@@ -19,10 +19,14 @@
 
 ## Стек
 
-- Python 3.11+, менеджер зависимостей `uv` (fallback: poetry)
+- Python 3.12 (`requires-python = ">=3.12,<3.13"`), менеджер зависимостей `uv`
 - pydantic v2 — все схемы и конфиги
-- pandas 2.x (numpy 2.x) — основной dataframe-слой; polars опционально для тяжёлых задач
-- DuckDB + Parquet — хранение рыночных данных и результатов
+- polars — единственный dataframe-слой. pandas НЕ используется и не входит в
+  зависимости (решение P02). Индекса нет: гарантии времени лежат на колонке
+  `timestamp` внутри `OHLCVFrame`, а не на DatetimeIndex.
+- DuckDB + Parquet — хранение рыночных данных и результатов. Чтение диапазонов
+  идёт через polars `scan_parquet`, DuckDB — слой агрегирующих SQL-запросов
+  (`coverage`, `query`), т.к. `.pl()` тянет pyarrow ради одной конвертации.
 - pytest + pytest-cov + hypothesis — тесты
 - ruff (lint+format), mypy --strict — качество
 - structlog — логирование (JSON в файл, human-readable в консоль)

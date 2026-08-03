@@ -18,6 +18,9 @@ dependencies = [
     "typer>=0.9",
 ]
 
+[project.scripts]
+ts = "trading_system.cli:app"
+
 [project.optional-dependencies]
 # streamlit lives here, not in the core dependencies: the UI is the last thing
 # built, and installing it drags pandas into every environment.
@@ -63,8 +66,13 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.flake8-bugbear]
+# typer's entire API is declaring options as argument defaults; B008 misreads it.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D100", "D103"]  # test modules and cases are self-describing
+# Test modules, classes and cases are self-describing; names carry the intent.
+"tests/**" = ["D100", "D101", "D102", "D103"]
 
 [tool.mypy]
 strict = true

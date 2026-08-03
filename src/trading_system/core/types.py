@@ -7,7 +7,7 @@ Conventions enforced here:
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import NewType
@@ -58,6 +58,26 @@ class Timeframe(StrEnum):
     H1 = "H1"
     H4 = "H4"
     D1 = "D1"
+
+    @property
+    def duration(self) -> timedelta:
+        """Nominal wall-clock length of one bar.
+
+        ``D1`` reports 24 hours. A calendar day spanning a DST transition is
+        23 or 25 hours long, so callers doing day-boundary arithmetic must work
+        in the session timezone rather than adding this value.
+        """
+        return _TIMEFRAME_DURATIONS[self]
+
+
+_TIMEFRAME_DURATIONS: dict[Timeframe, timedelta] = {
+    Timeframe.M1: timedelta(minutes=1),
+    Timeframe.M5: timedelta(minutes=5),
+    Timeframe.M15: timedelta(minutes=15),
+    Timeframe.H1: timedelta(hours=1),
+    Timeframe.H4: timedelta(hours=4),
+    Timeframe.D1: timedelta(days=1),
+}
 
 
 @dataclass(frozen=True)

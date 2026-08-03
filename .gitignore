@@ -4,6 +4,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 .venv/
 venv/
 ENV/
@@ -11,8 +14,12 @@ ENV/
 dist/
 build/
 .DS_Store
+
+# Local market data only. A bare "data/" would also swallow the source packages
+# src/trading_system/data/ and tests/data/, so both patterns are anchored.
+/data/
 *.parquet
-data/
+
 .env
 *.log
 .claude/
