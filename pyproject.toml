@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trading-system"
+version = "0.1.0"
+description = "Modular trading system with risk management"
+requires-python = ">=3.12"
+
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "polars>=0.20",
+    "duckdb>=0.9",
+    "sqlalchemy>=2.0",
+    "structlog>=24.0",
+    "typer>=0.9",
+    "streamlit>=1.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "hypothesis>=6.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "PIE",  # flake8-pie
+    "RET",  # flake8-return
+    "PTH",  # flake8-use-pathlib
+    "ARG",  # unused arguments
+    "D",    # pydocstyle
+    "TID",  # tidy imports
+]
+ignore = [
+    "D203",  # conflicts with D211 (no blank line before class docstring)
+    "D213",  # conflicts with D212 (summary on first line)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D100", "D103"]  # test modules and cases are self-describing
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "--strict-markers --strict-config"
