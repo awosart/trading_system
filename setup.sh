@@ -258,21 +258,6 @@ if __name__ == "__main__":
     app()
 CLIEOF
 
-# configs/settings.yaml
-cat > configs/settings.yaml << 'YAMLEOF'
-logging:
-  level: INFO
-  format: json
-
-data:
-  data_dir: ./data
-  parquet_dir: ./data/parquet
-
-backtest:
-  default_timeframe: H1
-  default_account_size: 100000
-YAMLEOF
-
 # tests/conftest.py
 cat > tests/conftest.py << 'CONFEOF'
 """Test configuration."""

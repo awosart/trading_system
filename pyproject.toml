@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "trading-system"
 version = "0.1.0"
 description = "Modular trading system with risk management"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 
 dependencies = [
     "pydantic>=2.0",
@@ -16,10 +16,14 @@ dependencies = [
     "sqlalchemy>=2.0",
     "structlog>=24.0",
     "typer>=0.9",
-    "streamlit>=1.28",
 ]
 
 [project.optional-dependencies]
+# streamlit lives here, not in the core dependencies: the UI is the last thing
+# built, and installing it drags pandas into every environment.
+ui = [
+    "streamlit>=1.28",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

@@ -117,7 +117,7 @@ def test_signal_accepts_boundary_quality(bar_open_time: datetime) -> None:
             timestamp=bar_open_time,
             direction=Side.BUY,
             quality=quality,
-            invalidation=Price(0.95),
+            invalidation_price=Price(0.95),
         )
         assert signal.quality == quality
 
@@ -133,7 +133,7 @@ def test_signal_rejects_quality_outside_unit_interval(
             timestamp=bar_open_time,
             direction=Side.BUY,
             quality=quality,
-            invalidation=Price(0.95),
+            invalidation_price=Price(0.95),
         )
 
 

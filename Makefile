@@ -1,20 +1,29 @@
 .PHONY: install lint typecheck test format all
 
+# pyproject pins requires-python to >=3.12,<3.13, so the interpreter must be
+# 3.12. Override if python3.12 is not on PATH:
+#   make install PYTHON=~/.local/share/uv/python/cpython-3.12.11-*/bin/python3.12
+PYTHON ?= python3.12
+VENV := $(CURDIR)/venv
+BIN := $(VENV)/bin
+
 install:
-	python3 -m venv venv
-	. venv/bin/activate && pip install -U pip && pip install uv && uv pip install -e .[dev]
+	$(PYTHON) -m venv $(VENV)
+	$(BIN)/python -m pip install -qU pip uv
+	VIRTUAL_ENV=$(VENV) $(BIN)/uv pip install -e ".[dev]"
 
 lint:
-	. venv/bin/activate && ruff check src/ tests/
+	$(BIN)/ruff check src/ tests/
+	$(BIN)/ruff format --check src/ tests/
 
 typecheck:
-	. venv/bin/activate && mypy --strict src/
+	$(BIN)/mypy --strict src/
 
 test:
-	. venv/bin/activate && pytest tests/ -v
+	$(BIN)/pytest tests/ -v
 
 format:
-	. venv/bin/activate && ruff format src/ tests/
+	$(BIN)/ruff format src/ tests/
 
 all: lint typecheck test
 	@echo "✓ All checks passed"

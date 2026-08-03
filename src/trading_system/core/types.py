@@ -100,7 +100,7 @@ class Signal:
 
     A signal carries no notion of money. The Risk Engine derives position size
     downstream from ``quality`` and the distance between entry and
-    ``invalidation``; the strategy never decides how much is at stake.
+    ``invalidation_price``; the strategy never decides how much is at stake.
 
     Attributes:
         strategy_id: Identifier of the strategy that produced the signal.
@@ -108,7 +108,7 @@ class Signal:
         timestamp: Close time of the bar the signal was derived from, UTC.
         direction: Intended trade direction.
         quality: Confidence score in ``[0.0, 1.0]``.
-        invalidation: Price at which the signal's thesis is void.
+        invalidation_price: Price at which the signal's thesis is void.
     """
 
     strategy_id: str
@@ -116,7 +116,7 @@ class Signal:
     timestamp: datetime
     direction: Side
     quality: float
-    invalidation: Price
+    invalidation_price: Price
 
     def __post_init__(self) -> None:
         """Normalise the timestamp and bound-check the quality score."""
