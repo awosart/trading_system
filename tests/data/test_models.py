@@ -60,7 +60,10 @@ def test_assume_tz_localises_naive_timestamps() -> None:
 def test_non_utc_input_is_converted() -> None:
     tokyo = timezone(timedelta(hours=9))
     aware = raw(
-        timestamp=[datetime(2024, 1, 1, 9, 0, tzinfo=tokyo), datetime(2024, 1, 1, 9, 1, tzinfo=tokyo)]
+        timestamp=[
+            datetime(2024, 1, 1, 9, 0, tzinfo=tokyo),
+            datetime(2024, 1, 1, 9, 1, tzinfo=tokyo),
+        ]
     )
     frame = OHLCVFrame.from_raw(aware, "EURUSD", Timeframe.M1)
     assert frame.start == datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
@@ -96,8 +99,11 @@ def test_constructor_rejects_unsorted_input() -> None:
         pl.col("timestamp").dt.replace_time_zone("UTC")
     )
     with pytest.raises(DataError, match="strictly increasing"):
-        OHLCVFrame(descending.select("timestamp", "open", "high", "low", "close", "volume"),
-                   "EURUSD", Timeframe.M1)
+        OHLCVFrame(
+            descending.select("timestamp", "open", "high", "low", "close", "volume"),
+            "EURUSD",
+            Timeframe.M1,
+        )
 
 
 def test_constructor_rejects_duplicate_timestamps() -> None:

@@ -125,7 +125,10 @@ class Signal:
     Attributes:
         strategy_id: Identifier of the strategy that produced the signal.
         symbol: Instrument the signal applies to.
-        timestamp: Close time of the bar the signal was derived from, UTC.
+        bar_close_ts: Close time of the bar the signal was derived from (UTC).
+            Execution is not allowed before open[t+1]. Note this differs from
+            :attr:`Bar.timestamp`, which is a bar's OPEN time; the name is
+            explicit so the two can never be confused at a module boundary.
         direction: Intended trade direction.
         quality: Confidence score in ``[0.0, 1.0]``.
         invalidation_price: Price at which the signal's thesis is void.
@@ -133,16 +136,38 @@ class Signal:
 
     strategy_id: str
     symbol: str
-    timestamp: datetime
+    bar_close_ts: datetime
     direction: Side
     quality: float
     invalidation_price: Price
 
     def __post_init__(self) -> None:
-        """Normalise the timestamp and bound-check the quality score."""
-        object.__setattr__(self, "timestamp", ensure_utc(self.timestamp))
+        """Normalise the bar close time and bound-check the quality score."""
+        object.__setattr__(self, "bar_close_ts", ensure_utc(self.bar_close_ts))
         if not 0.0 <= self.quality <= 1.0:
             raise ValueError(f"quality must be in [0.0, 1.0], got {self.quality}")
+
+
+def can_execute_at(signal: Signal, execution_ts: datetime) -> bool:
+    """Whether an order derived from ``signal`` may be filled at ``execution_ts``.
+
+    A signal is knowable only once bar ``t`` has closed, and bar ``t+1`` opens at
+    that same instant, so fills are permitted from ``bar_close_ts`` onwards.
+    Filling any earlier lands inside the bar the signal came from, which is
+    lookahead: the strategy would be trading on a close it could not yet have
+    observed.
+
+    Args:
+        signal: The signal an order would originate from.
+        execution_ts: Instant the fill would occur at. Must be tz-aware.
+
+    Returns:
+        ``True`` when the fill is at or after the signal's bar close.
+
+    Raises:
+        ValueError: If ``execution_ts`` is naive.
+    """
+    return ensure_utc(execution_ts) >= signal.bar_close_ts
 
 
 @dataclass(frozen=True)

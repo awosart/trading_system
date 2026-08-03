@@ -1,6 +1,6 @@
 """Resampling correctness, with lookahead as the headline concern."""
 
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, time
 
 import pytest
 
@@ -104,9 +104,9 @@ def test_dst_transition_day_is_short() -> None:
     frame = make_frame(start, 24 * 8, timeframe=Timeframe.H1)
     daily = resample(frame, Timeframe.D1, origin=FX_DAY_ORIGIN)
 
-    row = daily.df.filter(
-        daily.df["timestamp"] == datetime(2024, 3, 9, 22, 0, tzinfo=UTC)
-    ).rows(named=True)[0]
+    row = daily.df.filter(daily.df["timestamp"] == datetime(2024, 3, 9, 22, 0, tzinfo=UTC)).rows(
+        named=True
+    )[0]
     assert row["volume"] == 23.0
 
 

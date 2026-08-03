@@ -55,9 +55,7 @@ class TestIdempotency:
         assert original.df["close"].item(0) == 1.0
 
         corrected = hourly(START, 3)
-        corrected = corrected.with_df(
-            corrected.df.with_columns(pl.col("close") + 1000.0)
-        )
+        corrected = corrected.with_df(corrected.df.with_columns(pl.col("close") + 1000.0))
         store.upsert(corrected)
 
         merged = store.get("EURUSD", Timeframe.H1)

@@ -34,7 +34,7 @@ def empty_ohlcv_dataframe() -> pl.DataFrame:
     return pl.DataFrame(
         schema={
             TIMESTAMP_COLUMN: TIMESTAMP_DTYPE,
-            **{column: pl.Float64 for column in OHLCV_COLUMNS},
+            **dict.fromkeys(OHLCV_COLUMNS, pl.Float64),
         }
     )
 
@@ -176,7 +176,10 @@ class OHLCVFrame:
 
     def __repr__(self) -> str:
         """Compact description including the covered range."""
-        span = "empty" if self.is_empty else f"{self.start:%Y-%m-%d %H:%M}..{self.end:%Y-%m-%d %H:%M}"
+        if self.is_empty:
+            span = "empty"
+        else:
+            span = f"{self.start:%Y-%m-%d %H:%M}..{self.end:%Y-%m-%d %H:%M}"
         return f"OHLCVFrame({self._symbol} {self._timeframe} n={len(self)} {span})"
 
     def with_df(self, df: pl.DataFrame) -> "OHLCVFrame":
@@ -255,9 +258,7 @@ class OHLCVFrame:
 def _validate(df: pl.DataFrame, *, symbol: str) -> None:
     """Assert every structural invariant, raising :class:`DataError` on the first breach."""
     if tuple(df.columns) != REQUIRED_COLUMNS:
-        raise DataError(
-            f"{symbol}: expected columns {list(REQUIRED_COLUMNS)}, got {df.columns}"
-        )
+        raise DataError(f"{symbol}: expected columns {list(REQUIRED_COLUMNS)}, got {df.columns}")
 
     timestamp_dtype = df.schema[TIMESTAMP_COLUMN]
     if timestamp_dtype != TIMESTAMP_DTYPE:
@@ -271,9 +272,7 @@ def _validate(df: pl.DataFrame, *, symbol: str) -> None:
             raise DataError(f"{symbol}: column '{column}' must be Float64, got {dtype}")
 
     null_counts = df.null_count().row(0)
-    nulls = {
-        column: count for column, count in zip(df.columns, null_counts, strict=True) if count
-    }
+    nulls = {column: count for column, count in zip(df.columns, null_counts, strict=True) if count}
     if nulls:
         raise DataError(f"{symbol}: null values present in {nulls}")
 

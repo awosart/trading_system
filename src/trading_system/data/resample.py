@@ -99,9 +99,7 @@ def resample(
     grouping_tz = origin.tz if origin is not None else "UTC"
     offset = origin.offset_expression() if origin is not None else "0s"
 
-    localised = frame.df.with_columns(
-        pl.col(TIMESTAMP_COLUMN).dt.convert_time_zone(grouping_tz)
-    )
+    localised = frame.df.with_columns(pl.col(TIMESTAMP_COLUMN).dt.convert_time_zone(grouping_tz))
     aggregated = localised.group_by_dynamic(
         TIMESTAMP_COLUMN,
         every=every,

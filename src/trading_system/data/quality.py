@@ -143,9 +143,7 @@ def check_frame(frame: OHLCVFrame, config: QualityConfig | None = None) -> DataQ
     Returns:
         The resulting report.
     """
-    return check_quality(
-        frame.df, symbol=frame.symbol, timeframe=frame.timeframe, config=config
-    )
+    return check_quality(frame.df, symbol=frame.symbol, timeframe=frame.timeframe, config=config)
 
 
 def check_quality(

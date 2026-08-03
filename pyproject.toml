@@ -39,6 +39,11 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# Lint coverage must not depend on VCS ignore rules. A broad .gitignore entry
+# (a bare "data/" once matched src/trading_system/data/) would otherwise remove
+# whole packages from linting silently. Ruff's default excludes still skip
+# venv/, build/ and the caches.
+respect-gitignore = false
 
 [tool.ruff.lint]
 select = [
