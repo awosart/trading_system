@@ -1,0 +1,62 @@
+{
+  "id": "london-breakout",
+  "name": "London Breakout",
+  "version": "1.0.0",
+  "author": "trading_system",
+  "source": "https://www.babypips.com/forexpedia/london-breakout",
+  "type": "INTRADAY",
+  "status": "TESTING",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M5"
+  },
+  "instruments": {
+    "allowed_classes": ["FX"],
+    "allowed_symbols": ["EURUSD", "GBPUSD"],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entry": {
+    "direction": "BOTH",
+    "trigger": {
+      "type": "any_of",
+      "conditions": [
+        { "type": "leaf", "op": "cross_above", "left": "price:close", "right": "feature:donchian_upper" },
+        { "type": "leaf", "op": "cross_below", "left": "price:close", "right": "feature:donchian_lower" }
+      ]
+    },
+    "confirmation": [],
+    "confirmation_window_bars": 0,
+    "invalidation": {
+      "price_level": "feature:donchian_middle"
+    },
+    "entry_order": {
+      "order": { "type": "STOP", "offset": 0.0002 },
+      "expire_after_bars": 4
+    }
+  },
+  "exit_ref": "atr-trailing-v1",
+  "filters": [
+    { "kind": "session", "sessions": ["LONDON"] },
+    { "kind": "time_of_day", "start": "07:00", "end": "09:00" },
+    { "kind": "news_blackout", "minutes_before": 30, "minutes_after": 30, "min_impact": "HIGH" },
+    { "kind": "spread_max", "max_spread_pips": 2.0 }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": { "type": "leaf", "op": "gt", "left": "feature:atr_14", "right": 0.0006 },
+        "delta": 0.1,
+        "reason": "Sufficient volatility for a breakout to run rather than stall"
+      }
+    ],
+    "stop_reference": { "kind": "FIXED_PIPS", "pips": 15.0 },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 8
+  },
+  "metadata": {
+    "tags": ["breakout", "session", "london"],
+    "notes": "Trades the break of the Asian range at the London open; session and news filters do the real gatekeeping."
+  }
+}

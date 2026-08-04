@@ -1,0 +1,1201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "AllOf": {
+      "additionalProperties": false,
+      "description": "Every child condition must hold.\n\nAttributes:\n    type: Discriminator tag, always ``\"all_of\"``.\n    conditions: Children to AND together.",
+      "properties": {
+        "type": {
+          "const": "all_of",
+          "default": "all_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "all_of": "#/$defs/AllOf",
+                "any_of": "#/$defs/AnyOf",
+                "leaf": "#/$defs/LeafCondition",
+                "not": "#/$defs/Not"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/LeafCondition"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              },
+              {
+                "$ref": "#/$defs/Not"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Conditions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "conditions"
+      ],
+      "title": "AllOf",
+      "type": "object"
+    },
+    "AnyOf": {
+      "additionalProperties": false,
+      "description": "At least one child condition must hold.\n\nAttributes:\n    type: Discriminator tag, always ``\"any_of\"``.\n    conditions: Children to OR together.",
+      "properties": {
+        "type": {
+          "const": "any_of",
+          "default": "any_of",
+          "title": "Type",
+          "type": "string"
+        },
+        "conditions": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "all_of": "#/$defs/AllOf",
+                "any_of": "#/$defs/AnyOf",
+                "leaf": "#/$defs/LeafCondition",
+                "not": "#/$defs/Not"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/LeafCondition"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              },
+              {
+                "$ref": "#/$defs/Not"
+              }
+            ]
+          },
+          "minItems": 1,
+          "title": "Conditions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "conditions"
+      ],
+      "title": "AnyOf",
+      "type": "object"
+    },
+    "AtrStop": {
+      "additionalProperties": false,
+      "description": "Stop distance derived from a multiple of ATR.\n\nAttributes:\n    period: ATR lookback.\n    multiple: Multiple of ATR used as the stop distance.",
+      "properties": {
+        "kind": {
+          "const": "ATR",
+          "default": "ATR",
+          "title": "Kind",
+          "type": "string"
+        },
+        "period": {
+          "default": 14,
+          "exclusiveMinimum": 0,
+          "title": "Period",
+          "type": "integer"
+        },
+        "multiple": {
+          "default": 1.5,
+          "exclusiveMinimum": 0,
+          "title": "Multiple",
+          "type": "number"
+        }
+      },
+      "title": "AtrStop",
+      "type": "object"
+    },
+    "ConditionOp": {
+      "description": "Comparison performed by a :class:`LeafCondition`.",
+      "enum": [
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "cross_above",
+        "cross_below",
+        "between",
+        "rising",
+        "falling",
+        "inside_range",
+        "pattern_is",
+        "regime_is",
+        "session_is"
+      ],
+      "title": "ConditionOp",
+      "type": "string"
+    },
+    "CorrelationMaxFilter": {
+      "additionalProperties": false,
+      "description": "Block entries that would over-concentrate risk in correlated instruments.\n\nAttributes:\n    max_correlation: Highest tolerable absolute correlation to an existing\n        position.\n    lookback_bars: Bars of return history used to estimate correlation.",
+      "properties": {
+        "kind": {
+          "const": "correlation_max",
+          "default": "correlation_max",
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_correlation": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Max Correlation",
+          "type": "number"
+        },
+        "lookback_bars": {
+          "exclusiveMinimum": 0,
+          "title": "Lookback Bars",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_correlation",
+        "lookback_bars"
+      ],
+      "title": "CorrelationMaxFilter",
+      "type": "object"
+    },
+    "DayOfWeekFilter": {
+      "additionalProperties": false,
+      "description": "Only allow entries on named weekdays.\n\nAttributes:\n    allowed_days: Weekdays entries are permitted on.",
+      "properties": {
+        "kind": {
+          "const": "day_of_week",
+          "default": "day_of_week",
+          "title": "Kind",
+          "type": "string"
+        },
+        "allowed_days": {
+          "items": {
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ],
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Allowed Days",
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowed_days"
+      ],
+      "title": "DayOfWeekFilter",
+      "type": "object"
+    },
+    "Direction": {
+      "description": "Trade direction(s) an entry is willing to take.",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "BOTH"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "EntryOrderSpec": {
+      "additionalProperties": false,
+      "description": "The order placed once a setup is confirmed.\n\nAttributes:\n    order: Order type and its type-specific parameters.\n    expire_after_bars: Cancel the pending order if unfilled after this many\n        bars. ``None`` means it never expires on its own.",
+      "properties": {
+        "order": {
+          "discriminator": {
+            "mapping": {
+              "LIMIT": "#/$defs/LimitOrder",
+              "MARKET": "#/$defs/MarketOrder",
+              "STOP": "#/$defs/StopOrder"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/MarketOrder"
+            },
+            {
+              "$ref": "#/$defs/LimitOrder"
+            },
+            {
+              "$ref": "#/$defs/StopOrder"
+            }
+          ],
+          "title": "Order"
+        },
+        "expire_after_bars": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expire After Bars"
+        }
+      },
+      "required": [
+        "order"
+      ],
+      "title": "EntryOrderSpec",
+      "type": "object"
+    },
+    "EntrySpec": {
+      "additionalProperties": false,
+      "description": "Everything needed to recognise and place one entry.\n\nAttributes:\n    direction: Direction(s) this entry is willing to take.\n    trigger: The condition that opens a setup.\n    confirmation: Additional conditions that must all hold within\n        ``confirmation_window_bars`` bars of the trigger. Empty means the\n        trigger alone is sufficient.\n    confirmation_window_bars: Bars, counted from the trigger bar, allowed\n        for every entry of ``confirmation`` to become true. Must be\n        positive exactly when ``confirmation`` is non-empty \u2014 a window\n        without conditions or conditions without a window is a\n        contradictory config, not a default.\n    invalidation: Condition or level that cancels a pending setup.\n    entry_order: How the resulting order is placed.",
+      "properties": {
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "trigger": {
+          "discriminator": {
+            "mapping": {
+              "all_of": "#/$defs/AllOf",
+              "any_of": "#/$defs/AnyOf",
+              "leaf": "#/$defs/LeafCondition",
+              "not": "#/$defs/Not"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LeafCondition"
+            },
+            {
+              "$ref": "#/$defs/AllOf"
+            },
+            {
+              "$ref": "#/$defs/AnyOf"
+            },
+            {
+              "$ref": "#/$defs/Not"
+            }
+          ],
+          "title": "Trigger"
+        },
+        "confirmation": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "all_of": "#/$defs/AllOf",
+                "any_of": "#/$defs/AnyOf",
+                "leaf": "#/$defs/LeafCondition",
+                "not": "#/$defs/Not"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/LeafCondition"
+              },
+              {
+                "$ref": "#/$defs/AllOf"
+              },
+              {
+                "$ref": "#/$defs/AnyOf"
+              },
+              {
+                "$ref": "#/$defs/Not"
+              }
+            ]
+          },
+          "title": "Confirmation",
+          "type": "array"
+        },
+        "confirmation_window_bars": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Confirmation Window Bars",
+          "type": "integer"
+        },
+        "invalidation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Invalidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entry_order": {
+          "$ref": "#/$defs/EntryOrderSpec"
+        }
+      },
+      "required": [
+        "direction",
+        "trigger",
+        "entry_order"
+      ],
+      "title": "EntrySpec",
+      "type": "object"
+    },
+    "FixedPipsStop": {
+      "additionalProperties": false,
+      "description": "A stop at a fixed pip distance.\n\nAttributes:\n    pips: Stop distance in pips.",
+      "properties": {
+        "kind": {
+          "const": "FIXED_PIPS",
+          "default": "FIXED_PIPS",
+          "title": "Kind",
+          "type": "string"
+        },
+        "pips": {
+          "exclusiveMinimum": 0,
+          "title": "Pips",
+          "type": "number"
+        }
+      },
+      "required": [
+        "pips"
+      ],
+      "title": "FixedPipsStop",
+      "type": "object"
+    },
+    "InstrumentClass": {
+      "description": "Broad instrument category an entry is scoped to.",
+      "enum": [
+        "FX",
+        "CRYPTO",
+        "EQUITY",
+        "FUTURES",
+        "INDEX",
+        "COMMODITY"
+      ],
+      "title": "InstrumentClass",
+      "type": "string"
+    },
+    "InstrumentSpec": {
+      "additionalProperties": false,
+      "description": "Which instruments a strategy may be applied to.\n\nAttributes:\n    allowed_classes: Instrument classes this strategy is designed for.\n    allowed_symbols: Explicit allow-list. Empty means every symbol of an\n        allowed class is eligible.\n    denied_symbols: Explicit deny-list, checked after the allow-list.",
+      "properties": {
+        "allowed_classes": {
+          "items": {
+            "$ref": "#/$defs/InstrumentClass"
+          },
+          "minItems": 1,
+          "title": "Allowed Classes",
+          "type": "array"
+        },
+        "allowed_symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Symbols",
+          "type": "array"
+        },
+        "denied_symbols": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denied Symbols",
+          "type": "array"
+        }
+      },
+      "required": [
+        "allowed_classes"
+      ],
+      "title": "InstrumentSpec",
+      "type": "object"
+    },
+    "Invalidation": {
+      "additionalProperties": false,
+      "description": "A condition or price level that voids a pending setup before entry.\n\nAt least one of ``condition`` and ``price_level`` must be set.\n\nAttributes:\n    condition: A condition that, once true, cancels the setup.\n    price_level: A price beyond which the setup is void. Its side\n        (above/below entry) is implied by :attr:`EntrySpec.direction`.",
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "all_of": "#/$defs/AllOf",
+                  "any_of": "#/$defs/AnyOf",
+                  "leaf": "#/$defs/LeafCondition",
+                  "not": "#/$defs/Not"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/LeafCondition"
+                },
+                {
+                  "$ref": "#/$defs/AllOf"
+                },
+                {
+                  "$ref": "#/$defs/AnyOf"
+                },
+                {
+                  "$ref": "#/$defs/Not"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "price_level": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Price Level"
+        }
+      },
+      "title": "Invalidation",
+      "type": "object"
+    },
+    "LeafCondition": {
+      "additionalProperties": false,
+      "description": "A single comparison against a feature, a price, or a constant.\n\nAttributes:\n    type: Discriminator tag, always ``\"leaf\"``.\n    op: The comparison performed.\n    left: The primary operand. ``None`` only for ops such as\n        ``regime_is``/``session_is`` that test global bar context rather\n        than a specific series.\n    right: The comparison target. A plain float for most ops; a\n        ``[low, high]`` pair for ``between``/``inside_range``; ``None`` for\n        unary tests like ``rising``/``falling`` with no explicit lookback.",
+      "properties": {
+        "type": {
+          "const": "leaf",
+          "default": "leaf",
+          "title": "Type",
+          "type": "string"
+        },
+        "op": {
+          "$ref": "#/$defs/ConditionOp"
+        },
+        "left": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Left"
+        },
+        "right": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Right"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "LeafCondition",
+      "type": "object"
+    },
+    "LimitOrder": {
+      "additionalProperties": false,
+      "description": "Enter at an offset better than the trigger price.\n\nAttributes:\n    offset: Distance from the trigger price, in price units. Always\n        positive; the favourable side is implied by direction.",
+      "properties": {
+        "type": {
+          "const": "LIMIT",
+          "default": "LIMIT",
+          "title": "Type",
+          "type": "string"
+        },
+        "offset": {
+          "exclusiveMinimum": 0,
+          "title": "Offset",
+          "type": "number"
+        }
+      },
+      "required": [
+        "offset"
+      ],
+      "title": "LimitOrder",
+      "type": "object"
+    },
+    "MarketOrder": {
+      "additionalProperties": false,
+      "description": "Enter at the next available price.",
+      "properties": {
+        "type": {
+          "const": "MARKET",
+          "default": "MARKET",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "MarketOrder",
+      "type": "object"
+    },
+    "MinLiquidityFilter": {
+      "additionalProperties": false,
+      "description": "Block entries when recent volume is too thin to trust or fill.\n\nAttributes:\n    min_volume: Lowest tolerable average volume.\n    lookback_bars: Bars averaged to estimate current liquidity.",
+      "properties": {
+        "kind": {
+          "const": "min_liquidity",
+          "default": "min_liquidity",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min_volume": {
+          "exclusiveMinimum": 0,
+          "title": "Min Volume",
+          "type": "number"
+        },
+        "lookback_bars": {
+          "default": 20,
+          "exclusiveMinimum": 0,
+          "title": "Lookback Bars",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_volume"
+      ],
+      "title": "MinLiquidityFilter",
+      "type": "object"
+    },
+    "NewsBlackoutFilter": {
+      "additionalProperties": false,
+      "description": "Block entries around scheduled news releases.\n\nAttributes:\n    minutes_before: Minutes before a release during which entry is blocked.\n    minutes_after: Minutes after a release during which entry is blocked.\n    min_impact: Lowest news-impact tier that triggers the blackout.",
+      "properties": {
+        "kind": {
+          "const": "news_blackout",
+          "default": "news_blackout",
+          "title": "Kind",
+          "type": "string"
+        },
+        "minutes_before": {
+          "minimum": 0,
+          "title": "Minutes Before",
+          "type": "integer"
+        },
+        "minutes_after": {
+          "minimum": 0,
+          "title": "Minutes After",
+          "type": "integer"
+        },
+        "min_impact": {
+          "default": "HIGH",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "title": "Min Impact",
+          "type": "string"
+        }
+      },
+      "required": [
+        "minutes_before",
+        "minutes_after"
+      ],
+      "title": "NewsBlackoutFilter",
+      "type": "object"
+    },
+    "Not": {
+      "additionalProperties": false,
+      "description": "Negates a child condition.\n\nAttributes:\n    type: Discriminator tag, always ``\"not\"``.\n    condition: The condition to negate.",
+      "properties": {
+        "type": {
+          "const": "not",
+          "default": "not",
+          "title": "Type",
+          "type": "string"
+        },
+        "condition": {
+          "discriminator": {
+            "mapping": {
+              "all_of": "#/$defs/AllOf",
+              "any_of": "#/$defs/AnyOf",
+              "leaf": "#/$defs/LeafCondition",
+              "not": "#/$defs/Not"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LeafCondition"
+            },
+            {
+              "$ref": "#/$defs/AllOf"
+            },
+            {
+              "$ref": "#/$defs/AnyOf"
+            },
+            {
+              "$ref": "#/$defs/Not"
+            }
+          ],
+          "title": "Condition"
+        }
+      },
+      "required": [
+        "condition"
+      ],
+      "title": "Not",
+      "type": "object"
+    },
+    "PercentStop": {
+      "additionalProperties": false,
+      "description": "A stop at a fixed percentage of entry price.\n\nAttributes:\n    percent: Stop distance as a percentage of entry price.",
+      "properties": {
+        "kind": {
+          "const": "PERCENT",
+          "default": "PERCENT",
+          "title": "Kind",
+          "type": "string"
+        },
+        "percent": {
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "title": "Percent",
+          "type": "number"
+        }
+      },
+      "required": [
+        "percent"
+      ],
+      "title": "PercentStop",
+      "type": "object"
+    },
+    "QualityModifier": {
+      "additionalProperties": false,
+      "description": "A condition-gated adjustment to a signal's base quality score.\n\nAttributes:\n    condition: When true, ``delta`` is added to ``base_quality``.\n    delta: Adjustment applied. The final quality is still clamped to\n        ``[0, 1]`` by the Risk Engine; this spec does not enforce the\n        bound on any partial sum.\n    reason: Human-readable justification, for review and logging.",
+      "properties": {
+        "condition": {
+          "discriminator": {
+            "mapping": {
+              "all_of": "#/$defs/AllOf",
+              "any_of": "#/$defs/AnyOf",
+              "leaf": "#/$defs/LeafCondition",
+              "not": "#/$defs/Not"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/LeafCondition"
+            },
+            {
+              "$ref": "#/$defs/AllOf"
+            },
+            {
+              "$ref": "#/$defs/AnyOf"
+            },
+            {
+              "$ref": "#/$defs/Not"
+            }
+          ],
+          "title": "Condition"
+        },
+        "delta": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Delta",
+          "type": "number"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "condition",
+        "delta"
+      ],
+      "title": "QualityModifier",
+      "type": "object"
+    },
+    "Regime": {
+      "description": "Market regime a strategy is permitted to trade in.",
+      "enum": [
+        "TREND_UP",
+        "TREND_DOWN",
+        "RANGE",
+        "HIGH_VOLATILITY",
+        "LOW_VOLATILITY"
+      ],
+      "title": "Regime",
+      "type": "string"
+    },
+    "RiskProfileSpec": {
+      "additionalProperties": false,
+      "description": "Inputs the Risk Engine uses to size and gate a strategy's signals.\n\nAttributes:\n    base_quality: Starting quality score before modifiers, in ``[0, 1]``.\n    quality_modifiers: Condition-gated adjustments applied on top.\n    stop_reference: How the initial stop distance is derived.\n    max_concurrent_positions: Most open positions this strategy may hold\n        at once.\n    cooldown_bars_after_loss: Bars this strategy must stay flat after a\n        losing trade before it may signal again.",
+      "properties": {
+        "base_quality": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Base Quality",
+          "type": "number"
+        },
+        "quality_modifiers": {
+          "items": {
+            "$ref": "#/$defs/QualityModifier"
+          },
+          "title": "Quality Modifiers",
+          "type": "array"
+        },
+        "stop_reference": {
+          "discriminator": {
+            "mapping": {
+              "ATR": "#/$defs/AtrStop",
+              "FIXED_PIPS": "#/$defs/FixedPipsStop",
+              "PERCENT": "#/$defs/PercentStop",
+              "STRUCTURE": "#/$defs/StructureStop"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AtrStop"
+            },
+            {
+              "$ref": "#/$defs/StructureStop"
+            },
+            {
+              "$ref": "#/$defs/FixedPipsStop"
+            },
+            {
+              "$ref": "#/$defs/PercentStop"
+            }
+          ],
+          "title": "Stop Reference"
+        },
+        "max_concurrent_positions": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Max Concurrent Positions",
+          "type": "integer"
+        },
+        "cooldown_bars_after_loss": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Cooldown Bars After Loss",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base_quality",
+        "stop_reference"
+      ],
+      "title": "RiskProfileSpec",
+      "type": "object"
+    },
+    "SessionFilter": {
+      "additionalProperties": false,
+      "description": "Only allow entries during named trading sessions.\n\nAttributes:\n    sessions: Session names, e.g. ``\"LONDON\"``, ``\"NEW_YORK\"``, ``\"TOKYO\"``.\n        Interpretation is the trading calendar's; this spec only carries\n        the name.",
+      "properties": {
+        "kind": {
+          "const": "session",
+          "default": "session",
+          "title": "Kind",
+          "type": "string"
+        },
+        "sessions": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Sessions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "title": "SessionFilter",
+      "type": "object"
+    },
+    "SpreadMaxFilter": {
+      "additionalProperties": false,
+      "description": "Block entries when the quoted spread is too wide.\n\nAttributes:\n    max_spread_pips: Widest tolerable spread, in pips.",
+      "properties": {
+        "kind": {
+          "const": "spread_max",
+          "default": "spread_max",
+          "title": "Kind",
+          "type": "string"
+        },
+        "max_spread_pips": {
+          "exclusiveMinimum": 0,
+          "title": "Max Spread Pips",
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_spread_pips"
+      ],
+      "title": "SpreadMaxFilter",
+      "type": "object"
+    },
+    "Status": {
+      "description": "Lifecycle stage of a strategy definition.",
+      "enum": [
+        "DRAFT",
+        "TESTING",
+        "APPROVED",
+        "RETIRED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "StopOrder": {
+      "additionalProperties": false,
+      "description": "Enter at an offset beyond the trigger price, on confirmation of momentum.\n\nAttributes:\n    offset: Distance from the trigger price, in price units.",
+      "properties": {
+        "type": {
+          "const": "STOP",
+          "default": "STOP",
+          "title": "Type",
+          "type": "string"
+        },
+        "offset": {
+          "exclusiveMinimum": 0,
+          "title": "Offset",
+          "type": "number"
+        }
+      },
+      "required": [
+        "offset"
+      ],
+      "title": "StopOrder",
+      "type": "object"
+    },
+    "StrategyType": {
+      "description": "Holding-period class a strategy belongs to.",
+      "enum": [
+        "SWING",
+        "INTRADAY",
+        "SCALP",
+        "POSITION"
+      ],
+      "title": "StrategyType",
+      "type": "string"
+    },
+    "StructureStop": {
+      "additionalProperties": false,
+      "description": "Stop placed beyond the nearest swing structure.\n\nAttributes:\n    lookback_bars: How far back to look for structure.\n    buffer_atr_multiple: Extra ATR-scaled buffer beyond the structure\n        level, to absorb noise around it.",
+      "properties": {
+        "kind": {
+          "const": "STRUCTURE",
+          "default": "STRUCTURE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "lookback_bars": {
+          "default": 20,
+          "exclusiveMinimum": 0,
+          "title": "Lookback Bars",
+          "type": "integer"
+        },
+        "buffer_atr_multiple": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Buffer Atr Multiple",
+          "type": "number"
+        }
+      },
+      "title": "StructureStop",
+      "type": "object"
+    },
+    "TimeOfDayFilter": {
+      "additionalProperties": false,
+      "description": "Only allow entries within a UTC time-of-day window.\n\nAttributes:\n    start: Window start, ``\"HH:MM\"`` UTC, inclusive.\n    end: Window end, ``\"HH:MM\"`` UTC, exclusive. May be earlier than\n        ``start`` to express a window crossing midnight.",
+      "properties": {
+        "kind": {
+          "const": "time_of_day",
+          "default": "time_of_day",
+          "title": "Kind",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TimeOfDayFilter",
+      "type": "object"
+    },
+    "Timeframe": {
+      "description": "Trading timeframe.",
+      "enum": [
+        "M1",
+        "M5",
+        "M15",
+        "H1",
+        "H4",
+        "D1"
+      ],
+      "title": "Timeframe",
+      "type": "string"
+    },
+    "TimeframeSpec": {
+      "additionalProperties": false,
+      "description": "The timeframes an entry reasons across.\n\nAttributes:\n    signal_tf: Bar size the entry's trigger and confirmation evaluate on.\n    htf_filter_tf: Coarser timeframe used only to filter (e.g. a trend\n        bias); ``None`` if the strategy uses none.\n    entry_tf: Bar size execution actually fills on. Never coarser than\n        ``signal_tf``.",
+      "properties": {
+        "signal_tf": {
+          "$ref": "#/$defs/Timeframe"
+        },
+        "htf_filter_tf": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timeframe"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entry_tf": {
+          "$ref": "#/$defs/Timeframe"
+        }
+      },
+      "required": [
+        "signal_tf",
+        "entry_tf"
+      ],
+      "title": "TimeframeSpec",
+      "type": "object"
+    },
+    "VolatilityRangeFilter": {
+      "additionalProperties": false,
+      "description": "Only allow entries while a volatility feature sits inside a band.\n\nAttributes:\n    feature: Volatility feature reference, e.g. ``\"feature:atr_14\"``.\n    min_value: Inclusive lower bound. ``None`` means no lower bound.\n    max_value: Inclusive upper bound. ``None`` means no upper bound.",
+      "properties": {
+        "kind": {
+          "const": "volatility_range",
+          "default": "volatility_range",
+          "title": "Kind",
+          "type": "string"
+        },
+        "feature": {
+          "title": "Feature",
+          "type": "string"
+        },
+        "min_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Value"
+        },
+        "max_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Value"
+        }
+      },
+      "required": [
+        "feature"
+      ],
+      "title": "VolatilityRangeFilter",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The unified description of one trading strategy.\n\nThis is the contract Entry Engine, Exit Engine, the strategy database and\nvalidation all depend on. A spec never manages money: it names an\n``exit_ref`` rather than embedding an exit, and its output downstream is a\n:class:`~trading_system.core.types.Signal`, not an order.\n\nAttributes:\n    id: Unique, stable slug (lower-kebab-case).\n    name: Human-readable name.\n    version: Semantic version of this spec, ``\"X.Y.Z\"``.\n    author: Who defined the strategy.\n    source: Where the idea came from (URL, book, paper); optional.\n    type: Holding-period class.\n    status: Lifecycle stage.\n    timeframes: Timeframes the entry reasons across.\n    instruments: Which instruments this strategy may trade.\n    market_regimes: Regimes this strategy is permitted to trade in. Empty\n        means unrestricted.\n    entry: Trigger, confirmation, invalidation and order placement.\n    exit_ref: Id of the exit strategy this pairs with, looked up in the\n        Exit DB \u2014 never embedded, so entries and exits combine N\u00d7M.\n    filters: Permission gates; each can only forbid, never encourage.\n    risk_profile: Inputs to the Risk Engine's sizing and gating.\n    metadata: Free-form tags and notes. Never read by any control-flow\n        decision; a strategy field belongs above this dict, not inside it.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "name": {
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "author": {
+      "minLength": 1,
+      "title": "Author",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source"
+    },
+    "type": {
+      "$ref": "#/$defs/StrategyType"
+    },
+    "status": {
+      "$ref": "#/$defs/Status",
+      "default": "DRAFT"
+    },
+    "timeframes": {
+      "$ref": "#/$defs/TimeframeSpec"
+    },
+    "instruments": {
+      "$ref": "#/$defs/InstrumentSpec"
+    },
+    "market_regimes": {
+      "items": {
+        "$ref": "#/$defs/Regime"
+      },
+      "title": "Market Regimes",
+      "type": "array"
+    },
+    "entry": {
+      "$ref": "#/$defs/EntrySpec"
+    },
+    "exit_ref": {
+      "minLength": 1,
+      "title": "Exit Ref",
+      "type": "string"
+    },
+    "filters": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "correlation_max": "#/$defs/CorrelationMaxFilter",
+            "day_of_week": "#/$defs/DayOfWeekFilter",
+            "min_liquidity": "#/$defs/MinLiquidityFilter",
+            "news_blackout": "#/$defs/NewsBlackoutFilter",
+            "session": "#/$defs/SessionFilter",
+            "spread_max": "#/$defs/SpreadMaxFilter",
+            "time_of_day": "#/$defs/TimeOfDayFilter",
+            "volatility_range": "#/$defs/VolatilityRangeFilter"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/SessionFilter"
+          },
+          {
+            "$ref": "#/$defs/NewsBlackoutFilter"
+          },
+          {
+            "$ref": "#/$defs/VolatilityRangeFilter"
+          },
+          {
+            "$ref": "#/$defs/SpreadMaxFilter"
+          },
+          {
+            "$ref": "#/$defs/CorrelationMaxFilter"
+          },
+          {
+            "$ref": "#/$defs/DayOfWeekFilter"
+          },
+          {
+            "$ref": "#/$defs/TimeOfDayFilter"
+          },
+          {
+            "$ref": "#/$defs/MinLiquidityFilter"
+          }
+        ]
+      },
+      "title": "Filters",
+      "type": "array"
+    },
+    "risk_profile": {
+      "$ref": "#/$defs/RiskProfileSpec"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "name",
+    "version",
+    "author",
+    "type",
+    "timeframes",
+    "instruments",
+    "entry",
+    "exit_ref",
+    "risk_profile"
+  ],
+  "title": "StrategySpec",
+  "type": "object"
+}

@@ -5,6 +5,7 @@ and hands it to subcommands through the typer context, keeping configuration an
 explicit dependency rather than a module-level global.
 """
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,10 +18,14 @@ from trading_system.data.providers.csv_provider import CSVProvider, CSVSchema
 from trading_system.data.quality import check_frame
 from trading_system.data.resample import FX_DAY_ORIGIN, resample
 from trading_system.data.store import ParquetStore
+from trading_system.strategies.schema import SCHEMA_JSON_PATH, strategy_json_schema
+from trading_system.strategies.validator import Severity, validate_paths
 
 app = typer.Typer(help="Modular trading system.")
 data_app = typer.Typer(help="Market data management.")
+strategy_app = typer.Typer(help="Strategy spec management.")
 app.add_typer(data_app, name="data")
+app.add_typer(strategy_app, name="strategy")
 
 logger = get_logger(__name__)
 
@@ -136,6 +141,38 @@ def data_resample(
     resampled = resample(frame, target, origin=FX_DAY_ORIGIN if fx_day else None)
     store.upsert(resampled)
     typer.echo(f"Resampled {len(frame)} {source} bars into {len(resampled)} {target} bars.")
+
+
+@strategy_app.command("validate")
+def strategy_validate(
+    paths: list[Path] = typer.Argument(..., help="Strategy spec JSON files."),
+) -> None:
+    """Validate strategy specs: schema, feature refs, timeframe order, id uniqueness.
+
+    ``exit_ref`` existence is not checked yet — there is no Exit DB to consult
+    until the Exit Engine module exists.
+    """
+    results = validate_paths(paths)
+    has_errors = False
+    for path, issues in results.items():
+        if not issues:
+            typer.echo(f"{path}: OK")
+            continue
+        for issue in issues:
+            typer.echo(f"{path}: [{issue.severity}] {issue.code}: {issue.message}")
+            if issue.severity is Severity.ERROR:
+                has_errors = True
+    if has_errors:
+        raise typer.Exit(code=1)
+
+
+@strategy_app.command("schema-export")
+def strategy_schema_export(
+    out: Path = typer.Option(SCHEMA_JSON_PATH, "--out", help="Where to write the JSON Schema."),
+) -> None:
+    """(Re-)generate the JSON Schema editors use to validate strategy files."""
+    out.write_text(json.dumps(strategy_json_schema(), indent=2) + "\n", encoding="utf-8")
+    typer.echo(f"Wrote schema to {out}")
 
 
 @app.command()

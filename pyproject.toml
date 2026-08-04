@@ -33,6 +33,7 @@ dev = [
     "hypothesis>=6.0",
     "ruff>=0.1",
     "mypy>=1.0",
+    "jsonschema>=4.18",
 ]
 
 [tool.ruff]

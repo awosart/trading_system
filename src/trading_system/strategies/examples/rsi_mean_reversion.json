@@ -1,0 +1,64 @@
+{
+  "id": "rsi-mean-reversion",
+  "name": "RSI Mean Reversion",
+  "version": "1.0.0",
+  "author": "trading_system",
+  "source": "https://www.investopedia.com/terms/o/oscillator.asp",
+  "type": "INTRADAY",
+  "status": "DRAFT",
+  "timeframes": {
+    "signal_tf": "M15",
+    "htf_filter_tf": "H4",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": ["FX"],
+    "allowed_symbols": [],
+    "denied_symbols": ["EURUSD"]
+  },
+  "market_regimes": ["RANGE"],
+  "entry": {
+    "direction": "LONG",
+    "trigger": {
+      "type": "all_of",
+      "conditions": [
+        { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 30.0 },
+        { "type": "leaf", "op": "lt", "left": "feature:adx_14", "right": 20.0 }
+      ]
+    },
+    "confirmation": [
+      { "type": "leaf", "op": "gt", "left": "feature:rsi_14", "right": 30.0 }
+    ],
+    "confirmation_window_bars": 3,
+    "invalidation": {
+      "price_level": "feature:swing_low"
+    },
+    "entry_order": {
+      "order": { "type": "MARKET" },
+      "expire_after_bars": 2
+    }
+  },
+  "exit_ref": "structure-target-v1",
+  "filters": [
+    { "kind": "session", "sessions": ["LONDON", "NEW_YORK"] },
+    { "kind": "spread_max", "max_spread_pips": 1.5 },
+    { "kind": "volatility_range", "feature": "feature:atr_14", "min_value": 0.0003, "max_value": 0.0020 }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 20.0 },
+        "delta": 0.1,
+        "reason": "Deeply oversold adds conviction to the bounce"
+      }
+    ],
+    "stop_reference": { "kind": "STRUCTURE", "lookback_bars": 20, "buffer_atr_multiple": 0.3 },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 5
+  },
+  "metadata": {
+    "tags": ["mean-reversion", "range", "rsi"],
+    "notes": "Fades oversold RSI back toward the range mean; ADX filter keeps it out of trending regimes."
+  }
+}

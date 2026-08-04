@@ -1,0 +1,63 @@
+{
+  "id": "ema-pullback",
+  "name": "EMA Pullback",
+  "version": "1.0.0",
+  "author": "trading_system",
+  "source": "https://www.investopedia.com/terms/p/pullback.asp",
+  "type": "SWING",
+  "status": "DRAFT",
+  "timeframes": {
+    "signal_tf": "H4",
+    "htf_filter_tf": "D1",
+    "entry_tf": "H1"
+  },
+  "instruments": {
+    "allowed_classes": ["FX"],
+    "allowed_symbols": ["EURUSD", "GBPUSD"],
+    "denied_symbols": []
+  },
+  "market_regimes": ["TREND_UP", "TREND_DOWN"],
+  "entry": {
+    "direction": "LONG",
+    "trigger": {
+      "type": "all_of",
+      "conditions": [
+        { "type": "leaf", "op": "gt", "left": "price:close", "right": "feature:ema_50" },
+        { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 50.0 }
+      ]
+    },
+    "confirmation": [
+      { "type": "leaf", "op": "cross_above", "left": "price:close", "right": "feature:ema_20" }
+    ],
+    "confirmation_window_bars": 5,
+    "invalidation": {
+      "price_level": "feature:ema_50"
+    },
+    "entry_order": {
+      "order": { "type": "LIMIT", "offset": 0.0005 },
+      "expire_after_bars": 5
+    }
+  },
+  "exit_ref": "atr-trailing-v1",
+  "filters": [
+    { "kind": "day_of_week", "allowed_days": ["MON", "TUE", "WED", "THU", "FRI"] },
+    { "kind": "min_liquidity", "min_volume": 100.0, "lookback_bars": 20 }
+  ],
+  "risk_profile": {
+    "base_quality": 0.55,
+    "quality_modifiers": [
+      {
+        "condition": { "type": "leaf", "op": "gt", "left": "feature:adx_14", "right": 25.0 },
+        "delta": 0.15,
+        "reason": "Strong trend strength confirmed by ADX"
+      }
+    ],
+    "stop_reference": { "kind": "ATR", "period": 14, "multiple": 2.0 },
+    "max_concurrent_positions": 2,
+    "cooldown_bars_after_loss": 10
+  },
+  "metadata": {
+    "tags": ["trend", "pullback", "ema"],
+    "notes": "Classic trend-continuation entry: buy a pullback to the 50 EMA while price sits above it on the daily filter."
+  }
+}

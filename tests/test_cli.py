@@ -1,13 +1,19 @@
 """CLI wiring, including a full CSV-to-store-to-resample round trip."""
 
+import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 from typer.testing import CliRunner
 
 from trading_system.cli import app
+from trading_system.strategies import schema as strategy_schema_module
 
 runner = CliRunner()
+
+EXAMPLES_DIR = Path(strategy_schema_module.__file__).parent / "examples"
+EXAMPLE_PATHS = sorted(str(path) for path in EXAMPLES_DIR.glob("*.json"))
 
 MINUTE_CSV_HEADER = "timestamp,open,high,low,close,volume\n"
 
@@ -48,7 +54,7 @@ def test_placeholder_commands_run(command: str, expected: str) -> None:
 def test_help_lists_command_groups() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("data", "backtest", "validate", "ui"):
+    for command in ("data", "strategy", "backtest", "validate", "ui"):
         assert command in result.stdout
 
 
@@ -57,6 +63,43 @@ def test_data_help_lists_subcommands() -> None:
     assert result.exit_code == 0
     for command in ("import", "coverage", "quality", "resample"):
         assert command in result.stdout
+
+
+def test_strategy_help_lists_subcommands() -> None:
+    result = runner.invoke(app, ["strategy", "--help"])
+    assert result.exit_code == 0
+    for command in ("validate", "schema-export"):
+        assert command in result.stdout
+
+
+class TestStrategyValidate:
+    def test_worked_examples_all_pass(self) -> None:
+        result = runner.invoke(app, ["strategy", "validate", *EXAMPLE_PATHS])
+        assert result.exit_code == 0, result.stdout
+        for path in EXAMPLE_PATHS:
+            assert f"{path}: OK" in result.stdout
+
+    def test_syntactically_broken_file_exits_nonzero(self, tmp_path: Path) -> None:
+        broken = tmp_path / "broken.json"
+        broken.write_text('{"id": "Not A Slug"}', encoding="utf-8")
+        result = runner.invoke(app, ["strategy", "validate", str(broken)])
+        assert result.exit_code == 1
+        assert "[ERROR]" in result.stdout
+
+    def test_missing_file_exits_nonzero(self, tmp_path: Path) -> None:
+        result = runner.invoke(app, ["strategy", "validate", str(tmp_path / "nope.json")])
+        assert result.exit_code == 1
+        assert "[ERROR]" in result.stdout
+        assert "read_error" in result.stdout
+
+
+class TestStrategySchemaExport:
+    def test_writes_a_valid_draft_2020_12_schema(self, tmp_path: Path) -> None:
+        out = tmp_path / "schema.json"
+        result = runner.invoke(app, ["strategy", "schema-export", "--out", str(out)])
+        assert result.exit_code == 0, result.stdout
+        schema = json.loads(out.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
 
 
 class TestEndToEnd:
