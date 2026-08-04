@@ -1,4 +1,4 @@
-.PHONY: install lint typecheck test format all
+.PHONY: install lint typecheck test bench format all
 
 # pyproject pins requires-python to >=3.12,<3.13, so the interpreter must be
 # 3.12. Override if python3.12 is not on PATH:
@@ -21,6 +21,11 @@ typecheck:
 
 test:
 	$(BIN)/pytest tests/ -v
+
+# Performance budgets. Deselected from `make test` because building a
+# million-bar frame costs more than the rest of the suite put together.
+bench:
+	$(BIN)/pytest tests/ -v -m benchmark
 
 format:
 	$(BIN)/ruff format src/ tests/

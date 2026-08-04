@@ -88,4 +88,9 @@ warn_unreachable = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
-addopts = "--strict-markers --strict-config"
+# Benchmarks are deselected by default: building a million-bar frame takes
+# longer than the rest of the suite takes to run. `make bench` opts back in.
+addopts = "--strict-markers --strict-config -m 'not benchmark'"
+markers = [
+    "benchmark: performance budget on million-bar frames; run with `-m benchmark`",
+]
