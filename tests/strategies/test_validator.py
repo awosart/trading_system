@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from trading_system.exit.library import known_exit_ids
 from trading_system.strategies.schema import FeatureRef, StrategySpec
 from trading_system.strategies.validator import (
     Severity,
@@ -119,6 +120,34 @@ class TestCheckExitRef:
     def test_accepts_registered_exit_ref(self, minimal_spec_dict: dict[str, Any]) -> None:
         spec = StrategySpec.model_validate(minimal_spec_dict)
         assert check_exit_ref(spec, known_exit_ids={spec.exit_ref}) == []
+
+
+class TestExitRefAgainstTheRealLibrary:
+    """P07 stage 3: ``known_exit_ids`` wired to the real ``exit/library.json``."""
+
+    def test_a_strategy_naming_a_real_preset_is_accepted(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        minimal_spec_dict["exit_ref"] = "conservative_2r"
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert check_exit_ref(spec, known_exit_ids=known_exit_ids()) == []
+
+    def test_a_strategy_naming_no_such_preset_is_rejected(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        minimal_spec_dict["exit_ref"] = "no_such_preset"
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        issues = check_exit_ref(spec, known_exit_ids=known_exit_ids())
+        assert [issue.code for issue in issues] == ["unknown_exit_ref"]
+        assert "no_such_preset" in issues[0].message
+
+    def test_the_worked_examples_all_name_real_presets(self) -> None:
+        # The three shipped examples are meant to demonstrate real, working
+        # configurations end to end, not placeholder exit_ref strings.
+        ids = known_exit_ids()
+        for path in EXAMPLE_FILES:
+            spec = StrategySpec.model_validate_json(path.read_text(encoding="utf-8"))
+            assert check_exit_ref(spec, known_exit_ids=ids) == [], path
 
 
 class TestCheckTimeframeOrder:

@@ -64,7 +64,7 @@
       }
     }
   ],
-  "exit_ref": "structure-target-v1",
+  "exit_ref": "conservative_2r",
   "filters": [
     { "kind": "session", "sessions": ["LONDON", "NEWYORK"] },
     { "kind": "spread_max", "max_spread_pips": 1.5 },

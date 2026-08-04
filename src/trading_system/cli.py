@@ -12,12 +12,14 @@ from pathlib import Path
 import typer
 
 from trading_system.core.config import Settings
+from trading_system.core.exceptions import ValidationError
 from trading_system.core.logging import get_logger, setup_logging
 from trading_system.core.types import Timeframe
 from trading_system.data.providers.csv_provider import CSVProvider, CSVSchema
 from trading_system.data.quality import check_frame
 from trading_system.data.resample import FX_DAY_ORIGIN, resample
 from trading_system.data.store import ParquetStore
+from trading_system.exit.library import DEFAULT_LIBRARY_PATH, known_exit_ids
 from trading_system.strategies.schema import SCHEMA_JSON_PATH, strategy_json_schema
 from trading_system.strategies.validator import Severity, validate_paths
 
@@ -146,13 +148,24 @@ def data_resample(
 @strategy_app.command("validate")
 def strategy_validate(
     paths: list[Path] = typer.Argument(..., help="Strategy spec JSON files."),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH,
+        "--exit-library",
+        help="Exit preset library exit_ref is checked against.",
+    ),
 ) -> None:
-    """Validate strategy specs: schema, feature refs, timeframe order, id uniqueness.
+    """Validate strategy specs: schema, feature refs, timeframe order, id uniqueness, exit_ref.
 
-    ``exit_ref`` existence is not checked yet — there is no Exit DB to consult
-    until the Exit Engine module exists.
+    ``exit_ref`` is checked against the preset ids declared in
+    ``--exit-library``, the bundled ``exit/library.json`` by default.
     """
-    results = validate_paths(paths)
+    try:
+        ids = known_exit_ids(exit_library)
+    except ValidationError as error:
+        typer.echo(f"exit library {exit_library}: {error}")
+        raise typer.Exit(code=1) from error
+
+    results = validate_paths(paths, known_exit_ids=ids)
     has_errors = False
     for path, issues in results.items():
         if not issues:

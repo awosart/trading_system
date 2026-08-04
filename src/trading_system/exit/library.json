@@ -1,0 +1,94 @@
+{
+  "presets": [
+    {
+      "id": "conservative_2r",
+      "name": "Conservative 2R",
+      "description": "Fixed target at twice the initial risk. No trailing, no partials — the whole position rides to one level or the original stop, whichever comes first.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 2.0 }]
+    },
+    {
+      "id": "atr_trail_aggressive",
+      "name": "Aggressive ATR Trail",
+      "description": "Starts trailing as soon as the trade is barely in profit and follows closely — gives back little of an extended move, but is readily stopped out by ordinary noise.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "stop_modifiers": [
+        {
+          "kind": "TRAILING_STOP",
+          "source": { "kind": "ATR_TRAIL", "period": 10, "multiple": 2.0 },
+          "activation_r": 0.5
+        }
+      ]
+    },
+    {
+      "id": "scalp_quick",
+      "name": "Quick Scalp",
+      "description": "A small fixed target, or out after four bars regardless — whichever comes first. For setups meant to resolve almost immediately.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [
+        { "kind": "FIXED_RR", "r_multiple": 1.0 },
+        { "kind": "TIME_EXIT", "mode": "MAX_BARS_HELD", "max_bars_held": 4 }
+      ]
+    },
+    {
+      "id": "swing_partial_ladder",
+      "name": "Swing Partial Ladder",
+      "description": "Scales out half the position at 1R and a quarter at 2R, moves the remainder to breakeven once 1R is reached, then trails the final quarter behind swing structure.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [
+        {
+          "kind": "PARTIAL_CLOSE",
+          "rungs": [
+            { "r_multiple": 1.0, "fraction": "0.5" },
+            { "r_multiple": 2.0, "fraction": "0.25" }
+          ]
+        }
+      ],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0 },
+        {
+          "kind": "TRAILING_STOP",
+          "source": { "kind": "SWING_TRAIL", "lookback": 5 },
+          "activation_r": 1.5
+        }
+      ]
+    },
+    {
+      "id": "session_close",
+      "name": "Session Close",
+      "description": "No price target at all — flat by the close of the New York session, win or lose. For strategies that reason about one session and should not carry risk into the next.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "TIME_EXIT", "mode": "SESSION_CLOSE", "session": "NEWYORK" }]
+    },
+    {
+      "id": "breakeven_runner",
+      "name": "Breakeven Runner",
+      "description": "Protects at breakeven once 1R is reached, then hands over to a wider ATR trail from 2R onward. No fixed target — the whole position is either stopped at breakeven or left to run.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 },
+        {
+          "kind": "TRAILING_STOP",
+          "source": { "kind": "ATR_TRAIL", "period": 14, "multiple": 2.5 },
+          "activation_r": 2.0
+        }
+      ]
+    },
+    {
+      "id": "structure_trail",
+      "name": "Structure Trail",
+      "description": "The stop follows the nearest confirmed swing from the first bar, unconditionally — no activation threshold, no fixed target. Rides the position for as long as market structure supports it.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "stop_modifiers": [
+        { "kind": "STRUCTURE_STOP", "lookback": 5, "buffer_atr_multiple": 0.3 }
+      ]
+    },
+    {
+      "id": "time_boxed",
+      "name": "Time Boxed",
+      "description": "No price-based exit beyond the original stop. Closed after twenty bars regardless of where price is — for setups whose thesis has a shelf life.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "TIME_EXIT", "mode": "MAX_BARS_HELD", "max_bars_held": 20 }]
+    }
+  ]
+}

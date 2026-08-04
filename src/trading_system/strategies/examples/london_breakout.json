@@ -62,7 +62,7 @@
       }
     }
   ],
-  "exit_ref": "atr-trailing-v1",
+  "exit_ref": "atr_trail_aggressive",
   "filters": [
     { "kind": "session", "sessions": ["LONDON"] },
     { "kind": "time_of_day", "start": "07:00", "end": "09:00" },

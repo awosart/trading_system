@@ -92,6 +92,49 @@ class TestStrategyValidate:
         assert "[ERROR]" in result.stdout
         assert "read_error" in result.stdout
 
+    def test_unknown_exit_ref_exits_nonzero(self, tmp_path: Path) -> None:
+        # P07 stage 3: exit_ref is now checked against the real exit library
+        # by default, not skipped.
+        spec = json.loads(Path(EXAMPLE_PATHS[0]).read_text(encoding="utf-8"))
+        spec["exit_ref"] = "no_such_preset"
+        broken = tmp_path / "bad_exit_ref.json"
+        broken.write_text(json.dumps(spec), encoding="utf-8")
+
+        result = runner.invoke(app, ["strategy", "validate", str(broken)])
+
+        assert result.exit_code == 1
+        assert "unknown_exit_ref" in result.stdout
+        assert "no_such_preset" in result.stdout
+
+    def test_a_real_preset_id_passes(self, tmp_path: Path) -> None:
+        spec = json.loads(Path(EXAMPLE_PATHS[0]).read_text(encoding="utf-8"))
+        spec["exit_ref"] = "conservative_2r"
+        fixed = tmp_path / "good_exit_ref.json"
+        fixed.write_text(json.dumps(spec), encoding="utf-8")
+
+        result = runner.invoke(app, ["strategy", "validate", str(fixed)])
+
+        assert result.exit_code == 0, result.stdout
+        assert f"{fixed}: OK" in result.stdout
+
+    def test_a_broken_exit_library_is_reported_and_exits_nonzero(self, tmp_path: Path) -> None:
+        broken_library = tmp_path / "library.json"
+        broken_library.write_text("{not valid json", encoding="utf-8")
+
+        result = runner.invoke(
+            app,
+            [
+                "strategy",
+                "validate",
+                "--exit-library",
+                str(broken_library),
+                EXAMPLE_PATHS[0],
+            ],
+        )
+
+        assert result.exit_code == 1
+        assert "exit library" in result.stdout
+
 
 class TestStrategySchemaExport:
     def test_writes_a_valid_draft_2020_12_schema(self, tmp_path: Path) -> None:

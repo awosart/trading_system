@@ -55,7 +55,7 @@
       }
     }
   ],
-  "exit_ref": "atr-trailing-v1",
+  "exit_ref": "structure_trail",
   "filters": [
     { "kind": "day_of_week", "allowed_days": ["MON", "TUE", "WED", "THU", "FRI"] },
     { "kind": "min_liquidity", "min_volume": 100.0, "lookback_bars": 20 }

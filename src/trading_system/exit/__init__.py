@@ -41,6 +41,15 @@ from trading_system.exit.fills import (
     resting_fill_price,
     resting_order_filled,
 )
+from trading_system.exit.library import (
+    DEFAULT_LIBRARY_PATH,
+    ExitLibrary,
+    ExitLibrarySpec,
+    ExitPresetSpec,
+    build_plan,
+    known_exit_ids,
+    load_library,
+)
 from trading_system.exit.plan import (
     BarOutcome,
     DeferredExit,
@@ -48,7 +57,7 @@ from trading_system.exit.plan import (
     ExitPlan,
     ExitRun,
 )
-from trading_system.exit.position import WHOLE, ClosedLeg, ManagedPosition
+from trading_system.exit.position import INITIAL_STOP_SOURCE, WHOLE, ClosedLeg, ManagedPosition
 from trading_system.exit.rules import (
     ATRStop,
     AtrTrail,
@@ -69,6 +78,8 @@ from trading_system.exit.rules import (
 )
 
 __all__ = [
+    "DEFAULT_LIBRARY_PATH",
+    "INITIAL_STOP_SOURCE",
     "REASON_PRIORITY",
     "WHOLE",
     "ATRStop",
@@ -83,7 +94,10 @@ __all__ = [
     "ExitDropReason",
     "ExitFill",
     "ExitKind",
+    "ExitLibrary",
+    "ExitLibrarySpec",
     "ExitPlan",
+    "ExitPresetSpec",
     "ExitPriority",
     "ExitReason",
     "ExitRule",
@@ -106,8 +120,11 @@ __all__ = [
     "TrailingSource",
     "TrailingStop",
     "approaches_from_below",
+    "build_plan",
     "empty_drop_counts",
     "exit_contexts",
+    "known_exit_ids",
+    "load_library",
     "resting_fill_price",
     "resting_order_filled",
 ]
