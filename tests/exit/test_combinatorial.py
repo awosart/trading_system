@@ -152,7 +152,7 @@ class TestCombinatorial:
 
         # PnL is computed and finite either way.
         last_close = series.context(result.bars - 1).price("close") or ENTRY_PRICE
-        assert position.realized_pnl.is_finite()
+        assert position.realized_quote_move.is_finite()
         assert math.isfinite(position.total_r(Price(last_close)))
 
         # closed <=> nothing remains, and vice versa.

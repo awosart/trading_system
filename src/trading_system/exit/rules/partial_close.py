@@ -82,7 +82,7 @@ class PartialClose:
 
     @property
     def partial_fractions(self) -> tuple[Decimal, ...]:
-        """Every rung's fraction, what ``ExitPlan.smallest_fraction`` reads."""
+        """Every rung's fraction, what ``ExitPlan.smallest_closing_fraction`` reads."""
         return tuple(rung.fraction for rung in self._rungs)
 
     def on_bar(self, position: ManagedPosition, ctx: ExitContext) -> ExitDecision | None:

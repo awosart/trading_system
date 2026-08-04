@@ -1,0 +1,123 @@
+# Instrument contract specifications.
+#
+# Loaded by trading_system.core.instruments.load_instruments. Numbers here are
+# representative retail-broker values, not a live feed: they are what a backtest
+# assumes, and a live run should reconcile them against the broker's own symbol
+# table before trusting a position size computed from them.
+#
+# tick_size vs point_size: tick_size is the smallest quotable increment,
+# point_size is the unit distances are measured in. They differ for every
+# instrument below except XAUUSD. See core/instruments.py for why they are two
+# fields rather than one.
+#
+# Money fields (commission_per_lot, swap_long, swap_short) are in ACCOUNT
+# currency. Everything derived from price (value_per_point_quote) is in the
+# instrument's quote currency and needs converting; see risk/conversion.py.
+
+instruments:
+  # --- FX: quote currency is the account's, so no conversion ---------------
+  - symbol: EURUSD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001        # one pip; 10 ticks on a five-digit feed
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "100"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: USD
+    margin_rate: 0.0333
+    typical_spread_points: 0.8
+    commission_per_lot: "7.00"
+    swap_long: "-7.50"
+    swap_short: "2.10"
+    min_stop_distance_points: 1.0
+
+  # --- FX: quote currency is JPY, so a USD account needs USDJPY -----------
+  - symbol: GBPJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01          # one pip on a JPY cross
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: JPY
+    margin_rate: 0.0333
+    typical_spread_points: 2.4
+    commission_per_lot: "7.00"
+    swap_long: "-12.40"
+    swap_short: "-4.80"
+    min_stop_distance_points: 2.0
+
+  # --- Metal CFD: 100 oz per lot, quoted in USD --------------------------
+  - symbol: XAUUSD
+    asset_class: COMMODITY
+    tick_size: 0.01
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100"
+    base_currency: XAU
+    quote_currency: USD
+    margin_rate: 0.05
+    typical_spread_points: 25.0
+    commission_per_lot: "0"
+    swap_long: "-18.60"
+    swap_short: "6.20"
+    min_stop_distance_points: 30.0
+
+  # --- Index CFDs: the exchange multiplier, so a point is NOT a dollar ------
+  - symbol: NAS100
+    asset_class: INDEX
+    tick_size: 0.1
+    point_size: 1.0
+    lot_step: "0.1"
+    min_lot: "0.1"
+    max_lot: "100"
+    contract_size: "20"          # USD per index point, as CME prices the NQ
+    base_currency: USD
+    quote_currency: USD
+    margin_rate: 0.01
+    typical_spread_points: 1.5
+    commission_per_lot: "0"
+    swap_long: "-9.80"
+    swap_short: "-2.40"
+    min_stop_distance_points: 5.0
+
+  - symbol: US30
+    asset_class: INDEX
+    tick_size: 0.1
+    point_size: 1.0
+    lot_step: "0.1"
+    min_lot: "0.1"
+    max_lot: "100"
+    contract_size: "5"           # USD per index point, as CME prices the YM
+    base_currency: USD
+    quote_currency: USD
+    margin_rate: 0.01
+    typical_spread_points: 2.0
+    commission_per_lot: "0"
+    swap_long: "-11.20"
+    swap_short: "-3.10"
+    min_stop_distance_points: 8.0
+
+  # --- Crypto CFD: one coin per lot, fractional sizes --------------------
+  - symbol: BTCUSD
+    asset_class: CRYPTO
+    tick_size: 0.01
+    point_size: 1.0
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "10"
+    contract_size: "1"
+    base_currency: BTC
+    quote_currency: USD
+    margin_rate: 0.5
+    typical_spread_points: 22.0
+    commission_per_lot: "0"
+    swap_long: "-45.00"
+    swap_short: "-45.00"
+    min_stop_distance_points: 50.0

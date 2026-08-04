@@ -27,6 +27,11 @@ class Settings(BaseSettings):
         log_level: Threshold for the root logger.
         data_dir: Root directory for local parquet market data.
         log_file: Destination for JSON logs. ``None`` disables file logging.
+        instruments_path: Contract specifications the Risk Engine sizes against,
+            loaded by :func:`~trading_system.core.instruments.load_instruments`.
+            A setting rather than a constant because tick sizes, lot bounds and
+            swap rates are broker-specific: two brokers' EURUSD are two files,
+            and hardcoding one of them would silently size against the wrong one.
     """
 
     model_config = SettingsConfigDict(
@@ -40,3 +45,4 @@ class Settings(BaseSettings):
     log_level: LogLevel = "INFO"
     data_dir: Path = Path("data")
     log_file: Path | None = None
+    instruments_path: Path = Path("configs/instruments.yaml")

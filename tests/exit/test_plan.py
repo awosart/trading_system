@@ -172,7 +172,7 @@ class TestIntrabarConflict:
         assert result.fills[0].decision.reason is ExitReason.PROTECTIVE_STOP
         assert result.fills[0].leg.price == pytest.approx(1.0900)
         assert position.realized_r() == pytest.approx(-1.0)
-        assert position.realized_pnl < 0
+        assert position.realized_quote_move < 0
 
     def test_optimistic_resolves_the_same_bar_as_a_win(self) -> None:
         position = long_position(entry=1.1000, stop=1.0900)
@@ -360,7 +360,7 @@ class TestPartialComposition:
         assert position.remaining_fraction == Decimal("0.0")
         # 0.5 * 1R + 0.5 * 2R, and the money agrees: 0.5*0.01 + 0.5*0.02.
         assert position.realized_r() == pytest.approx(1.5)
-        assert position.realized_pnl == Decimal("0.015")
+        assert position.realized_quote_move == Decimal("0.015")
         assert result.closed is True
         assert result.dropped == 0
 
@@ -383,21 +383,51 @@ class TestPartialComposition:
         assert result.fills[1].leg.fraction == Decimal("0.4")
         assert position.realized_r() == pytest.approx(0.6 * 1.0 + 0.4 * 1.5)
 
-    def test_smallest_fraction_reports_the_tightest_rung_statically(self) -> None:
-        # The hook the Risk Engine checks against min_lot at position open. It
-        # must answer without a run: there is no position yet when it is asked.
+    def test_smallest_partial_fraction_reports_the_tightest_rung_statically(self) -> None:
+        # Must answer without a run: there is no position yet when it is asked.
         plan = ExitPlan(
             exit_id="ladder",
             protective_stop=ProtectiveStop(),
             rules=[PartialAt(1.0, "0.5"), PartialAt(2.0, "0.25")],
         )
-        assert plan.smallest_fraction() == Decimal("0.25")
+        assert plan.smallest_partial_fraction() == Decimal("0.25")
 
-    def test_a_full_close_only_plan_has_no_smallest_fraction(self) -> None:
+    def test_a_full_close_only_plan_requests_no_partials(self) -> None:
         plan = ExitPlan(
             exit_id="all-or-nothing", protective_stop=ProtectiveStop(), rules=[FixedRR(2.0)]
         )
-        assert plan.smallest_fraction() is None
+        assert plan.smallest_partial_fraction() is None
+
+    def test_a_full_close_only_plans_smallest_close_is_the_whole_position(self) -> None:
+        # Not None: the Risk Engine's min_lot check then needs no special case,
+        # it degenerates into the ordinary "is this size tradable" question.
+        plan = ExitPlan(
+            exit_id="all-or-nothing", protective_stop=ProtectiveStop(), rules=[FixedRR(2.0)]
+        )
+        assert plan.smallest_closing_fraction() == Decimal("1")
+
+    def test_the_residual_counts_as_a_close_even_though_no_rule_requests_it(self) -> None:
+        # The hole this method exists to close. A 0.5 + 0.4 ladder requests
+        # nothing below 0.4, but after both rungs fire, 0.1 of the position is
+        # still open and gets closed in one go by whatever fires next. It is
+        # that 0.1 which decides whether the pairing survives min_lot, and
+        # reading the rungs alone would clear a plan whose last close is four
+        # times too small to execute.
+        plan = ExitPlan(
+            exit_id="leaves-a-tail",
+            protective_stop=ProtectiveStop(),
+            rules=[PartialAt(1.0, "0.5"), PartialAt(2.0, "0.4")],
+        )
+        assert plan.smallest_partial_fraction() == Decimal("0.4")
+        assert plan.smallest_closing_fraction() == Decimal("0.1")
+
+    def test_a_ladder_that_closes_the_position_exactly_leaves_no_residual(self) -> None:
+        plan = ExitPlan(
+            exit_id="exact",
+            protective_stop=ProtectiveStop(),
+            rules=[PartialAt(1.0, "0.5"), PartialAt(2.0, "0.25"), PartialAt(3.0, "0.25")],
+        )
+        assert plan.smallest_closing_fraction() == Decimal("0.25")
 
 
 class TestRunAccounting:

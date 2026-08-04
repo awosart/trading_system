@@ -187,7 +187,7 @@ class ExitDropReason(StrEnum):
     #: and not lots: it is incremented by the executor that owns the instrument
     #: metadata, and lives here because this is where exit counts are collected.
     #: The Risk Engine should have refused the pairing at position open — see
-    #: :meth:`~trading_system.exit.plan.ExitPlan.smallest_fraction`.
+    #: :meth:`~trading_system.exit.plan.ExitPlan.smallest_closing_fraction`.
     PARTIAL_QUANTIZED_TO_ZERO = "partial_quantized_to_zero"
 
 

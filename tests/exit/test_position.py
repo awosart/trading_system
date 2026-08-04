@@ -182,7 +182,7 @@ class TestFractionInvariant:
         # Atomic: the rejected close booked no leg, no PnL and no reduction.
         assert position.remaining_fraction == Decimal("0.4")
         assert len(position.legs) == 1
-        assert position.realized_pnl == Decimal("0.10") * Decimal("0.6") * Decimal("0.01")
+        assert position.realized_quote_move == Decimal("0.10") * Decimal("0.6") * Decimal("0.01")
 
     def test_a_ladder_sums_to_exactly_one(self) -> None:
         # Exactly, not to within a tolerance — which is why fractions are Decimal.
@@ -239,14 +239,14 @@ class TestRealisedResults:
         position.close_all(price=Price(1.0950), ts=bar_close_ts(2), reason=STOP)
 
         # 2 * 0.5 * (+0.01) + 2 * 0.5 * (-0.005)
-        assert position.realized_pnl == Decimal("0.005")
-        assert isinstance(position.realized_pnl, Decimal)
+        assert position.realized_quote_move == Decimal("0.005")
+        assert isinstance(position.realized_quote_move, Decimal)
         assert position.is_open is False
 
     def test_a_short_books_profit_when_price_falls(self) -> None:
         position = short_position(entry=1.1000, stop=1.1100, size=Decimal("1"))
         position.close_all(price=Price(1.0900), ts=bar_close_ts(1), reason=TAKE)
-        assert position.realized_pnl == Decimal("0.0100")
+        assert position.realized_quote_move == Decimal("0.0100")
         assert position.realized_r() == pytest.approx(1.0)
 
     def test_a_leg_records_where_and_why_it_closed(self) -> None:

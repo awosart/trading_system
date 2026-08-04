@@ -63,7 +63,7 @@ from trading_system.exit.base import (
 )
 from trading_system.exit.context import ExitContext
 from trading_system.exit.fills import approaches_from_below, resting_fill_price
-from trading_system.exit.position import ClosedLeg, ManagedPosition
+from trading_system.exit.position import WHOLE, ClosedLeg, ManagedPosition
 
 logger = get_logger(__name__)
 
@@ -218,24 +218,62 @@ class ExitPlan:
         """Instructions that could not be carried out as stated, since reset."""
         return MappingProxyType(dict(self._drops))
 
-    def smallest_fraction(self) -> Decimal | None:
-        """The smallest partial any rule in this plan can ever request.
+    def smallest_partial_fraction(self) -> Decimal | None:
+        """The smallest partial any rule in this plan can ever *request*.
 
         Static, derived from the rules' configuration rather than from a run.
+        Describes the ladder only, and says nothing about the residual left over
+        once every rung has fired — for the minimum-lot question, which is about
+        every close a position can undergo and not just the requested ones, use
+        :meth:`smallest_closing_fraction` instead.
+
+        Returns:
+            The smallest requested fraction, or ``None`` if this plan declares no
+            partials at all and only ever closes in full.
+        """
+        fractions = self._partial_fractions()
+        return min(fractions) if fractions else None
+
+    def smallest_closing_fraction(self) -> Decimal:
+        """The smallest fraction this plan can ever close in one go, residual included.
+
         This is the hook the minimum-lot problem is solved through, and it is
         deliberately the only part of that problem this layer touches: the Exit
         Engine speaks in fractions of a position and has no idea what a lot is,
         so it cannot tell whether "close 50%" is executable. The Risk Engine
         can — it holds both the size in lots and the instrument's ``min_lot`` —
         and with this it can refuse an unexecutable pairing *at position open*
-        instead of discovering mid-trade that a rung of the ladder rounds to
-        nothing.
+        instead of discovering mid-trade that a close rounds to nothing.
+
+        The difference from :meth:`smallest_partial_fraction` is the **residual**,
+        and it is not a corner case. A ladder of ``0.5 + 0.4`` requests nothing
+        smaller than ``0.4``, but once both rungs have fired the position still
+        holds ``0.1`` which some rule eventually closes in full — and ``0.1`` is
+        the fraction that decides whether the pairing is executable. Reading the
+        rungs alone would clear a plan whose last close is four times too small.
+
+        Returns a plain :class:`~decimal.Decimal` and never ``None``: there is
+        always some smallest close, and for a plan with no partials it is the
+        whole position, ``1``. That also means the caller needs no special case —
+        checking ``size * smallest_closing_fraction() >= min_lot`` degenerates
+        into the ordinary minimum-lot check exactly when it should.
 
         Returns:
-            The smallest fraction, or ``None`` if this plan only closes in full.
+            The smallest closable fraction, in ``(0, 1]``.
         """
-        fractions = [fraction for rule in self._rules for fraction in rule.partial_fractions]
-        return min(fractions) if fractions else None
+        fractions = self._partial_fractions()
+        if not fractions:
+            return WHOLE
+        residual = WHOLE - sum(fractions, Decimal(0))
+        # A residual of zero means the ladder closes the position exactly, and a
+        # negative one means the rungs across several rules could not all fire
+        # anyway — in both cases there is no final remainder to be too small.
+        candidates = [*fractions, residual] if residual > 0 else list(fractions)
+        return min(candidates)
+
+    def _partial_fractions(self) -> tuple[Decimal, ...]:
+        """Every partial fraction any rule in this plan can request."""
+        return tuple(fraction for rule in self._rules for fraction in rule.partial_fractions)
 
     def reset(self) -> None:
         """Return every rule, modifier and counter to its pre-run state."""

@@ -400,7 +400,7 @@
       "type": "object"
     },
     "InstrumentClass": {
-      "description": "Broad instrument category an entry is scoped to.",
+      "description": "Broad category an instrument belongs to.\n\nDeliberately *not* a settlement wrapper. There is no ``INDEX_CFD`` member\nbeside ``INDEX``: whether NAS100 reaches the account as a CFD, a future or a\ncash index changes ``contract_size``, ``margin_rate``, ``quote_currency`` and\nthe swap fields, every one of which is already a field here. Adding the\nwrapper as a class would instead produce a strategy scoped to ``INDEX`` that\nsilently never trades NAS100 \u2014 a defect that looks from outside like a quiet\nstrategy, which is the same failure mode a mis-spelled session name once\nproduced in :mod:`trading_system.entry.labels`.",
       "enum": [
         "FX",
         "CRYPTO",
@@ -412,9 +412,9 @@
       "title": "InstrumentClass",
       "type": "string"
     },
-    "InstrumentSpec": {
+    "InstrumentScope": {
       "additionalProperties": false,
-      "description": "Which instruments a strategy may be applied to.\n\nAttributes:\n    allowed_classes: Instrument classes this strategy is designed for.\n    allowed_symbols: Explicit allow-list. Empty means every symbol of an\n        allowed class is eligible.\n    denied_symbols: Explicit deny-list, checked after the allow-list.",
+      "description": "Which instruments a strategy may be applied to.\n\nA scope, not a specification: three lists that filter a universe. What one\ninstrument *is* \u2014 tick size, contract size, currencies, lot bounds \u2014 is\n:class:`~trading_system.core.instruments.InstrumentSpec`, which is what the\nRisk Engine sizes against. The two were briefly the same name, which made a\nfilter and a contract specification indistinguishable at every import site.\n\nAttributes:\n    allowed_classes: Instrument classes this strategy is designed for.\n    allowed_symbols: Explicit allow-list. Empty means every symbol of an\n        allowed class is eligible.\n    denied_symbols: Explicit deny-list, checked after the allow-list.",
       "properties": {
         "allowed_classes": {
           "items": {
@@ -442,7 +442,7 @@
       "required": [
         "allowed_classes"
       ],
-      "title": "InstrumentSpec",
+      "title": "InstrumentScope",
       "type": "object"
     },
     "Invalidation": {
@@ -1174,7 +1174,7 @@
       "$ref": "#/$defs/TimeframeSpec"
     },
     "instruments": {
-      "$ref": "#/$defs/InstrumentSpec"
+      "$ref": "#/$defs/InstrumentScope"
     },
     "market_regimes": {
       "items": {

@@ -58,7 +58,15 @@ class ClosedLeg:
         r_multiple: This leg's result in units of the position's initial risk,
             at ``price``. Unweighted — multiply by ``fraction`` to contribute it
             to the position's total.
-        pnl: This leg's profit in quote currency, ``size * fraction * move``.
+        gross_quote_move: This leg's price movement times the size it closed,
+            ``size * fraction * (price - entry_price)``, signed by direction.
+            **Not money in the account**, and named so that saying otherwise
+            takes effort: it is denominated in the instrument's QUOTE currency,
+            carries no contract-size multiplier, and has had no commission or
+            swap deducted. Turning it into account currency is
+            :func:`trading_system.risk.pnl.realized_pnl`'s job, which holds the
+            :class:`~trading_system.core.instruments.InstrumentSpec` and an FX
+            rate — neither of which this layer has or should acquire.
         stop_source: :attr:`ManagedPosition.stop_source` as it stood at the
             moment this leg closed. Meaningful when ``reason`` is
             ``PROTECTIVE_STOP`` — every stop-modifier collapses onto that one
@@ -76,7 +84,7 @@ class ClosedLeg:
     ts: datetime
     reason: ExitReason
     r_multiple: float
-    pnl: Decimal
+    gross_quote_move: Decimal
     stop_source: str
 
 
@@ -333,17 +341,21 @@ class ManagedPosition:
         return self.realized_r() + self.open_r(price)
 
     @property
-    def realized_pnl(self) -> Decimal:
-        """Profit booked so far, in quote currency, as ``Decimal``.
+    def realized_quote_move(self) -> Decimal:
+        """Every closed leg's :attr:`ClosedLeg.gross_quote_move`, summed.
 
-        Money, so decimal — the float price move is converted at this one
-        boundary via ``str`` and never mixed back into a float total. The figure
-        is ``size * fraction * move`` and therefore assumes size is already in
-        instrument units; a contract-size multiplier, where an instrument has
-        one, belongs to the Risk Engine's instrument metadata and is applied
-        above this layer.
+        Decimal, because the float price move crosses into money's arithmetic at
+        this one boundary via ``str`` and is never mixed back into a float total.
+
+        **Not account P&L**, for the same three reasons the leg-level figure is
+        not: quote currency rather than account currency, no contract-size
+        multiplier, no costs. The name says ``quote_move`` and not ``pnl``
+        precisely so that a caller who wants account P&L has to go and get
+        :func:`trading_system.risk.pnl.realized_pnl`, which needs an
+        :class:`~trading_system.core.instruments.InstrumentSpec` and an FX rate
+        that this layer deliberately does not hold.
         """
-        return sum((leg.pnl for leg in self._legs), Decimal(0))
+        return sum((leg.gross_quote_move for leg in self._legs), Decimal(0))
 
     def tighten_stop(self, level: Price, *, source: str) -> bool:
         """Move the stop toward the entry, never away from it.
@@ -426,7 +438,7 @@ class ManagedPosition:
             ts=ensure_utc(ts),
             reason=reason,
             r_multiple=self.r_multiple(price),
-            pnl=self._size * fraction * move * direction,
+            gross_quote_move=self._size * fraction * move * direction,
             stop_source=self._stop_source,
         )
         self._remaining -= fraction

@@ -1,7 +1,7 @@
 """The Exit DB: preset specs, the loader, and the eight bundled presets.
 
 DoD items covered here: all eight presets load and validate; ``load_library``
-raises a clear, preset-naming error on a broken one; ``smallest_fraction()``
+raises a clear, preset-naming error on a broken one; the smallest-fraction hooks
 answers correctly for every preset, ladder or not.
 """
 
@@ -261,23 +261,31 @@ class TestExitLibraryApi:
 
 
 class TestSmallestFractionPerPreset:
-    """DoD: ``smallest_fraction()`` is correct for every preset, ladder or not.
+    """DoD: the smallest-fraction hooks are correct for every preset.
 
-    This is exactly what P08 will call at position-open time to decide whether
-    a partial ladder survives the instrument's minimum lot.
+    ``smallest_closing_fraction()`` is exactly what the Risk Engine calls at
+    position-open time to decide whether a preset survives the instrument's
+    minimum lot.
     """
 
     @pytest.mark.parametrize(
         "exit_id",
         sorted(BUNDLED_PRESET_IDS - {"swing_partial_ladder"}),
     )
-    def test_presets_without_a_ladder_report_none(self, exit_id: str) -> None:
+    def test_presets_without_a_ladder_request_no_partials(self, exit_id: str) -> None:
         library = load_library()
-        assert library[exit_id].smallest_fraction() is None
+        assert library[exit_id].smallest_partial_fraction() is None
+        assert library[exit_id].smallest_closing_fraction() == Decimal("1")
 
     def test_swing_partial_ladder_reports_its_smallest_rung(self) -> None:
         library = load_library()
-        assert library["swing_partial_ladder"].smallest_fraction() == Decimal("0.25")
+        assert library["swing_partial_ladder"].smallest_partial_fraction() == Decimal("0.25")
+
+    def test_swing_partial_ladders_residual_is_no_smaller_than_its_rungs(self) -> None:
+        # 0.5 + 0.25 leaves 0.25, equal to the smallest rung, so the bundled
+        # ladder is not the tail case -- but it is asserted rather than assumed.
+        library = load_library()
+        assert library["swing_partial_ladder"].smallest_closing_fraction() == Decimal("0.25")
 
 
 class TestKnownExitIds:

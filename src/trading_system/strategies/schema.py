@@ -32,6 +32,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from trading_system.core.instruments import InstrumentClass
 from trading_system.core.types import Timeframe
 
 #: Location of the generated JSON Schema, kept alongside this module so editors
@@ -99,17 +100,6 @@ class ConditionOp(StrEnum):
     PATTERN_IS = "pattern_is"
     REGIME_IS = "regime_is"
     SESSION_IS = "session_is"
-
-
-class InstrumentClass(StrEnum):
-    """Broad instrument category an entry is scoped to."""
-
-    FX = "FX"
-    CRYPTO = "CRYPTO"
-    EQUITY = "EQUITY"
-    FUTURES = "FUTURES"
-    INDEX = "INDEX"
-    COMMODITY = "COMMODITY"
 
 
 _PRICE_FIELDS = ("open", "high", "low", "close", "volume")
@@ -725,8 +715,14 @@ class TimeframeSpec(BaseModel):
     entry_tf: Timeframe
 
 
-class InstrumentSpec(BaseModel):
+class InstrumentScope(BaseModel):
     """Which instruments a strategy may be applied to.
+
+    A scope, not a specification: three lists that filter a universe. What one
+    instrument *is* — tick size, contract size, currencies, lot bounds — is
+    :class:`~trading_system.core.instruments.InstrumentSpec`, which is what the
+    Risk Engine sizes against. The two were briefly the same name, which made a
+    filter and a contract specification indistinguishable at every import site.
 
     Attributes:
         allowed_classes: Instrument classes this strategy is designed for.
@@ -742,7 +738,7 @@ class InstrumentSpec(BaseModel):
     denied_symbols: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _no_symbol_both_allowed_and_denied(self) -> "InstrumentSpec":
+    def _no_symbol_both_allowed_and_denied(self) -> "InstrumentScope":
         """Reject a symbol appearing on both lists, which is unresolvable."""
         overlap = sorted(set(self.allowed_symbols) & set(self.denied_symbols))
         if overlap:
@@ -794,7 +790,7 @@ class StrategySpec(BaseModel):
     type: StrategyType
     status: Status = Status.DRAFT
     timeframes: TimeframeSpec
-    instruments: InstrumentSpec
+    instruments: InstrumentScope
     market_regimes: list[Regime] = Field(default_factory=list)
     entries: list[EntrySpec] = Field(min_length=1, max_length=2)
     exit_ref: str = Field(min_length=1)

@@ -12,6 +12,7 @@ from typing import Any
 import polars as pl
 import pytest
 
+from trading_system.core.instruments import InstrumentClass
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
 from trading_system.entry.context import PRICE_FIELDS, BarSeries
@@ -20,8 +21,7 @@ from trading_system.strategies.schema import (
     EntryOrderSpec,
     EntrySpec,
     FeatureRef,
-    InstrumentClass,
-    InstrumentSpec,
+    InstrumentScope,
     Invalidation,
     LabelSet,
     LeafCondition,
@@ -239,7 +239,7 @@ def strategy_spec(
         author="tests",
         type=StrategyType.INTRADAY,
         timeframes=TimeframeSpec(signal_tf=TIMEFRAME, entry_tf=TIMEFRAME),
-        instruments=InstrumentSpec(allowed_classes=[InstrumentClass.FX]),
+        instruments=InstrumentScope(allowed_classes=[InstrumentClass.FX]),
         entries=list(entries),
         exit_ref="test-exit",
         risk_profile=RiskProfileSpec(
