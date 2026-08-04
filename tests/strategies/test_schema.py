@@ -12,16 +12,17 @@ from trading_system.strategies.schema import (
     AllOf,
     AnyOf,
     ConditionOp,
+    FeatureRef,
     LeafCondition,
     Not,
     StrategySpec,
     iter_leaf_conditions,
-    operand_feature_name,
+    operand_feature_ref,
     operand_price_field,
     strategy_json_schema,
 )
 
-from .conftest import EXAMPLE_FILES, leaf
+from .conftest import EXAMPLE_FILES, feature_ref, leaf
 
 
 class TestRoundTrip:
@@ -56,10 +57,8 @@ class TestIdAndVersion:
 
 
 class TestOperands:
-    @pytest.mark.parametrize(
-        "bad_ref", ["feature:", "price:bogus", "just_a_string", "feature:123bad"]
-    )
-    def test_rejects_malformed_operand_ref(
+    @pytest.mark.parametrize("bad_ref", ["price:", "price:bogus", "just_a_string"])
+    def test_rejects_malformed_price_ref(
         self, minimal_spec_dict: dict[str, Any], bad_ref: str
     ) -> None:
         minimal_spec_dict["entry"]["trigger"]["right"] = bad_ref
@@ -71,14 +70,31 @@ class TestOperands:
         spec = StrategySpec.model_validate(minimal_spec_dict)
         assert spec.entry.trigger.right == 100.5  # type: ignore[union-attr]
 
-    def test_operand_feature_name(self) -> None:
-        assert operand_feature_name("feature:rsi_14") == "rsi_14"
-        assert operand_feature_name("price:close") is None
-        assert operand_feature_name(70.0) is None
+    def test_accepts_structural_feature_ref(self, minimal_spec_dict: dict[str, Any]) -> None:
+        minimal_spec_dict["entry"]["trigger"] = leaf(
+            "gt", "price:close", feature_ref("rsi", {"period": 14})
+        )
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        expected = FeatureRef(indicator="rsi", params={"period": 14})
+        assert spec.entry.trigger.right == expected  # type: ignore[union-attr]
+
+    def test_feature_ref_rejects_unknown_field(self) -> None:
+        with pytest.raises(ValidationError, match="bogus"):
+            FeatureRef.model_validate({"indicator": "rsi", "bogus": 1})
+
+    def test_feature_ref_rejects_empty_channel(self) -> None:
+        with pytest.raises(ValidationError):
+            FeatureRef.model_validate({"indicator": "rsi", "channel": ""})
+
+    def test_operand_feature_ref(self) -> None:
+        ref = FeatureRef(indicator="rsi", params={"period": 14})
+        assert operand_feature_ref(ref) is ref
+        assert operand_feature_ref("price:close") is None
+        assert operand_feature_ref(70.0) is None
 
     def test_operand_price_field(self) -> None:
         assert operand_price_field("price:close") == "close"
-        assert operand_price_field("feature:rsi_14") is None
+        assert operand_price_field(FeatureRef(indicator="rsi")) is None
         assert operand_price_field(70.0) is None
 
 
@@ -91,13 +107,17 @@ class TestConditionTree:
                         LeafCondition(op=ConditionOp.GT, left="price:close", right=1.0),
                         Not(
                             condition=LeafCondition(
-                                op=ConditionOp.LT, left="feature:rsi_14", right=30.0
+                                op=ConditionOp.LT,
+                                left=FeatureRef(indicator="rsi", params={"period": 14}),
+                                right=30.0,
                             )
                         ),
                     ]
                 ),
                 LeafCondition(
-                    op=ConditionOp.CROSS_ABOVE, left="price:close", right="feature:ema_50"
+                    op=ConditionOp.CROSS_ABOVE,
+                    left="price:close",
+                    right=FeatureRef(indicator="ema", params={"period": 50}),
                 ),
             ]
         )
@@ -113,7 +133,9 @@ class TestConditionTree:
 
 class TestEntryConsistency:
     def test_confirmation_requires_positive_window(self, minimal_spec_dict: dict[str, Any]) -> None:
-        minimal_spec_dict["entry"]["confirmation"] = [leaf("gt", "feature:rsi_14", 50.0)]
+        minimal_spec_dict["entry"]["confirmation"] = [
+            leaf("gt", feature_ref("rsi", {"period": 14}), 50.0)
+        ]
         with pytest.raises(ValidationError, match="confirmation_window_bars"):
             StrategySpec.model_validate(minimal_spec_dict)
 
@@ -127,7 +149,9 @@ class TestEntryConsistency:
     def test_confirmation_with_matching_window_is_accepted(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["entry"]["confirmation"] = [leaf("gt", "feature:rsi_14", 50.0)]
+        minimal_spec_dict["entry"]["confirmation"] = [
+            leaf("gt", feature_ref("rsi", {"period": 14}), 50.0)
+        ]
         minimal_spec_dict["entry"]["confirmation_window_bars"] = 3
         spec = StrategySpec.model_validate(minimal_spec_dict)
         assert spec.entry.confirmation_window_bars == 3
@@ -152,7 +176,9 @@ class TestInstrumentsAndFilters:
     def test_volatility_range_filter_requires_a_bound(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["filters"] = [{"kind": "volatility_range", "feature": "feature:atr_14"}]
+        minimal_spec_dict["filters"] = [
+            {"kind": "volatility_range", "feature": feature_ref("atr", {"period": 14})}
+        ]
         with pytest.raises(ValidationError, match="min_value"):
             StrategySpec.model_validate(minimal_spec_dict)
 

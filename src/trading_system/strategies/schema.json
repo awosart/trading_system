@@ -351,6 +351,40 @@
       "title": "EntrySpec",
       "type": "object"
     },
+    "FeatureRef": {
+      "additionalProperties": false,
+      "description": "A structural pointer to one channel of one registered indicator.\n\nReplaces an earlier ``\"feature:<name>\"`` string convention, which could not\ndistinguish a legitimate unusual parameter (``rsi`` with ``period=500``)\nfrom a typo, and had no way to say *which* channel of a multi-output\nindicator like MACD or Bollinger Bands was meant \u2014 both are things\n:mod:`trading_system.strategies.validator` must be able to check against\nthe real indicator registry, not guess at from a string.\n\nAttributes:\n    indicator: Registry key, e.g. ``\"rsi\"`` \u2014 see\n        :data:`~trading_system.features.registry.INDICATOR_TYPES`.\n    params: Constructor arguments for the indicator, e.g. ``{\"period\": 14}``.\n        Empty means every parameter takes its default.\n    channel: Which output channel to read, e.g. ``\"signal\"`` for MACD.\n        Required for multi-output indicators; must be omitted for\n        single-output ones, which publish under their own name with no\n        channel to choose between.",
+      "properties": {
+        "indicator": {
+          "minLength": 1,
+          "title": "Indicator",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "channel": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel"
+        }
+      },
+      "required": [
+        "indicator"
+      ],
+      "title": "FeatureRef",
+      "type": "object"
+    },
     "FixedPipsStop": {
       "additionalProperties": false,
       "description": "A stop at a fixed pip distance.\n\nAttributes:\n    pips: Stop distance in pips.",
@@ -460,6 +494,9 @@
         "price_level": {
           "anyOf": [
             {
+              "$ref": "#/$defs/FeatureRef"
+            },
+            {
               "type": "string"
             },
             {
@@ -492,6 +529,9 @@
         "left": {
           "anyOf": [
             {
+              "$ref": "#/$defs/FeatureRef"
+            },
+            {
               "type": "string"
             },
             {
@@ -506,6 +546,9 @@
         },
         "right": {
           "anyOf": [
+            {
+              "$ref": "#/$defs/FeatureRef"
+            },
             {
               "type": "string"
             },
@@ -1025,7 +1068,7 @@
     },
     "VolatilityRangeFilter": {
       "additionalProperties": false,
-      "description": "Only allow entries while a volatility feature sits inside a band.\n\nAttributes:\n    feature: Volatility feature reference, e.g. ``\"feature:atr_14\"``.\n    min_value: Inclusive lower bound. ``None`` means no lower bound.\n    max_value: Inclusive upper bound. ``None`` means no upper bound.",
+      "description": "Only allow entries while a volatility feature sits inside a band.\n\nAttributes:\n    feature: Volatility feature reference, e.g. ATR.\n    min_value: Inclusive lower bound. ``None`` means no lower bound.\n    max_value: Inclusive upper bound. ``None`` means no upper bound.",
       "properties": {
         "kind": {
           "const": "volatility_range",
@@ -1034,8 +1077,7 @@
           "type": "string"
         },
         "feature": {
-          "title": "Feature",
-          "type": "string"
+          "$ref": "#/$defs/FeatureRef"
         },
         "min_value": {
           "anyOf": [

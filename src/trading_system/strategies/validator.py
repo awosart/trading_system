@@ -8,17 +8,16 @@ two strategies claim the same id. Those checks live here and report as
 :class:`ValidationIssue`, not exceptions, so a CLI invocation can show every
 problem in one pass instead of stopping at the first.
 
-``known_feature_kinds`` and ``known_exit_ids`` are supplied by the caller rather
-than hardcoded, because neither registry is reachable from this module without
-creating a dependency cycle: the Exit DB doesn't exist yet (built in a later
-phase), and feature specs only become concrete *column* names once assembled
-into a :class:`~trading_system.features.pipeline.FeaturePipeline`, which a bare
-:class:`~trading_system.strategies.schema.StrategySpec` does not carry. Absent an
-explicit collection, feature references are checked against indicator *kinds*
-in :data:`~trading_system.features.registry.INDICATOR_TYPES` by prefix — e.g.
-``feature:rsi_14`` matches kind ``"rsi"`` — which catches typos and unknown
-indicators without requiring the caller to enumerate every parameterised
-column name up front.
+Feature references are checked directly against
+:data:`~trading_system.features.registry.INDICATOR_TYPES`: a :class:`.FeatureRef`
+names an indicator and its constructor parameters structurally, so
+:func:`~trading_system.features.registry.build_indicator` — the same function a
+real :class:`~trading_system.features.pipeline.FeaturePipeline` uses — already
+does the work of confirming the indicator exists, its parameters match the
+constructor, and their values pass that indicator's own bounds checks. This
+registry is complete today, unlike the Exit DB: ``known_exit_ids`` is still
+supplied by the caller and defaults to skipping that check, because no Exit
+Engine exists yet to consult.
 """
 
 from collections.abc import Collection, Iterator, Sequence
@@ -28,14 +27,16 @@ from pathlib import Path
 
 import pydantic
 
-from trading_system.features.registry import INDICATOR_TYPES
+from trading_system.core.exceptions import ValidationError as IndicatorValidationError
+from trading_system.features.registry import INDICATOR_TYPES, build_indicator
 from trading_system.strategies.schema import (
     Condition,
     ConditionOp,
+    FeatureRef,
     Regime,
     StrategySpec,
+    VolatilityRangeFilter,
     iter_leaf_conditions,
-    operand_feature_name,
 )
 
 
@@ -90,52 +91,104 @@ def _iter_spec_conditions(spec: StrategySpec) -> Iterator[Condition]:
         yield modifier.condition
 
 
-def _feature_kind_known(feature_name: str, known_kinds: Collection[str]) -> bool:
-    """Whether ``feature_name`` plausibly comes from one of ``known_kinds``.
+def check_feature_reference(ref: FeatureRef) -> list[ValidationIssue]:
+    """Validate one structural feature reference against the indicator registry.
 
-    A feature column is usually named ``{kind}_{params}`` (e.g. ``rsi_14``,
-    matching indicator kind ``"rsi"``) but may also be a bare kind name with no
-    parameters (e.g. ``obv``), so both forms are accepted.
+    Checks, in order: the indicator is registered; its channel is required and
+    known for a multi-output indicator, or absent for a single-output one; its
+    parameters match the indicator's constructor and pass that indicator's own
+    bounds checks (via :func:`~trading_system.features.registry.build_indicator`,
+    the same path a real pipeline uses).
+
+    Args:
+        ref: Feature reference to check.
+
+    Returns:
+        Every issue found. Empty means the reference is usable as-is.
     """
-    return any(feature_name == kind or feature_name.startswith(f"{kind}_") for kind in known_kinds)
+    indicator_type = INDICATOR_TYPES.get(ref.indicator)
+    if indicator_type is None:
+        return [
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="unknown_indicator",
+                message=(
+                    f"indicator {ref.indicator!r} is not registered; "
+                    f"known: {sorted(INDICATOR_TYPES)}"
+                ),
+                path="entry",
+            )
+        ]
+
+    issues: list[ValidationIssue] = []
+    outputs = indicator_type.outputs
+    if len(outputs) > 1 and ref.channel is None:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="missing_channel",
+                message=(
+                    f"indicator {ref.indicator!r} is multi-output; channel is required, "
+                    f"one of {outputs}"
+                ),
+                path="entry",
+            )
+        )
+    elif len(outputs) > 1 and ref.channel not in outputs:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="unknown_channel",
+                message=(
+                    f"indicator {ref.indicator!r} has no channel {ref.channel!r}; known: {outputs}"
+                ),
+                path="entry",
+            )
+        )
+    elif len(outputs) == 1 and ref.channel is not None:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="unexpected_channel",
+                message=f"indicator {ref.indicator!r} is single-output; channel must be omitted",
+                path="entry",
+            )
+        )
+
+    try:
+        build_indicator(ref.indicator, ref.params)
+    except IndicatorValidationError as error:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="invalid_indicator_params",
+                message=str(error),
+                path="entry",
+            )
+        )
+    return issues
 
 
-def check_feature_references(
-    spec: StrategySpec, known_feature_kinds: Collection[str]
-) -> list[ValidationIssue]:
-    """Flag ``feature:*`` references that match no registered indicator kind.
+def check_feature_references(spec: StrategySpec) -> list[ValidationIssue]:
+    """Validate every feature reference embedded in a spec.
 
     Args:
         spec: Strategy to check.
-        known_feature_kinds: Registry keys (e.g. ``INDICATOR_TYPES``) that a
-            feature reference's prefix must match.
 
     Returns:
-        One ``ERROR`` per distinct unresolved feature name.
+        Every issue found across every :class:`FeatureRef` in the spec's
+        conditions and filters.
     """
-    unresolved: dict[str, None] = {}
+    issues: list[ValidationIssue] = []
     for condition in _iter_spec_conditions(spec):
         for leaf in iter_leaf_conditions(condition):
             for operand in (leaf.left, leaf.right):
-                if operand is None or isinstance(operand, tuple):
-                    continue
-                name = operand_feature_name(operand)
-                if name is not None and not _feature_kind_known(name, known_feature_kinds):
-                    unresolved[name] = None
+                if isinstance(operand, FeatureRef):
+                    issues.extend(check_feature_reference(operand))
     for filter_spec in spec.filters:
-        if filter_spec.kind == "volatility_range":
-            name = operand_feature_name(filter_spec.feature)
-            if name is not None and not _feature_kind_known(name, known_feature_kinds):
-                unresolved[name] = None
-    return [
-        ValidationIssue(
-            severity=Severity.ERROR,
-            code="unknown_feature",
-            message=f"feature:{name} matches no registered indicator kind",
-            path="entry",
-        )
-        for name in unresolved
-    ]
+        if isinstance(filter_spec, VolatilityRangeFilter):
+            issues.extend(check_feature_reference(filter_spec.feature))
+    return issues
 
 
 def check_exit_ref(
@@ -245,25 +298,20 @@ def check_regime_trigger_contradiction(spec: StrategySpec) -> list[ValidationIss
 def validate_spec(
     spec: StrategySpec,
     *,
-    known_feature_kinds: Collection[str] | None = None,
     known_exit_ids: Collection[str] | None = None,
 ) -> list[ValidationIssue]:
     """Run every semantic check against one spec.
 
     Args:
         spec: Strategy to check.
-        known_feature_kinds: Registry keys feature references are matched
-            against. Defaults to every kind in
-            :data:`~trading_system.features.registry.INDICATOR_TYPES`.
         known_exit_ids: Registered exit ids. ``None`` skips the ``exit_ref``
             existence check.
 
     Returns:
         Every issue found, in check order. Empty means the spec is clean.
     """
-    kinds = known_feature_kinds if known_feature_kinds is not None else INDICATOR_TYPES.keys()
     return [
-        *check_feature_references(spec, kinds),
+        *check_feature_references(spec),
         *check_exit_ref(spec, known_exit_ids),
         *check_timeframe_order(spec),
         *check_regime_trigger_contradiction(spec),
@@ -333,7 +381,6 @@ def load_spec(path: Path) -> ParsedStrategy:
 def validate_paths(
     paths: Sequence[Path],
     *,
-    known_feature_kinds: Collection[str] | None = None,
     known_exit_ids: Collection[str] | None = None,
 ) -> dict[Path, list[ValidationIssue]]:
     """Load and fully validate a batch of strategy files together.
@@ -344,7 +391,6 @@ def validate_paths(
 
     Args:
         paths: Strategy JSON files to validate.
-        known_feature_kinds: Forwarded to :func:`validate_spec`.
         known_exit_ids: Forwarded to :func:`validate_spec`.
 
     Returns:
@@ -355,13 +401,7 @@ def validate_paths(
     results: dict[Path, list[ValidationIssue]] = {item.path: list(item.issues) for item in parsed}
     for item in parsed:
         if item.spec is not None:
-            results[item.path].extend(
-                validate_spec(
-                    item.spec,
-                    known_feature_kinds=known_feature_kinds,
-                    known_exit_ids=known_exit_ids,
-                )
-            )
+            results[item.path].extend(validate_spec(item.spec, known_exit_ids=known_exit_ids))
 
     by_id: dict[str, list[Path]] = {}
     for item in parsed:

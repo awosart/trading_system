@@ -9,10 +9,15 @@ its exit by ``exit_ref`` rather than embedding one, so the two combine N×M
 without either importing the other.
 
 Condition trees (``Condition = LeafCondition | AllOf | AnyOf | Not``) are the one
-recursive piece. Every leaf compares two operands, each of which is a feature
-reference (``"feature:rsi_14"``), a price reference (``"price:close"``), or a
-bare numeric constant — see :func:`operand_feature_name` for how callers such as
-:mod:`trading_system.strategies.validator` inspect them.
+recursive piece. Every leaf compares two operands, each of which is a
+:class:`FeatureRef` (a structured pointer to one indicator, its parameters and,
+for multi-output indicators, a channel), a price reference (``"price:close"``),
+or a bare numeric constant. A :class:`FeatureRef` deliberately does not collapse
+back into a string like ``"feature:rsi_14"``: a string forces a reader (human or
+validator) to reverse-engineer which indicator and parameters produced it, and
+cannot express *which channel* of a multi-output indicator like MACD is meant at
+all. :mod:`trading_system.strategies.validator` checks a ``FeatureRef``'s
+``indicator``, ``params`` and ``channel`` against the real indicator registry.
 
 Every model here is frozen and rejects unknown fields (``extra="forbid"``): a
 strategy spec is version-controlled configuration, not a scratch object, and a
@@ -99,29 +104,18 @@ class InstrumentClass(StrEnum):
     COMMODITY = "COMMODITY"
 
 
-_FEATURE_NAME = r"[A-Za-z_][A-Za-z0-9_]*"
 _PRICE_FIELDS = ("open", "high", "low", "close", "volume")
-_FEATURE_REF_PATTERN = re.compile(rf"^feature:{_FEATURE_NAME}$")
 _PRICE_REF_PATTERN = re.compile(rf"^price:({'|'.join(_PRICE_FIELDS)})$")
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 _TIME_OF_DAY_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
-def _validate_operand_ref(value: str) -> str:
-    """Reject any string operand that isn't a ``feature:`` or ``price:`` reference."""
-    if _FEATURE_REF_PATTERN.match(value) or _PRICE_REF_PATTERN.match(value):
+def _validate_price_ref(value: str) -> str:
+    """Reject any string that isn't a ``price:<field>`` reference."""
+    if _PRICE_REF_PATTERN.match(value):
         return value
-    raise ValueError(
-        f"operand ref {value!r} must match 'feature:<name>' or 'price:<{'|'.join(_PRICE_FIELDS)}>'"
-    )
-
-
-def _validate_feature_ref(value: str) -> str:
-    """Reject any string that isn't specifically a ``feature:`` reference."""
-    if _FEATURE_REF_PATTERN.match(value):
-        return value
-    raise ValueError(f"{value!r} must match 'feature:<name>'")
+    raise ValueError(f"{value!r} must match 'price:<{'|'.join(_PRICE_FIELDS)}>'")
 
 
 def _validate_time_of_day(value: str) -> str:
@@ -131,11 +125,39 @@ def _validate_time_of_day(value: str) -> str:
     return value
 
 
-#: A leaf operand: a feature/price reference string, or a bare numeric constant.
-Operand = Annotated[str, AfterValidator(_validate_operand_ref)] | float
+class FeatureRef(BaseModel):
+    """A structural pointer to one channel of one registered indicator.
 
-#: A feature-only reference, used where a price reference makes no sense.
-FeatureRef = Annotated[str, AfterValidator(_validate_feature_ref)]
+    Replaces an earlier ``"feature:<name>"`` string convention, which could not
+    distinguish a legitimate unusual parameter (``rsi`` with ``period=500``)
+    from a typo, and had no way to say *which* channel of a multi-output
+    indicator like MACD or Bollinger Bands was meant — both are things
+    :mod:`trading_system.strategies.validator` must be able to check against
+    the real indicator registry, not guess at from a string.
+
+    Attributes:
+        indicator: Registry key, e.g. ``"rsi"`` — see
+            :data:`~trading_system.features.registry.INDICATOR_TYPES`.
+        params: Constructor arguments for the indicator, e.g. ``{"period": 14}``.
+            Empty means every parameter takes its default.
+        channel: Which output channel to read, e.g. ``"signal"`` for MACD.
+            Required for multi-output indicators; must be omitted for
+            single-output ones, which publish under their own name with no
+            channel to choose between.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    indicator: str = Field(min_length=1)
+    params: dict[str, Any] = Field(default_factory=dict)
+    channel: str | None = Field(default=None, min_length=1)
+
+
+#: A price reference string, e.g. ``"price:close"``.
+PriceRef = Annotated[str, AfterValidator(_validate_price_ref)]
+
+#: A leaf operand: a feature reference, a price reference, or a bare constant.
+Operand = FeatureRef | PriceRef | float
 
 #: Inclusive numeric bounds, e.g. the ``[30, 70]`` in an RSI ``between`` check.
 RangeBound = tuple[float, float]
@@ -143,19 +165,16 @@ RangeBound = tuple[float, float]
 TimeOfDay = Annotated[str, AfterValidator(_validate_time_of_day)]
 
 
-def operand_feature_name(operand: Operand | RangeBound) -> str | None:
-    """The feature name referenced by ``operand``, or ``None`` if it isn't one.
+def operand_feature_ref(operand: Operand | RangeBound) -> FeatureRef | None:
+    """The :class:`FeatureRef` carried by ``operand``, or ``None`` if it isn't one.
 
     Args:
         operand: A leaf condition's ``left`` or ``right`` value.
 
     Returns:
-        The name after ``feature:``, or ``None`` for a price reference,
-        constant, or range bound.
+        ``operand`` itself when it is a :class:`FeatureRef`, else ``None``.
     """
-    if isinstance(operand, str) and operand.startswith("feature:"):
-        return operand.removeprefix("feature:")
-    return None
+    return operand if isinstance(operand, FeatureRef) else None
 
 
 def operand_price_field(operand: Operand | RangeBound) -> str | None:
@@ -414,7 +433,7 @@ class VolatilityRangeFilter(BaseModel):
     """Only allow entries while a volatility feature sits inside a band.
 
     Attributes:
-        feature: Volatility feature reference, e.g. ``"feature:atr_14"``.
+        feature: Volatility feature reference, e.g. ATR.
         min_value: Inclusive lower bound. ``None`` means no lower bound.
         max_value: Inclusive upper bound. ``None`` means no upper bound.
     """

@@ -22,16 +22,35 @@
     "trigger": {
       "type": "all_of",
       "conditions": [
-        { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 30.0 },
-        { "type": "leaf", "op": "lt", "left": "feature:adx_14", "right": 20.0 }
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": { "indicator": "rsi", "params": { "period": 14 } },
+          "right": 30.0
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": { "indicator": "adx", "params": { "period": 14 }, "channel": "adx" },
+          "right": 20.0
+        }
       ]
     },
     "confirmation": [
-      { "type": "leaf", "op": "gt", "left": "feature:rsi_14", "right": 30.0 }
+      {
+        "type": "leaf",
+        "op": "gt",
+        "left": { "indicator": "rsi", "params": { "period": 14 } },
+        "right": 30.0
+      }
     ],
     "confirmation_window_bars": 3,
     "invalidation": {
-      "price_level": "feature:swing_low"
+      "price_level": {
+        "indicator": "swing",
+        "params": { "lookback": 5 },
+        "channel": "swing_low"
+      }
     },
     "entry_order": {
       "order": { "type": "MARKET" },
@@ -42,13 +61,23 @@
   "filters": [
     { "kind": "session", "sessions": ["LONDON", "NEW_YORK"] },
     { "kind": "spread_max", "max_spread_pips": 1.5 },
-    { "kind": "volatility_range", "feature": "feature:atr_14", "min_value": 0.0003, "max_value": 0.0020 }
+    {
+      "kind": "volatility_range",
+      "feature": { "indicator": "atr", "params": { "period": 14 } },
+      "min_value": 0.0003,
+      "max_value": 0.0020
+    }
   ],
   "risk_profile": {
     "base_quality": 0.5,
     "quality_modifiers": [
       {
-        "condition": { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 20.0 },
+        "condition": {
+          "type": "leaf",
+          "op": "lt",
+          "left": { "indicator": "rsi", "params": { "period": 14 } },
+          "right": 20.0
+        },
         "delta": 0.1,
         "reason": "Deeply oversold adds conviction to the bounce"
       }

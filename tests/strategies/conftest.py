@@ -23,13 +23,23 @@ def leaf(op: str, left: Any = None, right: Any = None) -> dict[str, Any]:
     return condition
 
 
+def feature_ref(
+    indicator: str, params: dict[str, Any] | None = None, channel: str | None = None
+) -> dict[str, Any]:
+    """Build a structural feature-reference dict for a leaf operand."""
+    ref: dict[str, Any] = {"indicator": indicator, "params": params or {}}
+    if channel is not None:
+        ref["channel"] = channel
+    return ref
+
+
 @pytest.fixture
 def minimal_spec_dict() -> dict[str, Any]:
     """The smallest strategy spec dict satisfying every required field.
 
-    References ``feature:ema_50``, which matches the registered ``ema`` kind,
-    so this spec passes :func:`~trading_system.strategies.validator.validate_spec`
-    with its default feature registry unmodified.
+    References ``ema`` with ``period=50``, a registered single-output
+    indicator, so this spec passes
+    :func:`~trading_system.strategies.validator.validate_spec` unmodified.
     """
     return {
         "id": "test-strategy",
@@ -41,7 +51,7 @@ def minimal_spec_dict() -> dict[str, Any]:
         "instruments": {"allowed_classes": ["FX"]},
         "entry": {
             "direction": "LONG",
-            "trigger": leaf("gt", "price:close", "feature:ema_50"),
+            "trigger": leaf("gt", "price:close", feature_ref("ema", {"period": 50})),
             "entry_order": {"order": {"type": "MARKET"}},
         },
         "exit_ref": "test-exit",

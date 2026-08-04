@@ -21,14 +21,24 @@
     "trigger": {
       "type": "any_of",
       "conditions": [
-        { "type": "leaf", "op": "cross_above", "left": "price:close", "right": "feature:donchian_upper" },
-        { "type": "leaf", "op": "cross_below", "left": "price:close", "right": "feature:donchian_lower" }
+        {
+          "type": "leaf",
+          "op": "cross_above",
+          "left": "price:close",
+          "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "upper" }
+        },
+        {
+          "type": "leaf",
+          "op": "cross_below",
+          "left": "price:close",
+          "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "lower" }
+        }
       ]
     },
     "confirmation": [],
     "confirmation_window_bars": 0,
     "invalidation": {
-      "price_level": "feature:donchian_middle"
+      "price_level": { "indicator": "donchian", "params": { "period": 20 }, "channel": "middle" }
     },
     "entry_order": {
       "order": { "type": "STOP", "offset": 0.0002 },
@@ -46,7 +56,12 @@
     "base_quality": 0.5,
     "quality_modifiers": [
       {
-        "condition": { "type": "leaf", "op": "gt", "left": "feature:atr_14", "right": 0.0006 },
+        "condition": {
+          "type": "leaf",
+          "op": "gt",
+          "left": { "indicator": "atr", "params": { "period": 14 } },
+          "right": 0.0006
+        },
         "delta": 0.1,
         "reason": "Sufficient volatility for a breakout to run rather than stall"
       }

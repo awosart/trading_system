@@ -6,10 +6,11 @@ from typing import Any
 
 import pytest
 
-from trading_system.strategies.schema import StrategySpec
+from trading_system.strategies.schema import FeatureRef, StrategySpec
 from trading_system.strategies.validator import (
     Severity,
     check_exit_ref,
+    check_feature_reference,
     check_feature_references,
     check_regime_trigger_contradiction,
     check_timeframe_order,
@@ -19,34 +20,88 @@ from trading_system.strategies.validator import (
     validate_spec,
 )
 
-from .conftest import EXAMPLE_FILES, leaf
+from .conftest import EXAMPLE_FILES, feature_ref, leaf
+
+
+class TestCheckFeatureReference:
+    """Checks a single :class:`FeatureRef` against the indicator registry.
+
+    Covers the three failure modes the old ``"feature:<name>"`` string
+    heuristic could not catch: an indicator name that was never registered, a
+    parameter that indicator doesn't accept, and a missing channel on a
+    multi-output indicator.
+    """
+
+    def test_rejects_unknown_indicator_name(self) -> None:
+        # A naive migration from the old string convention might carry the
+        # whole "ema_500" name into the new `indicator` field verbatim. The
+        # old prefix heuristic would have silently matched this against
+        # kind "ema"; the registry has no such key, so this must be rejected.
+        ref = FeatureRef(indicator="ema_500")
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["unknown_indicator"]
+        assert issues[0].severity is Severity.ERROR
+
+    def test_accepts_a_valid_indicator_and_params(self) -> None:
+        ref = FeatureRef(indicator="ema", params={"period": 500})
+        assert check_feature_reference(ref) == []
+
+    def test_rejects_nonexistent_parameter(self) -> None:
+        ref = FeatureRef(indicator="ema", params={"period": 14, "bogus_param": 1})
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["invalid_indicator_params"]
+
+    def test_rejects_out_of_bounds_parameter(self) -> None:
+        ref = FeatureRef(indicator="ema", params={"period": -5})
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["invalid_indicator_params"]
+
+    def test_rejects_multi_output_indicator_without_channel(self) -> None:
+        ref = FeatureRef(indicator="macd")
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["missing_channel"]
+
+    def test_rejects_unknown_channel(self) -> None:
+        ref = FeatureRef(indicator="macd", channel="bogus_channel")
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["unknown_channel"]
+
+    def test_accepts_multi_output_indicator_with_valid_channel(self) -> None:
+        ref = FeatureRef(indicator="macd", channel="signal")
+        assert check_feature_reference(ref) == []
+
+    def test_rejects_single_output_indicator_with_a_channel(self) -> None:
+        ref = FeatureRef(indicator="rsi", params={"period": 14}, channel="value")
+        issues = check_feature_reference(ref)
+        assert [issue.code for issue in issues] == ["unexpected_channel"]
 
 
 class TestCheckFeatureReferences:
-    def test_flags_feature_matching_no_registered_kind(
+    def test_flags_unregistered_indicator_in_trigger(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["entry"]["trigger"]["right"] = "feature:not_a_real_indicator_99"
+        minimal_spec_dict["entry"]["trigger"]["right"] = feature_ref("not_a_real_indicator")
         spec = StrategySpec.model_validate(minimal_spec_dict)
-        issues = check_feature_references(spec, known_feature_kinds={"ema", "rsi"})
-        assert [issue.code for issue in issues] == ["unknown_feature"]
-        assert issues[0].severity is Severity.ERROR
+        issues = check_feature_references(spec)
+        assert [issue.code for issue in issues] == ["unknown_indicator"]
 
-    def test_accepts_feature_matching_a_known_kind_prefix(
-        self, minimal_spec_dict: dict[str, Any]
-    ) -> None:
-        spec = StrategySpec.model_validate(minimal_spec_dict)  # references feature:ema_50
-        assert check_feature_references(spec, known_feature_kinds={"ema"}) == []
+    def test_accepts_a_registered_indicator(self, minimal_spec_dict: dict[str, Any]) -> None:
+        spec = StrategySpec.model_validate(minimal_spec_dict)  # references ema, period=50
+        assert check_feature_references(spec) == []
 
-    def test_flags_unknown_feature_in_volatility_range_filter(
+    def test_flags_unregistered_indicator_in_volatility_range_filter(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
         minimal_spec_dict["filters"] = [
-            {"kind": "volatility_range", "feature": "feature:bogus_indicator", "min_value": 0.0}
+            {
+                "kind": "volatility_range",
+                "feature": feature_ref("bogus_indicator"),
+                "min_value": 0.0,
+            }
         ]
         spec = StrategySpec.model_validate(minimal_spec_dict)
-        issues = check_feature_references(spec, known_feature_kinds={"ema", "atr"})
-        assert [issue.code for issue in issues] == ["unknown_feature"]
+        issues = check_feature_references(spec)
+        assert [issue.code for issue in issues] == ["unknown_indicator"]
 
 
 class TestCheckExitRef:
@@ -108,7 +163,7 @@ class TestCheckRegimeTriggerContradiction:
     ) -> None:
         minimal_spec_dict["market_regimes"] = ["RANGE"]
         minimal_spec_dict["entry"]["trigger"] = leaf(
-            "cross_above", "price:close", "feature:donchian_upper"
+            "cross_above", "price:close", feature_ref("donchian", {"period": 20}, "upper")
         )
         spec = StrategySpec.model_validate(minimal_spec_dict)
         issues = check_regime_trigger_contradiction(spec)
@@ -118,7 +173,7 @@ class TestCheckRegimeTriggerContradiction:
     def test_silent_without_range_regime(self, minimal_spec_dict: dict[str, Any]) -> None:
         minimal_spec_dict["market_regimes"] = ["TREND_UP"]
         minimal_spec_dict["entry"]["trigger"] = leaf(
-            "cross_above", "price:close", "feature:donchian_upper"
+            "cross_above", "price:close", feature_ref("donchian", {"period": 20}, "upper")
         )
         spec = StrategySpec.model_validate(minimal_spec_dict)
         assert check_regime_trigger_contradiction(spec) == []

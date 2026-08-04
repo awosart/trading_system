@@ -22,16 +22,31 @@
     "trigger": {
       "type": "all_of",
       "conditions": [
-        { "type": "leaf", "op": "gt", "left": "price:close", "right": "feature:ema_50" },
-        { "type": "leaf", "op": "lt", "left": "feature:rsi_14", "right": 50.0 }
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": "price:close",
+          "right": { "indicator": "ema", "params": { "period": 50 } }
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": { "indicator": "rsi", "params": { "period": 14 } },
+          "right": 50.0
+        }
       ]
     },
     "confirmation": [
-      { "type": "leaf", "op": "cross_above", "left": "price:close", "right": "feature:ema_20" }
+      {
+        "type": "leaf",
+        "op": "cross_above",
+        "left": "price:close",
+        "right": { "indicator": "ema", "params": { "period": 20 } }
+      }
     ],
     "confirmation_window_bars": 5,
     "invalidation": {
-      "price_level": "feature:ema_50"
+      "price_level": { "indicator": "ema", "params": { "period": 50 } }
     },
     "entry_order": {
       "order": { "type": "LIMIT", "offset": 0.0005 },
@@ -47,7 +62,12 @@
     "base_quality": 0.55,
     "quality_modifiers": [
       {
-        "condition": { "type": "leaf", "op": "gt", "left": "feature:adx_14", "right": 25.0 },
+        "condition": {
+          "type": "leaf",
+          "op": "gt",
+          "left": { "indicator": "adx", "params": { "period": 14 }, "channel": "adx" },
+          "right": 25.0
+        },
         "delta": 0.15,
         "reason": "Strong trend strength confirmed by ADX"
       }
