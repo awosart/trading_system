@@ -6,7 +6,7 @@ beyond a level it never brackets — are exactly the ones a close-only helper
 cannot express.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -50,15 +50,24 @@ def bar_close_ts(index: int) -> datetime:
     return bar_open_ts(index) + TIMEFRAME.duration
 
 
-def series(bars: Sequence[Bar], symbol: str = SYMBOL) -> BarSeries:
+def series(
+    bars: Sequence[Bar],
+    symbol: str = SYMBOL,
+    *,
+    features: Mapping[str, Sequence[float | None]] | None = None,
+) -> BarSeries:
     """Build a bar series from explicit OHLC tuples.
 
     Args:
         bars: One ``(open, high, low, close)`` per bar.
         symbol: Instrument identifier.
+        features: Hand-written feature columns, aligned with ``bars``. Written
+            by hand rather than computed, so a rule test can state the exact
+            ATR/swing/MA values it means — including the warmup nulls a real
+            indicator would produce.
 
     Returns:
-        The series, carrying no features and no labels.
+        The series.
     """
     frame = OHLCVFrame.from_raw(
         pl.DataFrame(
@@ -79,7 +88,7 @@ def series(bars: Sequence[Bar], symbol: str = SYMBOL) -> BarSeries:
         timeframe=frame.timeframe,
         timestamps=frame.df["timestamp"].to_list(),
         prices={field: frame.df[field].to_list() for field in PRICE_FIELDS},
-        features={},
+        features=features or {},
     )
 
 

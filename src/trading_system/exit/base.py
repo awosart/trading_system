@@ -90,11 +90,24 @@ class ExitReason(StrEnum):
     priority table below has to stay total over this enum.
     """
 
-    #: The position's protective stop was reached.
+    #: The position's protective stop was reached. Also what fires when a
+    #: StopModifier's proposed level — ATR-based, structure-based, trailing or
+    #: breakeven — was the one most recently accepted: there is exactly one
+    #: level in the market, so there is exactly one reason for it firing.
     PROTECTIVE_STOP = "PROTECTIVE_STOP"
 
     #: A profit target measured in multiples of the initial risk was reached.
     TAKE_PROFIT = "TAKE_PROFIT"
+
+    #: One rung of a partial-close ladder was reached.
+    PARTIAL_TAKE_PROFIT = "PARTIAL_TAKE_PROFIT"
+
+    #: Closed by elapsed time, session boundary or the approach of a market
+    #: closure rather than by price reaching any level.
+    TIME_EXIT = "TIME_EXIT"
+
+    #: Closed because an opposing entry signal was recognised on this bar.
+    SIGNAL_REVERSAL = "SIGNAL_REVERSAL"
 
 
 class ExitPriority(IntEnum):
@@ -120,6 +133,9 @@ class ExitPriority(IntEnum):
 REASON_PRIORITY: dict[ExitReason, ExitPriority] = {
     ExitReason.PROTECTIVE_STOP: ExitPriority.STOP,
     ExitReason.TAKE_PROFIT: ExitPriority.TARGET,
+    ExitReason.PARTIAL_TAKE_PROFIT: ExitPriority.TARGET,
+    ExitReason.TIME_EXIT: ExitPriority.FLATTEN,
+    ExitReason.SIGNAL_REVERSAL: ExitPriority.FLATTEN,
 }
 
 
@@ -320,14 +336,20 @@ class ExitRule(Protocol):
 class StopModifier(Protocol):
     """Something that moves a position's stop without ever closing it.
 
-    Trailing stops and breakeven moves are modifiers, not exits. Making them
-    emit exits would put two competing stop levels in the market — the
-    position's own and the trailing rule's — racing each other every bar, and
-    would spread the "a stop may only tighten" invariant across every rule that
-    has one. As modifiers they all funnel through
+    Every rule that only relocates the stop is a modifier, not an exit —
+    trailing stops and breakeven moves, but equally an ATR- or structure-based
+    stop that recomputes over the trade's life. Making any of them emit exits
+    would put two competing stop levels in the market — the position's own and
+    the rule's — racing each other every bar, and would spread the "a stop may
+    only tighten" invariant across every rule that has one. As modifiers they
+    all funnel through
     :meth:`~trading_system.exit.position.ManagedPosition.tighten_stop`, where the
-    ratchet is enforced once, and exactly one rule ever converts a stop level
-    into an exit.
+    ratchet is enforced once, and exactly one rule
+    (:class:`~trading_system.exit.rules.protective_stop.ProtectiveStop`) ever
+    converts a stop level into an exit — which is also why none of these
+    modifiers carries its own :class:`ExitReason`: whichever one most recently
+    tightened the level, the level firing is always attributed to
+    ``PROTECTIVE_STOP``.
     """
 
     @property

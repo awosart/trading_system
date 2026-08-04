@@ -2,20 +2,23 @@
 
 The equivalence technique is P06's, re-run against the wrapper. Wrapping a
 ``BarContext`` is only safe if the wrapper cannot smuggle anything past it, and
-the one genuinely new surface — ticks — is the easiest place to do exactly that.
+the two genuinely new surfaces — ticks and the reverse-signal flag — are the
+easiest places to do exactly that.
 """
 
 import inspect
 
 import pytest
 
+from trading_system.core.types import Side
 from trading_system.entry.context import PRICE_FIELDS
 from trading_system.exit.context import ExitContext, Tick, exit_contexts
 
 from .conftest import Bar, bar_close_ts, bar_open_ts, series, ticks
 
-#: The whole public surface of an exit context: the bar context's, plus ticks.
-#: Anything added here is a new route to data and has to be argued for.
+#: The whole public surface of an exit context: the bar context's, plus ticks
+#: and the reverse-signal flag. Anything added here is a new route to data and
+#: has to be argued for.
 EXPECTED_API = frozenset(
     {
         "bars",
@@ -26,6 +29,7 @@ EXPECTED_API = frozenset(
         "bar_close_ts",
         "has_ticks",
         "ticks",
+        "reverse_signal_side",
         "price",
         "feature",
         "labels",
@@ -79,8 +83,9 @@ class TestNoLookahead:
         for index in range(len(BARS)):
             truncated = full.truncated(index + 1)
             bar_ticks = ticks(index, [1.1005, 1.1015])
-            here = ExitContext(full.context(index), bar_ticks)
-            there = ExitContext(truncated.context(index), bar_ticks)
+            side = Side.SELL if index % 2 else None
+            here = ExitContext(full.context(index), bar_ticks, side)
+            there = ExitContext(truncated.context(index), bar_ticks, side)
 
             assert here.index == there.index
             assert here.symbol == there.symbol
@@ -89,6 +94,7 @@ class TestNoLookahead:
             assert here.bar_close_ts == there.bar_close_ts
             assert here.has_ticks == there.has_ticks
             assert here.ticks == there.ticks
+            assert here.reverse_signal_side == there.reverse_signal_side
             assert here.feature_snapshot() == there.feature_snapshot()
             for lookback in range(4):
                 for field in PRICE_FIELDS:
@@ -140,3 +146,14 @@ class TestTickWindow:
     def test_ticks_filed_against_the_wrong_bar_are_refused(self) -> None:
         with pytest.raises(ValueError, match="outside bar"):
             list(exit_contexts(series(BARS), {5: ticks(2, [1.1])}))
+
+
+class TestReverseSignal:
+    def test_almost_every_bar_carries_none(self) -> None:
+        contexts = list(exit_contexts(series(BARS)))
+        assert all(ctx.reverse_signal_side is None for ctx in contexts)
+
+    def test_a_reverse_signal_is_filed_against_the_bar_it_belongs_to(self) -> None:
+        contexts = list(exit_contexts(series(BARS), reverse_signals={4: Side.SELL}))
+        assert [ctx.index for ctx in contexts if ctx.reverse_signal_side is not None] == [4]
+        assert contexts[4].reverse_signal_side is Side.SELL

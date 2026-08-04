@@ -5,12 +5,9 @@ to answer a question OHLC data cannot: in what order did those things happen
 inside the bar? :class:`ExitPlan` answers it in two passes with two different
 kinds of certainty.
 
-**Phase 1 — stop modifiers.** Trailing and breakeven rules propose a level; the
-position accepts it only if it tightens. They run before anything else on the
-bar so that the stop an exit rule reads is the stop that was actually in the
-market for that bar.
-
-**Phase 2 — exit rules.** Their decisions split by
+**Phase 1 — exit rules**, checked against the stop as it stood at the *start*
+of this bar — i.e. as :attr:`ManagedPosition.stop` was left by the previous
+bar's modifiers, not this one's. Decisions split by
 :class:`~trading_system.exit.base.ExitTrigger`:
 
 * ``LEVEL_TOUCH`` decisions were resting orders and filled *inside* bar ``t``.
@@ -27,6 +24,17 @@ market for that bar.
 At most one ``BAR_CLOSE`` decision is deferred per bar, chosen by priority.
 Nothing is lost by dropping the others: a close-decided rule is level-free and
 will simply say the same thing on the next bar if it still holds.
+
+**Phase 2 — stop modifiers**, run last rather than first. A trailing or ATR
+modifier typically reads *this* bar's own high or low to propose its level; if
+phase 1 then tested that level against this same bar's opposite extreme, a rule
+would be testing a level against the very data used to derive it moments
+earlier — indistinguishable from testing an entry's invalidation against its
+own trigger bar, which P06 already ruled out for the same reason. A modifier's
+proposal was only ever knowable at ``close(t)``, exactly like a ``BAR_CLOSE``
+decision, so ``open(t+1)`` is the earliest its effect can honestly reach a
+rule — which phase 2 running last, and the next bar's phase 1 seeing the
+result, is what provides.
 
 A plan cannot be built without a protective stop. ``protective_stop`` is a
 required argument with no default and no ``None``, so an unprotected position is
@@ -249,13 +257,6 @@ class ExitPlan:
             What was filled inside this bar, and what was deferred to the next
             bar's open.
         """
-        for modifier in self._stop_modifiers:
-            if not position.is_open:
-                break
-            level = modifier.on_bar(position, ctx)
-            if level is not None:
-                position.tighten_stop(level)
-
         decisions = [
             (rule.name, decision)
             for rule in self._rules
@@ -294,6 +295,24 @@ class ExitPlan:
         if position.is_open and at_close:
             name, decision = min(at_close, key=lambda item: item[1].priority)
             deferred = DeferredExit(rule=name, decision=decision, decided_bar_index=ctx.index)
+
+        # Modifiers run last, not first, and their effect is on the NEXT bar's
+        # rule-check, not this one's. A modifier that reads this bar's own high
+        # to propose a level and a rule that reads this bar's own low to test
+        # it would otherwise be testing a level against the very data used to
+        # derive it — the same hazard P06 ruled out by not applying an
+        # invalidation to its own trigger bar. The level a modifier proposes on
+        # bar t was only ever knowable at close(t), so bar t's own intrabar
+        # prices cannot have reacted to it; open(t+1) is the earliest that is
+        # honest, which is exactly the rule everything else decided on
+        # close(t) already follows.
+        for modifier in self._stop_modifiers:
+            if not position.is_open:
+                break
+            level = modifier.on_bar(position, ctx)
+            if level is not None:
+                position.tighten_stop(level)
+
         return BarOutcome(applied=tuple(applied), deferred=deferred)
 
     def run(self, position: ManagedPosition, contexts: Iterable[ExitContext]) -> ExitRun:

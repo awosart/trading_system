@@ -19,13 +19,22 @@ test is run against this class too. The one genuinely new surface is
 a context carries the ticks of *its own bar only*, and a tick timestamped
 outside ``[open(t), close(t))`` is rejected rather than stored. A tick from bar
 ``t+1`` is lookahead of the most direct possible kind.
+
+:attr:`ExitContext.reverse_signal_side` is the same pattern applied to
+``SignalReverseExit``: whether an opposing entry signal was recognised on this
+bar's close. It is a plain ``Side | None`` — a fact about the bar, not a
+reference to an :class:`~trading_system.entry.signal.EntrySignal` or anything
+else that would pull the Entry compiler into this layer. Something that already
+holds both engines — the backtest orchestrator — is what fills it in, the same
+way a market data provider fills in ticks; Exit only has to accept the value,
+not know where it came from.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from trading_system.core.types import Timeframe, ensure_utc
+from trading_system.core.types import Side, Timeframe, ensure_utc
 from trading_system.entry.context import BarContext, BarSeries
 
 
@@ -55,15 +64,23 @@ class ExitContext:
     start of the series (``None``, meaning "no such bar").
     """
 
-    __slots__ = ("_bars", "_ticks")
+    __slots__ = ("_bars", "_reverse_signal_side", "_ticks")
 
-    def __init__(self, bars: BarContext, ticks: Sequence[Tick] = ()) -> None:
+    def __init__(
+        self,
+        bars: BarContext,
+        ticks: Sequence[Tick] = (),
+        reverse_signal_side: Side | None = None,
+    ) -> None:
         """Wrap a bar context, optionally with the ticks of that same bar.
 
         Args:
             bars: The P06 context for bar ``t``.
             ticks: Ticks that traded inside bar ``t``, ascending by time. Empty
                 means the run has no tick data, which is the normal case.
+            reverse_signal_side: Direction of an opposing entry signal
+                recognised on this bar's close, if any. ``None`` is the default
+                for almost every bar.
 
         Raises:
             ValueError: If a tick is naive, falls outside ``[open(t), close(t))``,
@@ -71,6 +88,7 @@ class ExitContext:
                 future price to reach a rule, so none of them is tolerated.
         """
         self._bars = bars
+        self._reverse_signal_side = reverse_signal_side
         close_ts = bars.bar_close_ts
         open_ts = close_ts - bars.timeframe.duration
 
@@ -143,6 +161,16 @@ class ExitContext:
         """Ticks of bar ``t``, ascending. Empty when the run has no tick data."""
         return self._ticks
 
+    @property
+    def reverse_signal_side(self) -> Side | None:
+        """Direction of an opposing entry signal recognised on this bar's close.
+
+        ``None`` on almost every bar. Filled in by whatever composed this
+        context — normally a backtest orchestrator that runs both engines —
+        never derived here.
+        """
+        return self._reverse_signal_side
+
     def price(self, field: str, lookback: int = 0) -> float | None:
         """A price of the bar ``lookback`` bars before ``t``.
 
@@ -191,7 +219,9 @@ class ExitContext:
 
 
 def exit_contexts(
-    series: BarSeries, ticks: Mapping[int, Sequence[Tick]] | None = None
+    series: BarSeries,
+    ticks: Mapping[int, Sequence[Tick]] | None = None,
+    reverse_signals: Mapping[int, Side] | None = None,
 ) -> Iterator[ExitContext]:
     """Yield one exit context per bar of a series, oldest first.
 
@@ -199,6 +229,8 @@ def exit_contexts(
         series: Bars, features and labels to walk.
         ticks: Ticks per bar index. Bars absent from the mapping carry none,
             which is what a run without tick data looks like.
+        reverse_signals: Opposing entry signal side per bar index. Bars absent
+            from the mapping carry ``None``, which is almost every bar.
 
     Yields:
         A context per bar, in the order a live loop would see them.
@@ -206,6 +238,7 @@ def exit_contexts(
     Raises:
         ValueError: If any tick falls outside the bar it is filed under.
     """
-    per_bar = ticks or {}
+    per_bar_ticks = ticks or {}
+    per_bar_reversal = reverse_signals or {}
     for bar in series.contexts():
-        yield ExitContext(bar, per_bar.get(bar.index, ()))
+        yield ExitContext(bar, per_bar_ticks.get(bar.index, ()), per_bar_reversal.get(bar.index))

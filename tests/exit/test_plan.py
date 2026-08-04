@@ -228,10 +228,18 @@ class TestIntrabarConflict:
 
 
 class TestPhases:
-    def test_stop_modifiers_run_before_the_exit_rules_on_the_same_bar(self) -> None:
-        # The stop an exit rule reads must be the one that was in the market for
-        # this bar. A modifier applied after would be a bar late, every bar.
-        bars: list[Bar] = [(1.1010, 1.1030, 1.0985, 1.1000)]
+    def test_a_modifiers_proposal_on_bar_t_is_not_checkable_until_bar_t_plus_1(self) -> None:
+        # A rule seeing this bar's own tightened level tested against this same
+        # bar's own low would be testing a level against the data used to
+        # derive it — the same hazard P06 ruled out for an invalidation on its
+        # own trigger bar. Bar 0's low (1.0985) is below the modifier's
+        # proposal (1.0990), so a same-bar effect would wrongly stop it out
+        # here; the position must instead survive bar 0 and only be caught once
+        # the tightened level is live, on bar 1.
+        bars: list[Bar] = [
+            (1.1010, 1.1030, 1.0985, 1.1000),
+            (1.1000, 1.1010, 1.0985, 1.0995),
+        ]
         position = long_position(entry=1.1000, stop=1.0900)
         modifier = MoveStopTo(1.0990)
         plan = ExitPlan(
@@ -239,10 +247,29 @@ class TestPhases:
         )
         result = plan.run(position, exit_contexts(series(bars)))
 
+        # The modifier proposes once, on bar 0; bar 1 closes the position
+        # during the rule phase, before the modifier phase ever runs again.
         assert modifier.proposals == 1
         assert len(result.fills) == 1
-        assert result.fills[0].bar_index == 0
+        assert result.fills[0].bar_index == 1
         assert result.fills[0].leg.price == pytest.approx(1.0990)
+
+    def test_a_modifier_never_gets_to_react_to_its_own_bars_data(self) -> None:
+        # The general form of the above: a modifier that reads this bar's own
+        # high to compute a level must never have that level tested against
+        # this same bar's own low, however tight the two are.
+        bars: list[Bar] = [(1.1150, 1.1200, 1.1140, 1.1180)]  # range spans the proposal
+        position = long_position(entry=1.1000, stop=1.0900)
+        plan = ExitPlan(
+            exit_id="same-bar-immunity",
+            protective_stop=ProtectiveStop(),
+            stop_modifiers=[MoveStopTo(1.1150)],  # inside this very bar's [1.1140, 1.1200]
+        )
+        result = plan.run(position, exit_contexts(series(bars)))
+
+        assert result.fills == ()
+        assert position.stop == pytest.approx(1.1150)
+        assert position.is_open is True
 
     def test_a_modifier_cannot_widen_the_stop_through_the_plan_either(self) -> None:
         bars: list[Bar] = [(1.1010, 1.1030, 1.0995, 1.1000)] * 3
