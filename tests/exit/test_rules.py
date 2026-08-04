@@ -69,12 +69,14 @@ class TestProtectiveStop:
 
     def test_a_tightened_stop_is_the_one_that_fires(self) -> None:
         position = long_position(entry=1.1000, stop=1.0900)
-        position.tighten_stop(Price(1.0990))
+        position.tighten_stop(Price(1.0990), source="test")
         bars: list[Bar] = [(1.1010, 1.1030, 1.0985, 1.1000)]  # low pierces 1.0990 only
         result = plan().run(position, exit_contexts(series(bars)))
 
         assert result.fills[0].leg.price == pytest.approx(1.0990)
         assert result.fills[0].decision.context["initial_stop"] == pytest.approx(1.0900)
+        assert result.fills[0].decision.context["stop_source"] == "test"
+        assert result.fills[0].leg.stop_source == "test"
 
     def test_a_position_the_bars_never_reach_stays_open(self) -> None:
         bars: list[Bar] = [(1.1000, 1.1030, 1.0980, 1.1020)] * 5
@@ -135,7 +137,7 @@ class TestFixedRR:
         rule = FixedRR(2.0)
         position = long_position(entry=1.1000, stop=1.0900)
         before = rule.target_price(position)
-        position.tighten_stop(Price(1.1000))
+        position.tighten_stop(Price(1.1000), source="test")
         assert rule.target_price(position) == pytest.approx(before)
         assert rule.target_price(position) == pytest.approx(1.1200)
 

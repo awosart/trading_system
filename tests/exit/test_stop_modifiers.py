@@ -107,6 +107,10 @@ class TestATRStop:
         assert result.fills[0].rule == "protective_stop"
         assert result.fills[0].decision.reason is ExitReason.PROTECTIVE_STOP
         assert result.fills[0].leg.price == pytest.approx(1.0900)
+        # The reason alone reads "exited on stop"; stop_source is what tells
+        # this apart from the original invalidation firing untouched.
+        assert result.fills[0].leg.stop_source == "atr_stop_14_1"
+        assert result.fills[0].decision.context["stop_source"] == "atr_stop_14_1"
 
     @pytest.mark.parametrize(("period", "multiple"), [(0, 1.0), (14, 0.0), (14, -1.0)])
     def test_construction_rejects_non_positive_parameters(
@@ -346,3 +350,67 @@ class TestBreakevenMove:
     def test_construction_rejects_a_negative_spread(self) -> None:
         with pytest.raises(ValueError, match="non-negative"):
             BreakevenMove(activation_r=1.0, spread=-0.0001)
+
+
+class TestStopSourceTellsThreeStopStoriesApart:
+    """The scenario this field exists for.
+
+    Three positions all end on ``ExitReason.PROTECTIVE_STOP`` — a backtest
+    report that only reads ``reason`` sees three identical "exited on stop"
+    rows. They are not the same trade: one setup was simply wrong, one banked
+    real profit on the way down, one scratched at breakeven. ``stop_source``
+    is the only field that tells them apart, on both the fill's decision
+    context and the closed leg itself.
+    """
+
+    def test_the_original_stop_never_moving_means_the_setup_failed(self) -> None:
+        bars: list[Bar] = [(1.1000, 1.1010, 1.0890, 1.0900)]  # straight down, no BE/trail chance
+        position = long_position(entry=1.1000, stop=1.0900)
+        plan = ExitPlan(
+            exit_id="story-loss",
+            protective_stop=ProtectiveStop(),
+            stop_modifiers=[BreakevenMove(activation_r=1.0)],
+        )
+        result = plan.run(position, exit_contexts(series(bars)))
+
+        assert result.fills[0].decision.reason is ExitReason.PROTECTIVE_STOP
+        assert result.fills[0].leg.stop_source == "initial_stop"
+        assert position.realized_r() == pytest.approx(-1.0)
+
+    def test_breakeven_firing_means_a_scratch_not_a_loss(self) -> None:
+        bars: list[Bar] = [
+            (1.1000, 1.1100, 1.0990, 1.1080),  # touches 1R, BE activates
+            (1.1080, 1.1085, 1.0995, 1.1000),  # falls back through entry
+        ]
+        position = long_position(entry=1.1000, stop=1.0900)
+        plan = ExitPlan(
+            exit_id="story-scratch",
+            protective_stop=ProtectiveStop(),
+            stop_modifiers=[BreakevenMove(activation_r=1.0)],
+        )
+        result = plan.run(position, exit_contexts(series(bars)))
+
+        assert result.fills[0].decision.reason is ExitReason.PROTECTIVE_STOP
+        assert result.fills[0].leg.stop_source == "breakeven_1r"
+        assert position.realized_r() == pytest.approx(0.0)
+
+    def test_a_trail_firing_means_profit_was_banked(self) -> None:
+        bars: list[Bar] = [
+            (1.1150, 1.1200, 1.1140, 1.1180),  # 2R, trail activates and sets a level
+            (1.1180, 1.1190, 1.1000, 1.1050),  # falls back, trail's level is hit
+        ]
+        atr = {ATR_14: [0.0050, 0.0050]}
+        position = long_position(entry=1.1000, stop=1.0900)
+        plan = ExitPlan(
+            exit_id="story-trailed-profit",
+            protective_stop=ProtectiveStop(),
+            stop_modifiers=[TrailingStop(AtrTrail(period=14, multiple=1.0), activation_r=2.0)],
+        )
+        result = plan.run(position, exit_contexts(series(bars, features=atr)))
+
+        assert result.fills[0].decision.reason is ExitReason.PROTECTIVE_STOP
+        assert result.fills[0].leg.stop_source == "trailing_stop_atr_14_1_2r"
+        # Stopped out well above the original 1.0900 risk: real profit banked,
+        # not the flat loss "exited on stop" alone would suggest.
+        assert result.fills[0].leg.price > 1.0900
+        assert position.realized_r() > 0.0

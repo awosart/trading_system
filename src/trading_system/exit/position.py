@@ -38,6 +38,10 @@ from trading_system.exit.base import ExitReason
 #: The whole position, as a fraction of itself.
 WHOLE = Decimal("1")
 
+#: :attr:`ManagedPosition.stop_source` before any modifier has ever tightened
+#: the stop — the entry's own invalidation level, untouched.
+INITIAL_STOP_SOURCE = "initial_stop"
+
 
 @dataclass(frozen=True)
 class ClosedLeg:
@@ -55,6 +59,16 @@ class ClosedLeg:
             at ``price``. Unweighted — multiply by ``fraction`` to contribute it
             to the position's total.
         pnl: This leg's profit in quote currency, ``size * fraction * move``.
+        stop_source: :attr:`ManagedPosition.stop_source` as it stood at the
+            moment this leg closed. Meaningful when ``reason`` is
+            ``PROTECTIVE_STOP`` — every stop-modifier collapses onto that one
+            reason (see :class:`~trading_system.exit.base.StopModifier`), so
+            this is the only place P14 can tell apart three trades that would
+            otherwise all read "exited on stop": the original stop never
+            moving (the setup was wrong), a trailing modifier's name (profit
+            was banked), or ``BreakevenMove``'s name (a scratch). Present but
+            not particularly meaningful for other reasons — whatever the stop
+            happened to be when a target or a time exit fired.
     """
 
     fraction: Decimal
@@ -63,6 +77,7 @@ class ClosedLeg:
     reason: ExitReason
     r_multiple: float
     pnl: Decimal
+    stop_source: str
 
 
 class ManagedPosition:
@@ -90,6 +105,7 @@ class ManagedPosition:
         "_side",
         "_size",
         "_stop",
+        "_stop_source",
         "_strategy_id",
         "_symbol",
     )
@@ -155,6 +171,7 @@ class ManagedPosition:
         self._opened_at = ensure_utc(opened_at)
         self._strategy_id = strategy_id
         self._stop = initial_stop
+        self._stop_source = INITIAL_STOP_SOURCE
         self._remaining = WHOLE
         self._legs: list[ClosedLeg] = []
 
@@ -207,6 +224,18 @@ class ManagedPosition:
     def stop(self) -> Price:
         """Current protective level, after any tightening."""
         return self._stop
+
+    @property
+    def stop_source(self) -> str:
+        """Name of whichever modifier most recently tightened the stop.
+
+        :data:`INITIAL_STOP_SOURCE` until the first accepted tighten. Every
+        :class:`~trading_system.exit.base.StopModifier` in this library
+        collapses onto the single ``PROTECTIVE_STOP`` reason when its level is
+        eventually touched (see that class's docstring for why), so this is
+        what survives to tell the resulting trades apart afterward.
+        """
+        return self._stop_source
 
     @property
     def initial_risk_distance(self) -> float:
@@ -316,7 +345,7 @@ class ManagedPosition:
         """
         return sum((leg.pnl for leg in self._legs), Decimal(0))
 
-    def tighten_stop(self, level: Price) -> bool:
+    def tighten_stop(self, level: Price, *, source: str) -> bool:
         """Move the stop toward the entry, never away from it.
 
         Declining a looser level is the defined behaviour of a ratchet, not an
@@ -328,6 +357,12 @@ class ManagedPosition:
 
         Args:
             level: Proposed stop level, absolute price.
+            source: Identifies whoever proposed ``level`` — normally a
+                :class:`~trading_system.exit.base.StopModifier`'s ``name``.
+                Required rather than defaulted: since every modifier collapses
+                onto the same ``PROTECTIVE_STOP`` reason when it eventually
+                fires, a caller that forgot to pass one would silently erase
+                the only place that distinction survives.
 
         Returns:
             Whether the stop actually moved.
@@ -343,6 +378,7 @@ class ManagedPosition:
         if not tighter:
             return False
         self._stop = level
+        self._stop_source = source
         return True
 
     def close(
@@ -391,6 +427,7 @@ class ManagedPosition:
             reason=reason,
             r_multiple=self.r_multiple(price),
             pnl=self._size * fraction * move * direction,
+            stop_source=self._stop_source,
         )
         self._remaining -= fraction
         self._legs.append(leg)

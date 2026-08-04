@@ -7,7 +7,7 @@ import pytest
 
 from trading_system.core.types import Price, Side
 from trading_system.exit.base import ExitReason
-from trading_system.exit.position import ManagedPosition
+from trading_system.exit.position import INITIAL_STOP_SOURCE, ManagedPosition
 
 from .conftest import START, SYMBOL, bar_close_ts, long_position, short_position
 
@@ -83,7 +83,7 @@ class TestRMultiple:
         # R threshold in the plan would become unreachable or infinite.
         position = long_position(entry=1.1000, stop=1.0900)
         before = position.r_multiple(Price(1.1200))
-        position.tighten_stop(Price(1.1000))
+        position.tighten_stop(Price(1.1000), source="test")
         assert position.stop == pytest.approx(1.1000)
         assert position.initial_risk_distance == pytest.approx(0.0100)
         assert position.r_multiple(Price(1.1200)) == pytest.approx(before)
@@ -99,24 +99,24 @@ class TestRMultiple:
 class TestStopRatchet:
     def test_a_long_stop_only_moves_up(self) -> None:
         position = long_position(entry=1.1000, stop=1.0900)
-        assert position.tighten_stop(Price(1.0950)) is True
+        assert position.tighten_stop(Price(1.0950), source="test") is True
         assert position.stop == pytest.approx(1.0950)
         # A trailing rule recomputing on a pullback proposes a wider stop as a
         # matter of course. That is declined, not raised on.
-        assert position.tighten_stop(Price(1.0910)) is False
+        assert position.tighten_stop(Price(1.0910), source="test") is False
         assert position.stop == pytest.approx(1.0950)
 
     def test_a_short_stop_only_moves_down(self) -> None:
         position = short_position(entry=1.1000, stop=1.1100)
-        assert position.tighten_stop(Price(1.1050)) is True
-        assert position.tighten_stop(Price(1.1090)) is False
+        assert position.tighten_stop(Price(1.1050), source="test") is True
+        assert position.tighten_stop(Price(1.1090), source="test") is False
         assert position.stop == pytest.approx(1.1050)
 
     def test_the_stop_is_monotonic_across_a_noisy_sequence(self) -> None:
         position = long_position(entry=1.1000, stop=1.0900)
         seen = [position.stop]
         for level in (1.0910, 1.0905, 1.0930, 1.0800, 1.0931, 1.0931):
-            position.tighten_stop(Price(level))
+            position.tighten_stop(Price(level), source="test")
             seen.append(position.stop)
         assert seen == sorted(seen)
         assert position.stop == pytest.approx(1.0931)
@@ -125,7 +125,48 @@ class TestStopRatchet:
         position = long_position()
         position.close_all(price=Price(1.1100), ts=bar_close_ts(1), reason=TAKE)
         with pytest.raises(ValueError, match="closed position"):
-            position.tighten_stop(Price(1.1000))
+            position.tighten_stop(Price(1.1000), source="test")
+
+
+class TestStopSource:
+    def test_starts_at_the_initial_stop_sentinel(self) -> None:
+        position = long_position(entry=1.1000, stop=1.0900)
+        assert position.stop_source == INITIAL_STOP_SOURCE
+
+    def test_records_whoever_tightened_it_last(self) -> None:
+        position = long_position(entry=1.1000, stop=1.0900)
+        position.tighten_stop(Price(1.0950), source="atr_stop_14_1.5")
+        assert position.stop_source == "atr_stop_14_1.5"
+        position.tighten_stop(Price(1.0980), source="breakeven_1r")
+        assert position.stop_source == "breakeven_1r"
+
+    def test_a_declined_looser_proposal_does_not_overwrite_the_source(self) -> None:
+        # The ratchet declines the move; the attribution must not update either
+        # — otherwise a rejected proposal could still relabel who is "in charge"
+        # of a level it never actually set.
+        position = long_position(entry=1.1000, stop=1.0900)
+        position.tighten_stop(Price(1.0950), source="atr_stop_14_1.5")
+        position.tighten_stop(Price(1.0910), source="some_looser_rule")
+        assert position.stop_source == "atr_stop_14_1.5"
+
+    def test_the_closed_leg_carries_the_stop_source_at_close_time(self) -> None:
+        position = long_position(entry=1.1000, stop=1.0900)
+        position.tighten_stop(Price(1.0950), source="breakeven_1r")
+        leg = position.close_all(price=Price(1.0950), ts=bar_close_ts(1), reason=STOP)
+        assert leg.stop_source == "breakeven_1r"
+
+    def test_a_leg_closed_before_any_tighten_carries_the_initial_sentinel(self) -> None:
+        position = long_position(entry=1.1000, stop=1.0900)
+        leg = position.close_all(price=Price(1.0900), ts=bar_close_ts(1), reason=STOP)
+        assert leg.stop_source == INITIAL_STOP_SOURCE
+
+    def test_a_take_profit_leg_still_carries_whatever_the_stop_source_was(self) -> None:
+        # Not particularly meaningful for a non-stop reason, but present and
+        # honest rather than silently omitted.
+        position = long_position(entry=1.1000, stop=1.0900)
+        position.tighten_stop(Price(1.0950), source="atr_stop_14_1.5")
+        leg = position.close_all(price=Price(1.1200), ts=bar_close_ts(1), reason=TAKE)
+        assert leg.stop_source == "atr_stop_14_1.5"
 
 
 class TestFractionInvariant:

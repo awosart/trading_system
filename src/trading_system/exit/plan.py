@@ -311,7 +311,7 @@ class ExitPlan:
                 break
             level = modifier.on_bar(position, ctx)
             if level is not None:
-                position.tighten_stop(level)
+                position.tighten_stop(level, source=modifier.name)
 
         return BarOutcome(applied=tuple(applied), deferred=deferred)
 

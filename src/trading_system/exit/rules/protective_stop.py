@@ -63,6 +63,7 @@ class ProtectiveStop:
             context={
                 "stop": level,
                 "initial_stop": position.initial_stop,
+                "stop_source": position.stop_source,
                 "bar_index": ctx.index,
             },
         )
