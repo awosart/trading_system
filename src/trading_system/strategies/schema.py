@@ -68,11 +68,19 @@ class Regime(StrEnum):
 
 
 class Direction(StrEnum):
-    """Trade direction(s) an entry is willing to take."""
+    """The direction one entry takes.
+
+    There is deliberately no ``BOTH``. A symmetric idea is two entries under one
+    :class:`StrategySpec` — see :attr:`StrategySpec.entries` — because the two
+    sides need more than a shared trigger flipped over: a range fade is
+    invalidated *below* the range for its long leg and *above* it for its short
+    one, which a single :class:`Invalidation` cannot say. A ``BOTH`` direction
+    also leaves the side of a fired signal underivable, since nothing in a
+    condition tree marks which branch was the long one.
+    """
 
     LONG = "LONG"
     SHORT = "SHORT"
-    BOTH = "BOTH"
 
 
 class ConditionOp(StrEnum):
@@ -153,11 +161,45 @@ class FeatureRef(BaseModel):
     channel: str | None = Field(default=None, min_length=1)
 
 
+class LabelSet(BaseModel):
+    """Categorical labels a bar is tested against.
+
+    The operand form of the three tests that ask *what kind of bar is this*
+    rather than *what number does this series carry*: ``pattern_is``,
+    ``regime_is`` and ``session_is``. Their vocabulary is an enumeration, not a
+    price, so none of the numeric operand forms can express them — which is why
+    those operators had no way to name their argument at all before this existed.
+
+    A set rather than a single label because the natural phrasing is a
+    disjunction: "the London or New York session", "a hammer or a bullish
+    engulfing". The test is intersection — true when the bar carries *any* of
+    these labels.
+
+    Which vocabulary applies depends on the operator, so the labels are checked
+    against :class:`~trading_system.features.patterns.Pattern`, :class:`Regime`
+    or :class:`~trading_system.data.sessions.Session` by
+    :func:`~trading_system.strategies.validator.check_condition_labels`, not
+    here — a model cannot see the leaf it hangs from.
+
+    Attributes:
+        labels: The labels to test for. At least one.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    labels: tuple[str, ...] = Field(min_length=1)
+
+
 #: A price reference string, e.g. ``"price:close"``.
 PriceRef = Annotated[str, AfterValidator(_validate_price_ref)]
 
-#: A leaf operand: a feature reference, a price reference, or a bare constant.
-Operand = FeatureRef | PriceRef | float
+#: A leaf operand: a feature reference, a set of categorical labels, a price
+#: reference, or a bare constant. Not a discriminated union — ``str`` and
+#: ``float`` members leave nowhere to put a tag — but not an ambiguous one
+#: either: :class:`FeatureRef` requires ``indicator``, :class:`LabelSet`
+#: requires ``labels``, and both forbid extra fields, so no object satisfies
+#: both.
+Operand = FeatureRef | LabelSet | PriceRef | float
 
 #: Inclusive numeric bounds, e.g. the ``[30, 70]`` in an RSI ``between`` check.
 RangeBound = tuple[float, float]
@@ -175,6 +217,18 @@ def operand_feature_ref(operand: Operand | RangeBound) -> FeatureRef | None:
         ``operand`` itself when it is a :class:`FeatureRef`, else ``None``.
     """
     return operand if isinstance(operand, FeatureRef) else None
+
+
+def operand_labels(operand: Operand | RangeBound | None) -> LabelSet | None:
+    """The :class:`LabelSet` carried by ``operand``, or ``None`` if it isn't one.
+
+    Args:
+        operand: A leaf condition's ``left`` or ``right`` value.
+
+    Returns:
+        ``operand`` itself when it is a :class:`LabelSet`, else ``None``.
+    """
+    return operand if isinstance(operand, LabelSet) else None
 
 
 def operand_price_field(operand: Operand | RangeBound) -> str | None:
@@ -283,27 +337,27 @@ def iter_leaf_conditions(condition: Condition) -> Iterator[LeafCondition]:
 
 
 class Invalidation(BaseModel):
-    """A condition or price level that voids a pending setup before entry.
+    """The price at which a setup is disproven, and optionally a condition too.
 
-    At least one of ``condition`` and ``price_level`` must be set.
+    ``price_level`` is mandatory. An entry that cannot name the price at which
+    its thesis is void cannot produce a sizeable signal: the Risk Engine derives
+    position size from the distance between entry and invalidation, and there is
+    nothing else for it to measure. Leaving this optional only moved the failure
+    from load time to the middle of a backtest. Deriving one from
+    ``risk_profile.stop_reference`` instead is the Risk Engine's job — that field
+    is its input, and ``FIXED_PIPS`` needs instrument metadata no strategy spec
+    carries.
 
     Attributes:
-        condition: A condition that, once true, cancels the setup.
-        price_level: A price beyond which the setup is void. Its side
+        price_level: The price beyond which the setup is void. Its side
             (above/below entry) is implied by :attr:`EntrySpec.direction`.
+        condition: A further condition that, once true, also cancels the setup.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    price_level: Operand
     condition: Condition | None = None
-    price_level: Operand | None = None
-
-    @model_validator(mode="after")
-    def _require_condition_or_price(self) -> "Invalidation":
-        """Reject an invalidation rule that would never trigger."""
-        if self.condition is None and self.price_level is None:
-            raise ValueError("invalidation requires a condition, a price_level, or both")
-        return self
 
 
 class MarketOrder(BaseModel):
@@ -361,10 +415,16 @@ class EntryOrderSpec(BaseModel):
 
 
 class EntrySpec(BaseModel):
-    """Everything needed to recognise and place one entry.
+    """Everything needed to recognise and place one entry, in one direction.
+
+    One entry is one-sided. A strategy that trades both ways carries two of
+    these under :attr:`StrategySpec.entries`, each with its own trigger,
+    confirmation, invalidation and order — because those genuinely differ
+    between the legs, which is what makes a shared "both directions" trigger
+    unworkable rather than merely awkward.
 
     Attributes:
-        direction: Direction(s) this entry is willing to take.
+        direction: Which way this entry trades.
         trigger: The condition that opens a setup.
         confirmation: Additional conditions that must all hold within
             ``confirmation_window_bars`` bars of the trigger. Empty means the
@@ -374,7 +434,8 @@ class EntrySpec(BaseModel):
             positive exactly when ``confirmation`` is non-empty — a window
             without conditions or conditions without a window is a
             contradictory config, not a default.
-        invalidation: Condition or level that cancels a pending setup.
+        invalidation: Where the setup is disproven, and optionally a condition
+            that also cancels it. Mandatory: see :class:`Invalidation`.
         entry_order: How the resulting order is placed.
     """
 
@@ -384,7 +445,7 @@ class EntrySpec(BaseModel):
     trigger: Condition
     confirmation: list[Condition] = Field(default_factory=list)
     confirmation_window_bars: int = Field(default=0, ge=0)
-    invalidation: Invalidation | None = None
+    invalidation: Invalidation
     entry_order: EntryOrderSpec
 
     @model_validator(mode="after")
@@ -709,7 +770,12 @@ class StrategySpec(BaseModel):
         instruments: Which instruments this strategy may trade.
         market_regimes: Regimes this strategy is permitted to trade in. Empty
             means unrestricted.
-        entry: Trigger, confirmation, invalidation and order placement.
+        entries: One or two entries, at most one per direction. Two is how a
+            symmetric idea — fading both edges of a range — is expressed: the
+            legs share this spec's risk profile, exit, filters and id, so
+            ``max_concurrent_positions`` counts across both, which two separate
+            specs could not do. Each leg keeps its own trigger, confirmation,
+            invalidation and order, which is exactly what differs between them.
         exit_ref: Id of the exit strategy this pairs with, looked up in the
             Exit DB — never embedded, so entries and exits combine N×M.
         filters: Permission gates; each can only forbid, never encourage.
@@ -730,7 +796,7 @@ class StrategySpec(BaseModel):
     timeframes: TimeframeSpec
     instruments: InstrumentSpec
     market_regimes: list[Regime] = Field(default_factory=list)
-    entry: EntrySpec
+    entries: list[EntrySpec] = Field(min_length=1, max_length=2)
     exit_ref: str = Field(min_length=1)
     filters: list[FilterSpec] = Field(default_factory=list)
     risk_profile: RiskProfileSpec
@@ -749,6 +815,32 @@ class StrategySpec(BaseModel):
         if not _SEMVER_PATTERN.match(self.version):
             raise ValueError(f"version must be semver 'X.Y.Z', got {self.version!r}")
         return self
+
+    @model_validator(mode="after")
+    def _entries_have_distinct_directions(self) -> "StrategySpec":
+        """Reject two entries pulling the same way.
+
+        Two long legs would be two strategies sharing an id and a risk budget by
+        accident rather than by design, and nothing downstream could tell their
+        signals apart.
+        """
+        directions = [entry.direction for entry in self.entries]
+        if len(set(directions)) != len(directions):
+            raise ValueError(
+                f"entries must take distinct directions, got {[d.value for d in directions]}"
+            )
+        return self
+
+    def entry_for(self, direction: Direction) -> EntrySpec | None:
+        """The entry trading ``direction``, if this strategy has one.
+
+        Args:
+            direction: Side to look up.
+
+        Returns:
+            The matching entry, or ``None``.
+        """
+        return next((entry for entry in self.entries if entry.direction is direction), None)
 
 
 def strategy_json_schema() -> dict[str, Any]:

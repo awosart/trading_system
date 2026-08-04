@@ -15,7 +15,16 @@ from .conftest import TIMEFRAME, frame_from_closes, series_from_features
 #: route to data and has to be argued for; anything that could name a bar after
 #: ``t`` does not belong in it at all.
 EXPECTED_API = frozenset(
-    {"index", "symbol", "timeframe", "bar_close_ts", "price", "feature", "feature_snapshot"}
+    {
+        "index",
+        "symbol",
+        "timeframe",
+        "bar_close_ts",
+        "price",
+        "feature",
+        "labels",
+        "feature_snapshot",
+    }
 )
 
 
@@ -47,7 +56,7 @@ class TestNoLookahead:
         ):
             assert not hasattr(BarContext, name), f"BarContext exposes {name!r}"
 
-    @pytest.mark.parametrize("accessor", ["price", "feature"])
+    @pytest.mark.parametrize("accessor", ["price", "feature", "labels"])
     def test_every_data_accessor_counts_backwards(self, accessor: str) -> None:
         parameters = list(inspect.signature(getattr(BarContext, accessor)).parameters)
         assert parameters[-1] == "lookback", (
@@ -64,12 +73,18 @@ class TestNoLookahead:
     def test_a_negative_lookback_is_rejected_rather_than_wrapping(self) -> None:
         # Python would happily read index -1 as the last bar of the series, which
         # is the future. The API refuses instead.
-        series = series_from_features([1.0, 2.0, 3.0], {"f": [10.0, 20.0, 30.0]})
+        series = series_from_features(
+            [1.0, 2.0, 3.0],
+            {"f": [10.0, 20.0, 30.0]},
+            labels={"pattern": [frozenset(), frozenset({"DOJI"}), frozenset()]},
+        )
         ctx = series.context(0)
         with pytest.raises(ValueError, match="non-negative"):
             ctx.price("close", -1)
         with pytest.raises(ValueError, match="non-negative"):
             ctx.feature("f", -1)
+        with pytest.raises(ValueError, match="non-negative"):
+            ctx.labels("pattern", -1)
 
     def test_every_accessor_agrees_with_a_series_truncated_at_the_bar(self) -> None:
         # The real proof, by exhaustion over the API: if any accessor could read
@@ -79,7 +94,15 @@ class TestNoLookahead:
             "fast": [None, None, *[value + 0.5 for value in closes[2:]]],
             "slow": [*[None] * 5, *[value - 0.5 for value in closes[5:]]],
         }
-        full = series_from_features(closes, features)
+        bar_labels: dict[str, list[frozenset[str] | None]] = {
+            "pattern": [
+                None,
+                None,
+                *(frozenset({"DOJI"}) if i % 3 else frozenset() for i in range(2, 20)),
+            ],
+            "session": [frozenset({"LONDON"}) if i < 10 else frozenset() for i in range(20)],
+        }
+        full = series_from_features(closes, features, labels=bar_labels)
 
         for index in range(len(closes)):
             truncated = full.truncated(index + 1)
@@ -94,6 +117,8 @@ class TestNoLookahead:
                     assert here.price(field, lookback) == there.price(field, lookback)
                 for key in ("fast", "slow"):
                     assert here.feature(key, lookback) == there.feature(key, lookback)
+                for category in ("pattern", "session"):
+                    assert here.labels(category, lookback) == there.labels(category, lookback)
 
 
 class TestAccess:

@@ -2,12 +2,14 @@
 
 import math
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from structlog.testing import capture_logs
 
 from trading_system.core.exceptions import ValidationError
-from trading_system.core.types import Side
+from trading_system.core.types import Price, Side
 from trading_system.entry.compiler import compile_condition, compile_entry
 from trading_system.entry.context import BarSeries
 from trading_system.entry.features import FeatureRegistry, feature_key
@@ -25,7 +27,14 @@ from trading_system.strategies.schema import (
     StopOrder,
 )
 
-from .conftest import frame_from_closes, leaf, ref, series_from_features, strategy_spec
+from .conftest import (
+    frame_from_closes,
+    labels,
+    leaf,
+    ref,
+    series_from_features,
+    strategy_spec,
+)
 
 RSI = ref("rsi", period=14)
 RSI_KEY = feature_key(RSI)
@@ -167,23 +176,27 @@ class TestNesting:
 class TestRejectedSpecs:
     """Defects that must surface at compile time, never mid-backtest."""
 
-    @pytest.mark.parametrize("op", ["pattern_is", "regime_is", "session_is"])
-    def test_categorical_operators_are_rejected_with_the_reason(self, op: str) -> None:
-        spec = strategy_spec(trigger=leaf(op, RSI, 1.0))
-        with pytest.raises(ValidationError, match="categorical operand"):
+    def test_regime_is_is_rejected_until_a_regime_module_exists(self) -> None:
+        # The schema accepts it so specs can be written against the eventual
+        # contract; the compiler will not pretend it can classify a bar.
+        spec = strategy_spec(trigger=leaf("regime_is", None, labels("RANGE")))
+        with pytest.raises(ValidationError, match="no Regime module"):
             compile_entry(spec, FeatureRegistry.from_strategy(spec))
 
-    def test_direction_both_is_rejected(self) -> None:
-        spec = strategy_spec(trigger=leaf("gt", RSI, 50.0), direction="BOTH")
-        with pytest.raises(ValidationError, match="side is not derivable"):
+    @pytest.mark.parametrize("op", ["pattern_is", "session_is"])
+    def test_a_categorical_operator_without_labels_is_rejected(self, op: str) -> None:
+        spec = strategy_spec(trigger=leaf(op, None, 1.0))
+        with pytest.raises(ValidationError, match="requires a label set"):
             compile_entry(spec, FeatureRegistry.from_strategy(spec))
 
-    def test_an_entry_without_an_invalidation_price_level_is_rejected(self) -> None:
-        spec = strategy_spec(
-            trigger=leaf("gt", RSI, 50.0),
-            invalidation=Invalidation(condition=leaf("lt", RSI, 20.0)),
-        )
-        with pytest.raises(ValidationError, match="no invalidation.price_level"):
+    def test_a_categorical_operator_with_a_left_operand_is_rejected(self) -> None:
+        spec = strategy_spec(trigger=leaf("pattern_is", RSI, labels("DOJI")))
+        with pytest.raises(ValidationError, match="left must be omitted"):
+            compile_entry(spec, FeatureRegistry.from_strategy(spec))
+
+    def test_labels_handed_to_a_numeric_operator_are_rejected(self) -> None:
+        spec = strategy_spec(trigger=leaf("gt", RSI, labels("DOJI")))
+        with pytest.raises(ValidationError, match="compares numbers"):
             compile_entry(spec, FeatureRegistry.from_strategy(spec))
 
     def test_a_feature_the_registry_does_not_provide_is_rejected(self) -> None:
@@ -219,7 +232,7 @@ class TestEvaluation:
     def test_a_bare_trigger_fires_on_its_own_bar(self) -> None:
         spec = strategy_spec(trigger=leaf("gt", RSI, 50.0))
         series = series_from_features([1.10] * 4, {RSI_KEY: [40.0, 60.0, 40.0, 70.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert [signal.context["signal_bar_index"] for signal in signals] == [1, 3]
 
     def test_confirmation_may_land_on_the_trigger_bar_itself(self) -> None:
@@ -229,7 +242,7 @@ class TestEvaluation:
             confirmation_window_bars=1,
         )
         series = series_from_features([1.10] * 3, {RSI_KEY: [40.0, 60.0, 40.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert [signal.context["signal_bar_index"] for signal in signals] == [1]
 
     def test_confirmation_arriving_later_in_the_window_fires_then(self) -> None:
@@ -239,7 +252,7 @@ class TestEvaluation:
             confirmation_window_bars=3,
         )
         series = series_from_features([1.10] * 5, {RSI_KEY: [40.0, 60.0, 60.0, 80.0, 40.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert len(signals) == 1
         assert signals[0].context["trigger_bar_index"] == 1
         assert signals[0].context["signal_bar_index"] == 3
@@ -261,10 +274,12 @@ class TestEvaluation:
         # Trigger at bar 1. A window of 2 covers bars 1 and 2; confirmation only
         # arrives at bar 3, one bar too late. A window of 3 reaches it.
         narrow = spec_with(2)
-        assert compile_entry(narrow, FeatureRegistry.from_strategy(narrow)).run(series) == []
+        assert (
+            compile_entry(narrow, FeatureRegistry.from_strategy(narrow)).run(series).signals == ()
+        )
 
         wide = spec_with(3)
-        signals = compile_entry(wide, FeatureRegistry.from_strategy(wide)).run(series)
+        signals = compile_entry(wide, FeatureRegistry.from_strategy(wide)).run(series).signals
         assert [signal.context["signal_bar_index"] for signal in signals] == [3]
 
     def test_a_dead_setup_does_not_block_a_new_trigger_on_the_same_bar(self) -> None:
@@ -279,7 +294,7 @@ class TestEvaluation:
             confirmation_window_bars=2,
         )
         series = series_from_features([1.10] * 5, {RSI_KEY: [40.0, 60.0, 60.0, 80.0, 40.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert [signal.context["trigger_bar_index"] for signal in signals] == [3]
 
     def test_several_confirmations_latch_independently(self) -> None:
@@ -294,7 +309,7 @@ class TestEvaluation:
             [1.10] * 5,
             {RSI_KEY: [40.0, 60.0, 60.0, 80.0, 40.0], SMA5_KEY: [1.0, 1.0, 1.5, 1.0, 1.0]},
         )
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert len(signals) == 1
         assert signals[0].context["confirmation_bars"] == (2, 3)
 
@@ -305,7 +320,7 @@ class TestEvaluation:
             confirmation_window_bars=4,
         )
         series = series_from_features([1.10] * 5, {RSI_KEY: [40.0, 60.0, 65.0, 80.0, 40.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert len(signals) == 1
         assert signals[0].context["trigger_bar_index"] == 1
 
@@ -320,13 +335,17 @@ class TestEvaluation:
         rsi = [40.0, 60.0, 60.0, 80.0, 40.0]
         registry = FeatureRegistry.from_strategy(spec)
 
-        survived = compile_entry(spec, registry).run(series_from_features(closes, {RSI_KEY: rsi}))
+        survived = (
+            compile_entry(spec, registry).run(series_from_features(closes, {RSI_KEY: rsi})).signals
+        )
         assert len(survived) == 1
 
-        pierced = compile_entry(spec, registry).run(
-            series_from_features(closes, {RSI_KEY: rsi}, lows=[1.10, 1.10, 1.04, 1.10, 1.10])
+        pierced = (
+            compile_entry(spec, registry)
+            .run(series_from_features(closes, {RSI_KEY: rsi}, lows=[1.10, 1.10, 1.04, 1.10, 1.10]))
+            .signals
         )
-        assert pierced == []
+        assert pierced == ()
 
     def test_the_trigger_bar_itself_is_not_subject_to_invalidation(self) -> None:
         # A level drawn from a feature the trigger references would otherwise
@@ -341,7 +360,7 @@ class TestEvaluation:
         series = series_from_features(
             [1.10] * 4, {RSI_KEY: [40.0, 80.0, 60.0, 60.0]}, lows=[1.10, 1.04, 1.10, 1.10]
         )
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert [signal.context["signal_bar_index"] for signal in signals] == [1]
 
     def test_an_invalidation_condition_also_kills_a_pending_setup(self) -> None:
@@ -355,7 +374,7 @@ class TestEvaluation:
             [1.10] * 5,
             {RSI_KEY: [40.0, 60.0, 60.0, 80.0, 40.0], SMA5_KEY: [1.5, 1.5, 0.5, 1.5, 1.5]},
         )
-        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series) == []
+        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals == ()
 
     def test_reset_discards_a_pending_setup(self) -> None:
         spec = strategy_spec(
@@ -364,12 +383,13 @@ class TestEvaluation:
             confirmation_window_bars=4,
         )
         series = series_from_features([1.10] * 3, {RSI_KEY: [40.0, 60.0, 60.0]})
-        evaluator = compile_entry(spec, FeatureRegistry.from_strategy(spec))
-        evaluator.evaluate(series.context(0))
-        evaluator.evaluate(series.context(1))
-        assert evaluator.has_pending_setup
-        evaluator.reset()
-        assert not evaluator.has_pending_setup
+        engine = compile_entry(spec, FeatureRegistry.from_strategy(spec))
+        (leg,) = engine.evaluators
+        engine.evaluate(series.context(0))
+        engine.evaluate(series.context(1))
+        assert leg.has_pending_setup
+        engine.reset()
+        assert not leg.has_pending_setup
 
 
 class TestSignalContents:
@@ -378,7 +398,7 @@ class TestSignalContents:
     def _one_signal(self, **kwargs: Any) -> EntrySignal:
         spec = strategy_spec(trigger=leaf("gt", RSI, 50.0), **kwargs)
         series = series_from_features([1.10, 1.20], {RSI_KEY: [40.0, 60.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert len(signals) == 1
         return signals[0]
 
@@ -401,7 +421,7 @@ class TestSignalContents:
             order=LimitOrder(offset=0.0005),
         )
         series = series_from_features([1.10, 1.20], {RSI_KEY: [40.0, 60.0]})
-        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series)
+        signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
         assert signals[0].side is Side.SELL
         assert signals[0].reference_price == pytest.approx(1.2005)
 
@@ -449,14 +469,53 @@ class TestSignalContents:
             trigger=leaf("gt", RSI, 50.0), invalidation=Invalidation(price_level=1.5)
         )
         series = series_from_features([1.10, 1.20], {RSI_KEY: [40.0, 60.0]})
-        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series) == []
+        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals == ()
+
+    def test_a_wrong_sided_bar_is_dropped_but_the_run_carries_on(self) -> None:
+        # The reason this is a per-bar drop and not a raise: the invalidation
+        # level is a feature value, so whether it lands on the right side is a
+        # property of the bar, not of the spec. One defective bar must not end a
+        # backtest, and must not be quietly repaired either.
+        spec = strategy_spec(
+            trigger=leaf("gt", RSI, 50.0), invalidation=Invalidation(price_level=SMA5)
+        )
+        series = series_from_features(
+            [1.10, 1.20, 1.30, 1.40],
+            # Bar 1: level 1.50 sits above the 1.20 entry — defective, dropped.
+            # Bar 3: level 1.00 sits below the 1.40 entry — a usable signal.
+            {RSI_KEY: [40.0, 60.0, 40.0, 60.0], SMA5_KEY: [1.0, 1.5, 1.0, 1.0]},
+        )
+        with capture_logs() as logs:
+            signals = compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals
+
+        assert [signal.context["signal_bar_index"] for signal in signals] == [3]
+        dropped = [entry for entry in logs if entry["event"] == "entry.signal_dropped"]
+        assert len(dropped) == 1
+        assert dropped[0]["log_level"] == "warning"
+        assert dropped[0]["bar_index"] == 1
+        assert dropped[0]["reference_price"] == pytest.approx(1.20)
+        assert dropped[0]["invalidation_price"] == pytest.approx(1.50)
+
+    def test_the_signal_type_itself_refuses_to_hold_a_wrong_sided_stop(self) -> None:
+        # The second layer: even if a future caller assembled a signal by hand,
+        # bypassing the evaluator, the object cannot exist.
+        with pytest.raises(ValueError, match="strictly below"):
+            EntrySignal(
+                strategy_id="test-entry",
+                symbol="TESTFX",
+                bar_close_ts=datetime(2024, 1, 2, 9, 15, tzinfo=UTC),
+                side=Side.BUY,
+                reference_price=Price(1.20),
+                invalidation_price=Price(1.50),
+                quality=0.5,
+            )
 
     def test_a_signal_is_dropped_when_the_invalidation_feature_has_no_value(self) -> None:
         spec = strategy_spec(
             trigger=leaf("gt", RSI, 50.0), invalidation=Invalidation(price_level=SMA5)
         )
         series = series_from_features([1.10, 1.20], {RSI_KEY: [40.0, 60.0], SMA5_KEY: [None, None]})
-        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series) == []
+        assert compile_entry(spec, FeatureRegistry.from_strategy(spec)).run(series).signals == ()
 
 
 class TestNoLookahead:
@@ -475,7 +534,9 @@ class TestNoLookahead:
             highs=[close + 0.0020 for close in closes],
         )
         features = registry.pipeline().compute(frame)
-        return compile_entry(spec, registry).run(BarSeries.from_frame(frame, features))
+        return list(
+            compile_entry(spec, registry).run(BarSeries.from_frame(frame, features)).signals
+        )
 
     @pytest.mark.parametrize("prefix_length", [90, 110, 130])
     def test_a_prefix_run_matches_the_full_run_on_the_overlap(self, prefix_length: int) -> None:
@@ -521,11 +582,13 @@ class TestNoLookahead:
         closes = [1.10] * 4
 
         evaluator = compile_entry(spec, registry)
-        cut = evaluator.run(series_from_features(closes[:3], {RSI_KEY: rsi[:3]}))
-        assert cut == []
-        assert evaluator.has_pending_setup, (
+        cut = evaluator.run(series_from_features(closes[:3], {RSI_KEY: rsi[:3]})).signals
+        assert cut == ()
+        assert evaluator.evaluators[0].has_pending_setup, (
             "the setup must still be waiting, not resolved by bars that do not exist yet"
         )
 
-        whole = compile_entry(spec, registry).run(series_from_features(closes, {RSI_KEY: rsi}))
+        whole = (
+            compile_entry(spec, registry).run(series_from_features(closes, {RSI_KEY: rsi})).signals
+        )
         assert [signal.context["signal_bar_index"] for signal in whole] == [3]

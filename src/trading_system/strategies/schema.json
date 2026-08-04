@@ -205,11 +205,10 @@
       "type": "object"
     },
     "Direction": {
-      "description": "Trade direction(s) an entry is willing to take.",
+      "description": "The direction one entry takes.\n\nThere is deliberately no ``BOTH``. A symmetric idea is two entries under one\n:class:`StrategySpec` \u2014 see :attr:`StrategySpec.entries` \u2014 because the two\nsides need more than a shared trigger flipped over: a range fade is\ninvalidated *below* the range for its long leg and *above* it for its short\none, which a single :class:`Invalidation` cannot say. A ``BOTH`` direction\nalso leaves the side of a fired signal underivable, since nothing in a\ncondition tree marks which branch was the long one.",
       "enum": [
         "LONG",
-        "SHORT",
-        "BOTH"
+        "SHORT"
       ],
       "title": "Direction",
       "type": "string"
@@ -262,7 +261,7 @@
     },
     "EntrySpec": {
       "additionalProperties": false,
-      "description": "Everything needed to recognise and place one entry.\n\nAttributes:\n    direction: Direction(s) this entry is willing to take.\n    trigger: The condition that opens a setup.\n    confirmation: Additional conditions that must all hold within\n        ``confirmation_window_bars`` bars of the trigger. Empty means the\n        trigger alone is sufficient.\n    confirmation_window_bars: Bars, counted from the trigger bar, allowed\n        for every entry of ``confirmation`` to become true. Must be\n        positive exactly when ``confirmation`` is non-empty \u2014 a window\n        without conditions or conditions without a window is a\n        contradictory config, not a default.\n    invalidation: Condition or level that cancels a pending setup.\n    entry_order: How the resulting order is placed.",
+      "description": "Everything needed to recognise and place one entry, in one direction.\n\nOne entry is one-sided. A strategy that trades both ways carries two of\nthese under :attr:`StrategySpec.entries`, each with its own trigger,\nconfirmation, invalidation and order \u2014 because those genuinely differ\nbetween the legs, which is what makes a shared \"both directions\" trigger\nunworkable rather than merely awkward.\n\nAttributes:\n    direction: Which way this entry trades.\n    trigger: The condition that opens a setup.\n    confirmation: Additional conditions that must all hold within\n        ``confirmation_window_bars`` bars of the trigger. Empty means the\n        trigger alone is sufficient.\n    confirmation_window_bars: Bars, counted from the trigger bar, allowed\n        for every entry of ``confirmation`` to become true. Must be\n        positive exactly when ``confirmation`` is non-empty \u2014 a window\n        without conditions or conditions without a window is a\n        contradictory config, not a default.\n    invalidation: Where the setup is disproven, and optionally a condition\n        that also cancels it. Mandatory: see :class:`Invalidation`.\n    entry_order: How the resulting order is placed.",
       "properties": {
         "direction": {
           "$ref": "#/$defs/Direction"
@@ -329,15 +328,7 @@
           "type": "integer"
         },
         "invalidation": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Invalidation"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+          "$ref": "#/$defs/Invalidation"
         },
         "entry_order": {
           "$ref": "#/$defs/EntryOrderSpec"
@@ -346,6 +337,7 @@
       "required": [
         "direction",
         "trigger",
+        "invalidation",
         "entry_order"
       ],
       "title": "EntrySpec",
@@ -455,8 +447,25 @@
     },
     "Invalidation": {
       "additionalProperties": false,
-      "description": "A condition or price level that voids a pending setup before entry.\n\nAt least one of ``condition`` and ``price_level`` must be set.\n\nAttributes:\n    condition: A condition that, once true, cancels the setup.\n    price_level: A price beyond which the setup is void. Its side\n        (above/below entry) is implied by :attr:`EntrySpec.direction`.",
+      "description": "The price at which a setup is disproven, and optionally a condition too.\n\n``price_level`` is mandatory. An entry that cannot name the price at which\nits thesis is void cannot produce a sizeable signal: the Risk Engine derives\nposition size from the distance between entry and invalidation, and there is\nnothing else for it to measure. Leaving this optional only moved the failure\nfrom load time to the middle of a backtest. Deriving one from\n``risk_profile.stop_reference`` instead is the Risk Engine's job \u2014 that field\nis its input, and ``FIXED_PIPS`` needs instrument metadata no strategy spec\ncarries.\n\nAttributes:\n    price_level: The price beyond which the setup is void. Its side\n        (above/below entry) is implied by :attr:`EntrySpec.direction`.\n    condition: A further condition that, once true, also cancels the setup.",
       "properties": {
+        "price_level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FeatureRef"
+            },
+            {
+              "$ref": "#/$defs/LabelSet"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Price Level"
+        },
         "condition": {
           "anyOf": [
             {
@@ -490,27 +499,31 @@
           ],
           "default": null,
           "title": "Condition"
-        },
-        "price_level": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/FeatureRef"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Price Level"
         }
       },
+      "required": [
+        "price_level"
+      ],
       "title": "Invalidation",
+      "type": "object"
+    },
+    "LabelSet": {
+      "additionalProperties": false,
+      "description": "Categorical labels a bar is tested against.\n\nThe operand form of the three tests that ask *what kind of bar is this*\nrather than *what number does this series carry*: ``pattern_is``,\n``regime_is`` and ``session_is``. Their vocabulary is an enumeration, not a\nprice, so none of the numeric operand forms can express them \u2014 which is why\nthose operators had no way to name their argument at all before this existed.\n\nA set rather than a single label because the natural phrasing is a\ndisjunction: \"the London or New York session\", \"a hammer or a bullish\nengulfing\". The test is intersection \u2014 true when the bar carries *any* of\nthese labels.\n\nWhich vocabulary applies depends on the operator, so the labels are checked\nagainst :class:`~trading_system.features.patterns.Pattern`, :class:`Regime`\nor :class:`~trading_system.data.sessions.Session` by\n:func:`~trading_system.strategies.validator.check_condition_labels`, not\nhere \u2014 a model cannot see the leaf it hangs from.\n\nAttributes:\n    labels: The labels to test for. At least one.",
+      "properties": {
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "labels"
+      ],
+      "title": "LabelSet",
       "type": "object"
     },
     "LeafCondition": {
@@ -532,6 +545,9 @@
               "$ref": "#/$defs/FeatureRef"
             },
             {
+              "$ref": "#/$defs/LabelSet"
+            },
+            {
               "type": "string"
             },
             {
@@ -548,6 +564,9 @@
           "anyOf": [
             {
               "$ref": "#/$defs/FeatureRef"
+            },
+            {
+              "$ref": "#/$defs/LabelSet"
             },
             {
               "type": "string"
@@ -1112,7 +1131,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "The unified description of one trading strategy.\n\nThis is the contract Entry Engine, Exit Engine, the strategy database and\nvalidation all depend on. A spec never manages money: it names an\n``exit_ref`` rather than embedding an exit, and its output downstream is a\n:class:`~trading_system.core.types.Signal`, not an order.\n\nAttributes:\n    id: Unique, stable slug (lower-kebab-case).\n    name: Human-readable name.\n    version: Semantic version of this spec, ``\"X.Y.Z\"``.\n    author: Who defined the strategy.\n    source: Where the idea came from (URL, book, paper); optional.\n    type: Holding-period class.\n    status: Lifecycle stage.\n    timeframes: Timeframes the entry reasons across.\n    instruments: Which instruments this strategy may trade.\n    market_regimes: Regimes this strategy is permitted to trade in. Empty\n        means unrestricted.\n    entry: Trigger, confirmation, invalidation and order placement.\n    exit_ref: Id of the exit strategy this pairs with, looked up in the\n        Exit DB \u2014 never embedded, so entries and exits combine N\u00d7M.\n    filters: Permission gates; each can only forbid, never encourage.\n    risk_profile: Inputs to the Risk Engine's sizing and gating.\n    metadata: Free-form tags and notes. Never read by any control-flow\n        decision; a strategy field belongs above this dict, not inside it.",
+  "description": "The unified description of one trading strategy.\n\nThis is the contract Entry Engine, Exit Engine, the strategy database and\nvalidation all depend on. A spec never manages money: it names an\n``exit_ref`` rather than embedding an exit, and its output downstream is a\n:class:`~trading_system.core.types.Signal`, not an order.\n\nAttributes:\n    id: Unique, stable slug (lower-kebab-case).\n    name: Human-readable name.\n    version: Semantic version of this spec, ``\"X.Y.Z\"``.\n    author: Who defined the strategy.\n    source: Where the idea came from (URL, book, paper); optional.\n    type: Holding-period class.\n    status: Lifecycle stage.\n    timeframes: Timeframes the entry reasons across.\n    instruments: Which instruments this strategy may trade.\n    market_regimes: Regimes this strategy is permitted to trade in. Empty\n        means unrestricted.\n    entries: One or two entries, at most one per direction. Two is how a\n        symmetric idea \u2014 fading both edges of a range \u2014 is expressed: the\n        legs share this spec's risk profile, exit, filters and id, so\n        ``max_concurrent_positions`` counts across both, which two separate\n        specs could not do. Each leg keeps its own trigger, confirmation,\n        invalidation and order, which is exactly what differs between them.\n    exit_ref: Id of the exit strategy this pairs with, looked up in the\n        Exit DB \u2014 never embedded, so entries and exits combine N\u00d7M.\n    filters: Permission gates; each can only forbid, never encourage.\n    risk_profile: Inputs to the Risk Engine's sizing and gating.\n    metadata: Free-form tags and notes. Never read by any control-flow\n        decision; a strategy field belongs above this dict, not inside it.",
   "properties": {
     "id": {
       "title": "Id",
@@ -1164,8 +1183,14 @@
       "title": "Market Regimes",
       "type": "array"
     },
-    "entry": {
-      "$ref": "#/$defs/EntrySpec"
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/EntrySpec"
+      },
+      "maxItems": 2,
+      "minItems": 1,
+      "title": "Entries",
+      "type": "array"
     },
     "exit_ref": {
       "minLength": 1,
@@ -1234,7 +1259,7 @@
     "type",
     "timeframes",
     "instruments",
-    "entry",
+    "entries",
     "exit_ref",
     "risk_profile"
   ],

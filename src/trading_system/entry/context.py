@@ -26,6 +26,7 @@ from datetime import datetime
 from trading_system.core.exceptions import ValidationError
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCV_COLUMNS, TIMESTAMP_COLUMN, OHLCVFrame
+from trading_system.entry.labels import LabelCategory, label_columns
 from trading_system.features.pipeline import FeatureSet
 
 #: Price fields a condition may reference, matching P04's ``price:<field>``.
@@ -39,7 +40,15 @@ class BarSeries:
     hands the underlying lists back out.
     """
 
-    __slots__ = ("_features", "_length", "_prices", "_symbol", "_timeframe", "_timestamps")
+    __slots__ = (
+        "_features",
+        "_labels",
+        "_length",
+        "_prices",
+        "_symbol",
+        "_timeframe",
+        "_timestamps",
+    )
 
     def __init__(
         self,
@@ -49,6 +58,7 @@ class BarSeries:
         timestamps: Sequence[datetime],
         prices: Mapping[str, Sequence[float]],
         features: Mapping[str, Sequence[float | None]],
+        labels: Mapping[str, Sequence[frozenset[str] | None]] | None = None,
     ) -> None:
         """Bundle aligned columns into a series.
 
@@ -58,6 +68,9 @@ class BarSeries:
             timestamps: Bar OPEN times, ascending, tz-aware UTC.
             prices: One column per entry of :data:`PRICE_FIELDS`.
             features: One column per feature key, nulls allowed for warmup.
+            labels: One column per :class:`~trading_system.entry.labels.LabelCategory`,
+                each holding the bar's label set or ``None`` where the bar cannot
+                be classified. Omitted entirely for a strategy that asks for none.
 
         Raises:
             ValidationError: If a price column is missing or any column's length
@@ -67,7 +80,8 @@ class BarSeries:
         missing = [field for field in PRICE_FIELDS if field not in prices]
         if missing:
             raise ValidationError(f"{symbol}: missing price columns {missing}")
-        for name, column in (*prices.items(), *features.items()):
+        labels = labels or {}
+        for name, column in (*prices.items(), *features.items(), *labels.items()):
             if len(column) != length:
                 raise ValidationError(
                     f"{symbol}: column {name!r} has {len(column)} rows, expected {length}"
@@ -78,16 +92,25 @@ class BarSeries:
         self._timestamps = list(timestamps)
         self._prices = {field: list(prices[field]) for field in PRICE_FIELDS}
         self._features = {key: list(column) for key, column in features.items()}
+        self._labels = {key: list(column) for key, column in labels.items()}
         self._length = length
 
     @classmethod
-    def from_frame(cls, frame: OHLCVFrame, features: FeatureSet | None = None) -> "BarSeries":
+    def from_frame(
+        cls,
+        frame: OHLCVFrame,
+        features: FeatureSet | None = None,
+        categories: Sequence["LabelCategory"] = (),
+    ) -> "BarSeries":
         """Build a series from a validated frame and, optionally, its features.
 
         Args:
             frame: Bars to expose.
             features: Features computed over exactly these bars. ``None`` means
                 the series carries prices only.
+            categories: Label categories to classify the bars into. Empty means
+                none, which is what a strategy that never asks about patterns or
+                sessions should pay for.
 
         Returns:
             The series.
@@ -126,6 +149,7 @@ class BarSeries:
             timestamps=frame.df[TIMESTAMP_COLUMN].to_list(),
             prices={field: frame.df[field].to_list() for field in PRICE_FIELDS},
             features=feature_columns,
+            labels=label_columns(frame, categories),
         )
 
     def __len__(self) -> int:
@@ -146,6 +170,11 @@ class BarSeries:
     def feature_keys(self) -> tuple[str, ...]:
         """Feature columns this series carries."""
         return tuple(self._features)
+
+    @property
+    def label_categories(self) -> tuple[str, ...]:
+        """Label categories this series carries."""
+        return tuple(self._labels)
 
     def truncated(self, length: int) -> "BarSeries":
         """A copy holding only the first ``length`` bars.
@@ -171,6 +200,7 @@ class BarSeries:
             timestamps=self._timestamps[:length],
             prices={field: column[:length] for field, column in self._prices.items()},
             features={key: column[:length] for key, column in self._features.items()},
+            labels={key: column[:length] for key, column in self._labels.items()},
         )
 
     def context(self, index: int) -> "BarContext":
@@ -223,6 +253,20 @@ class BarSeries:
         if column is None:
             raise ValidationError(
                 f"feature {key!r} is not in this series; carried: {sorted(self._features)}"
+            )
+        return column
+
+    def _label_column(self, category: str) -> list[frozenset[str] | None]:
+        """The named label column.
+
+        Raises:
+            ValidationError: If ``category`` is not carried by this series.
+        """
+        column = self._labels.get(category)
+        if column is None:
+            raise ValidationError(
+                f"label category {category!r} is not in this series; "
+                f"carried: {sorted(self._labels)}"
             )
         return column
 
@@ -319,6 +363,30 @@ class BarContext:
             ValidationError: If ``key`` is not carried by this series.
         """
         column = self._series._feature_column(key)
+        position = self._position(lookback)
+        if position is None:
+            return None
+        return column[position]
+
+    def labels(self, category: str, lookback: int = 0) -> frozenset[str] | None:
+        """The categorical labels of the bar ``lookback`` bars before ``t``.
+
+        Args:
+            category: A :class:`~trading_system.entry.labels.LabelCategory`
+                value, e.g. ``"pattern"``.
+            lookback: Bars back from ``t``. Zero is the current bar.
+
+        Returns:
+            The label set, or ``None`` if that bar precedes the series or cannot
+            be classified. An *empty* set is not ``None``: it means the bar was
+            classified and carries none of that category's labels, which is a
+            decidable answer, whereas ``None`` is not.
+
+        Raises:
+            ValueError: If ``lookback`` is negative.
+            ValidationError: If ``category`` is not carried by this series.
+        """
+        column = self._series._label_column(category)
         position = self._position(lookback)
         if position is None:
             return None

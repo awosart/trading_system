@@ -23,6 +23,7 @@ from trading_system.strategies.schema import (
     InstrumentClass,
     InstrumentSpec,
     Invalidation,
+    LabelSet,
     LeafCondition,
     MarketOrder,
     Operand,
@@ -79,6 +80,7 @@ def series_from_features(
     closes: Sequence[float],
     features: Mapping[str, Sequence[float | None]] | None = None,
     *,
+    labels: Mapping[str, Sequence[frozenset[str] | None]] | None = None,
     lows: Sequence[float] | None = None,
     highs: Sequence[float] | None = None,
 ) -> BarSeries:
@@ -91,6 +93,7 @@ def series_from_features(
     Args:
         closes: One close per bar.
         features: Feature key to column, aligned with ``closes``.
+        labels: Label category to column, aligned with ``closes``.
         lows: Per-bar low, defaulting to the close.
         highs: Per-bar high, defaulting to the close.
 
@@ -104,6 +107,7 @@ def series_from_features(
         timestamps=frame.df["timestamp"].to_list(),
         prices={field: frame.df[field].to_list() for field in PRICE_FIELDS},
         features=features or {},
+        labels=labels or {},
     )
 
 
@@ -135,9 +139,55 @@ def ref(indicator: str, channel: str | None = None, **params: Any) -> FeatureRef
     return FeatureRef(indicator=indicator, params=params, channel=channel)
 
 
-def strategy_spec(
+def entry_spec(
     *,
     trigger: Condition,
+    direction: str = "LONG",
+    confirmation: Sequence[Condition] = (),
+    confirmation_window_bars: int = 0,
+    invalidation: Invalidation | None = None,
+    order: Any = None,
+) -> EntrySpec:
+    """Build one leg of an entry.
+
+    Args:
+        trigger: Trigger condition.
+        direction: ``"LONG"`` or ``"SHORT"``.
+        confirmation: Confirmation conditions.
+        confirmation_window_bars: Bars of opportunity, trigger bar included.
+        invalidation: Invalidation rule; defaults to a level below every close
+            used in these tests, so it never fires unless a test wants it to.
+        order: Entry order; defaults to a market order.
+
+    Returns:
+        The entry.
+    """
+    return EntrySpec(
+        direction=direction,  # type: ignore[arg-type]
+        trigger=trigger,
+        confirmation=list(confirmation),
+        confirmation_window_bars=confirmation_window_bars,
+        invalidation=invalidation if invalidation is not None else Invalidation(price_level=1.0),
+        entry_order=EntryOrderSpec(order=order if order is not None else MarketOrder()),
+    )
+
+
+def labels(*names: str) -> LabelSet:
+    """Build a categorical label-set operand.
+
+    Args:
+        *names: Pattern, regime or session names.
+
+    Returns:
+        The label set.
+    """
+    return LabelSet(labels=names)
+
+
+def strategy_spec(
+    *,
+    trigger: Condition | None = None,
+    entries: Sequence[EntrySpec] = (),
     direction: str = "LONG",
     confirmation: Sequence[Condition] = (),
     confirmation_window_bars: int = 0,
@@ -148,24 +198,40 @@ def strategy_spec(
     stop_reference: StopReference | None = None,
     strategy_id: str = "test-entry",
 ) -> StrategySpec:
-    """Assemble a minimal but complete spec around one entry.
+    """Assemble a minimal but complete spec.
+
+    Either pass ``entries`` directly, or pass the single-leg arguments and get a
+    one-entry spec — most tests care about one direction and should not have to
+    say so twice.
 
     Args:
-        trigger: Trigger condition.
-        direction: ``"LONG"``, ``"SHORT"`` or ``"BOTH"``.
-        confirmation: Confirmation conditions.
-        confirmation_window_bars: Bars of opportunity, trigger bar included.
-        invalidation: Invalidation rule; defaults to a fixed price level below
-            every close used in these tests.
-        order: Entry order; defaults to a market order.
-        base_quality: Quality before modifiers.
-        quality_modifiers: Condition-gated adjustments.
+        trigger: Trigger for the implied single leg.
+        entries: Explicit legs, for the two-directional cases.
+        direction: Direction of the implied single leg.
+        confirmation: Confirmations of the implied single leg.
+        confirmation_window_bars: Window of the implied single leg.
+        invalidation: Invalidation of the implied single leg.
+        order: Entry order of the implied single leg.
+        base_quality: Quality before modifiers, shared by every leg.
+        quality_modifiers: Condition-gated adjustments, shared by every leg.
         stop_reference: Risk Engine stop derivation; irrelevant to entry.
         strategy_id: Spec id.
 
     Returns:
         The spec.
     """
+    if not entries:
+        assert trigger is not None, "pass either a trigger or explicit entries"
+        entries = [
+            entry_spec(
+                trigger=trigger,
+                direction=direction,
+                confirmation=confirmation,
+                confirmation_window_bars=confirmation_window_bars,
+                invalidation=invalidation,
+                order=order,
+            )
+        ]
     return StrategySpec(
         id=strategy_id,
         name="Test Entry",
@@ -174,16 +240,7 @@ def strategy_spec(
         type=StrategyType.INTRADAY,
         timeframes=TimeframeSpec(signal_tf=TIMEFRAME, entry_tf=TIMEFRAME),
         instruments=InstrumentSpec(allowed_classes=[InstrumentClass.FX]),
-        entry=EntrySpec(
-            direction=direction,  # type: ignore[arg-type]
-            trigger=trigger,
-            confirmation=list(confirmation),
-            confirmation_window_bars=confirmation_window_bars,
-            invalidation=(
-                invalidation if invalidation is not None else Invalidation(price_level=1.0)
-            ),
-            entry_order=EntryOrderSpec(order=order if order is not None else MarketOrder()),
-        ),
+        entries=list(entries),
         exit_ref="test-exit",
         risk_profile=RiskProfileSpec(
             base_quality=base_quality,

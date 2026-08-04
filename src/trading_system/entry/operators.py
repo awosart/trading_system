@@ -251,6 +251,29 @@ def rising(now: Value, past: Value) -> Truth:
     return now > past
 
 
+def label_is(present: frozenset[str] | None, wanted: frozenset[str]) -> Truth:
+    """Whether a bar carries any of the labels being asked about.
+
+    Intersection rather than equality, because a bar genuinely carries several
+    labels at once — London and New York overlap, a bar is both an inside bar and
+    a doji — and because the natural phrasing of the question is a disjunction.
+
+    Args:
+        present: Labels the bar carries, or ``None`` if it could not be
+            classified. Note the difference from an *empty* set, which means the
+            bar was classified and carries none: that is a decidable ``False``,
+            whereas ``None`` is not decidable at all.
+        wanted: Labels the condition asks for.
+
+    Returns:
+        Whether the two sets intersect, or ``None`` if the bar has no
+        classification.
+    """
+    if present is None:
+        return None
+    return not present.isdisjoint(wanted)
+
+
 def falling(now: Value, past: Value) -> Truth:
     """Whether a series is lower than it was ``n`` bars ago.
 

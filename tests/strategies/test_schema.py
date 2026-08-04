@@ -61,22 +61,22 @@ class TestOperands:
     def test_rejects_malformed_price_ref(
         self, minimal_spec_dict: dict[str, Any], bad_ref: str
     ) -> None:
-        minimal_spec_dict["entry"]["trigger"]["right"] = bad_ref
+        minimal_spec_dict["entries"][0]["trigger"]["right"] = bad_ref
         with pytest.raises(ValidationError):
             StrategySpec.model_validate(minimal_spec_dict)
 
     def test_accepts_numeric_constant(self, minimal_spec_dict: dict[str, Any]) -> None:
-        minimal_spec_dict["entry"]["trigger"] = leaf("gt", "price:close", 100.5)
+        minimal_spec_dict["entries"][0]["trigger"] = leaf("gt", "price:close", 100.5)
         spec = StrategySpec.model_validate(minimal_spec_dict)
-        assert spec.entry.trigger.right == 100.5  # type: ignore[union-attr]
+        assert spec.entries[0].trigger.right == 100.5  # type: ignore[union-attr]
 
     def test_accepts_structural_feature_ref(self, minimal_spec_dict: dict[str, Any]) -> None:
-        minimal_spec_dict["entry"]["trigger"] = leaf(
+        minimal_spec_dict["entries"][0]["trigger"] = leaf(
             "gt", "price:close", feature_ref("rsi", {"period": 14})
         )
         spec = StrategySpec.model_validate(minimal_spec_dict)
         expected = FeatureRef(indicator="rsi", params={"period": 14})
-        assert spec.entry.trigger.right == expected  # type: ignore[union-attr]
+        assert spec.entries[0].trigger.right == expected  # type: ignore[union-attr]
 
     def test_feature_ref_rejects_unknown_field(self) -> None:
         with pytest.raises(ValidationError, match="bogus"):
@@ -133,7 +133,7 @@ class TestConditionTree:
 
 class TestEntryConsistency:
     def test_confirmation_requires_positive_window(self, minimal_spec_dict: dict[str, Any]) -> None:
-        minimal_spec_dict["entry"]["confirmation"] = [
+        minimal_spec_dict["entries"][0]["confirmation"] = [
             leaf("gt", feature_ref("rsi", {"period": 14}), 50.0)
         ]
         with pytest.raises(ValidationError, match="confirmation_window_bars"):
@@ -142,24 +142,31 @@ class TestEntryConsistency:
     def test_confirmation_window_without_conditions_rejected(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["entry"]["confirmation_window_bars"] = 3
+        minimal_spec_dict["entries"][0]["confirmation_window_bars"] = 3
         with pytest.raises(ValidationError, match="confirmation_window_bars"):
             StrategySpec.model_validate(minimal_spec_dict)
 
     def test_confirmation_with_matching_window_is_accepted(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["entry"]["confirmation"] = [
+        minimal_spec_dict["entries"][0]["confirmation"] = [
             leaf("gt", feature_ref("rsi", {"period": 14}), 50.0)
         ]
-        minimal_spec_dict["entry"]["confirmation_window_bars"] = 3
+        minimal_spec_dict["entries"][0]["confirmation_window_bars"] = 3
         spec = StrategySpec.model_validate(minimal_spec_dict)
-        assert spec.entry.confirmation_window_bars == 3
+        assert spec.entries[0].confirmation_window_bars == 3
 
-    def test_invalidation_requires_condition_or_price_level(
-        self, minimal_spec_dict: dict[str, Any]
-    ) -> None:
-        minimal_spec_dict["entry"]["invalidation"] = {}
+    def test_invalidation_requires_a_price_level(self, minimal_spec_dict: dict[str, Any]) -> None:
+        # A condition alone is not enough: without a price there is nothing for
+        # the Risk Engine to size from.
+        minimal_spec_dict["entries"][0]["invalidation"] = {
+            "condition": leaf("lt", "price:close", 1.0)
+        }
+        with pytest.raises(ValidationError, match="price_level"):
+            StrategySpec.model_validate(minimal_spec_dict)
+
+    def test_entry_requires_an_invalidation(self, minimal_spec_dict: dict[str, Any]) -> None:
+        del minimal_spec_dict["entries"][0]["invalidation"]
         with pytest.raises(ValidationError, match="invalidation"):
             StrategySpec.model_validate(minimal_spec_dict)
 

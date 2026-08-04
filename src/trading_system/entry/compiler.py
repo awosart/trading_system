@@ -7,27 +7,15 @@ strategy file is configuration, and configuration that can execute arbitrary
 Python is a different and much worse thing. Every error a spec can contain —
 an unknown indicator, a channel that does not exist, a range with its bounds
 swapped, a comparison against a range — surfaces at compile time, before the
-first bar.
+first bar. A one-sided direction and a mandatory invalidation price are now
+guaranteed by P04 itself rather than re-checked here.
 
-Three constructs P04 permits are rejected here rather than guessed at:
-
-* **``pattern_is`` / ``regime_is`` / ``session_is``.** P04's ``Operand`` is
-  ``FeatureRef | PriceRef | float``, and ``PriceRef`` only matches
-  ``price:<field>``. There is no way to write *which* pattern, regime or session
-  is meant, so these operators cannot be given an argument at all. Compiling them
-  would mean inventing an encoding that the schema, the validator and the JSON
-  Schema know nothing about. The Regime module does not exist yet either, and
-  sessions are already covered by ``SessionFilter``.
-* **``direction: BOTH``.** When a trigger fires there is nothing in the tree
-  saying which branch was the long one, so the signal's side is not derivable.
-  Mirroring the tree automatically works on ``cross_above``/``cross_below`` and
-  quietly produces nonsense on thresholds — the mirror of ``rsi < 30`` is
-  ``rsi > 70``, not ``rsi > 30``.
-* **An entry with no ``invalidation.price_level``.** A signal without a price at
-  which it is disproven cannot be sized, and the Entry Engine has no business
-  deriving one from ``risk_profile.stop_reference`` — that is the Risk Engine's
-  input, and ``FIXED_PIPS`` needs instrument metadata the Entry Engine does not
-  have.
+One construct the schema accepts is still rejected here: **``regime_is``**. The
+schema admits it so specs can be written against the eventual contract, but no
+Regime module exists to classify a bar with, and a condition that silently never
+fires is worse than one that refuses to compile. ``pattern_is`` and
+``session_is`` do compile, reading the label columns of
+:mod:`trading_system.entry.labels`.
 
 Evaluation is stateful, because confirmation is. A trigger opens a *pending
 setup*; each confirmation latches on the bar it first becomes true; the signal
@@ -37,16 +25,19 @@ evaluator cannot revisit a bar, and a run over ``[0..t]`` produces the same
 signals as the prefix of a run over ``[0..t+n]``.
 """
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import datetime
+from enum import StrEnum
+from types import MappingProxyType
 from typing import Any
 
 from trading_system.core.exceptions import ValidationError
 from trading_system.core.logging import get_logger
 from trading_system.core.types import Price, Side
 from trading_system.entry.context import BarContext, BarSeries
-from trading_system.entry.features import FeatureRegistry
+from trading_system.entry.features import LABEL_OPERATORS, FeatureRegistry
+from trading_system.entry.labels import LabelCategory
 from trading_system.entry.operators import (
     Truth,
     and_all,
@@ -57,6 +48,7 @@ from trading_system.entry.operators import (
     gt,
     gte,
     inside_range,
+    label_is,
     lt,
     lte,
     negate,
@@ -70,13 +62,16 @@ from trading_system.strategies.schema import (
     ConditionOp,
     Direction,
     EntryOrder,
+    EntrySpec,
     FeatureRef,
+    LabelSet,
     LeafCondition,
     LimitOrder,
     MarketOrder,
     Not,
     Operand,
     StrategySpec,
+    operand_labels,
     operand_price_field,
 )
 
@@ -87,11 +82,6 @@ type ConditionFn = Callable[[BarContext], Truth]
 
 #: A compiled operand, read at a lookback in bars from the current bar.
 type OperandFn = Callable[[BarContext, int], float | None]
-
-#: Operators whose argument P04 cannot express. See the module docstring.
-_CATEGORICAL_OPS = frozenset(
-    {ConditionOp.PATTERN_IS, ConditionOp.REGIME_IS, ConditionOp.SESSION_IS}
-)
 
 _COMPARISONS: dict[ConditionOp, Callable[[float | None, float | None], Truth]] = {
     ConditionOp.GT: gt,
@@ -148,6 +138,10 @@ def compile_operand(operand: Operand, registry: FeatureRegistry) -> OperandFn:
         constant = float(operand)
         return lambda _ctx, _lookback: constant
 
+    if isinstance(operand, LabelSet):
+        raise ValidationError(
+            f"a label set is not a price or a series and cannot be read as one: {operand!r}"
+        )
     raise ValidationError(f"cannot compile operand {operand!r}")
 
 
@@ -186,12 +180,14 @@ def _compile_leaf(leaf: LeafCondition, registry: FeatureRegistry) -> ConditionFn
     Raises:
         ValidationError: If the operands do not fit the operator.
     """
-    if leaf.op in _CATEGORICAL_OPS:
+    category = LABEL_OPERATORS.get(leaf.op)
+    if category is not None:
+        return _compile_label_test(leaf, category)
+
+    if isinstance(leaf.left, LabelSet) or isinstance(leaf.right, LabelSet):
         raise ValidationError(
-            f"operator {leaf.op.value!r} needs a categorical operand (a pattern, regime or "
-            "session name), which P04's Operand union cannot express: it admits only a "
-            "FeatureRef, a 'price:<field>' reference, or a number. Extend the strategy schema "
-            "before using it."
+            f"operator {leaf.op.value!r} compares numbers; a label set is only meaningful to "
+            f"{sorted(op.value for op in LABEL_OPERATORS)}"
         )
 
     left = _require_operand(leaf, "left")
@@ -221,6 +217,37 @@ def _compile_leaf(leaf: LeafCondition, registry: FeatureRegistry) -> ConditionFn
         return lambda ctx: slope(left_fn(ctx, 0), left_fn(ctx, lookback))
 
     raise ValidationError(f"unsupported operator {leaf.op.value!r}")
+
+
+def _compile_label_test(leaf: LeafCondition, category: LabelCategory) -> ConditionFn:
+    """Compile one ``pattern_is`` / ``session_is`` / ``regime_is`` test.
+
+    Raises:
+        ValidationError: If the category has no source of labels yet, if the
+            right operand is not a label set, or if a left operand was given —
+            these operators test the bar itself, not a series.
+    """
+    if category is LabelCategory.REGIME:
+        raise ValidationError(
+            f"operator {leaf.op.value!r} cannot be compiled: there is no Regime module to "
+            "classify bars with yet. The schema accepts it so specs can be written against the "
+            "eventual contract; the compiler will honour it once regimes are computed."
+        )
+
+    labels = operand_labels(leaf.right)
+    if labels is None:
+        raise ValidationError(
+            f"operator {leaf.op.value!r} requires a label set as its right operand, "
+            f"got {leaf.right!r}"
+        )
+    if leaf.left is not None:
+        raise ValidationError(
+            f"operator {leaf.op.value!r} tests the bar itself, not a series; left must be omitted"
+        )
+
+    wanted = frozenset(labels.labels)
+    column = category.value
+    return lambda ctx: label_is(ctx.labels(column), wanted)
 
 
 def _require_operand(leaf: LeafCondition, side: str) -> Operand:
@@ -298,6 +325,64 @@ class _CompiledModifier:
     condition: ConditionFn
     delta: float
     reason: str
+
+
+class DropReason(StrEnum):
+    """Why a confirmed setup failed to become a signal.
+
+    Every one of these is a defect in the spec or in the data, not a normal
+    outcome — a setup that expires or is invalidated is not counted here, because
+    that is the machinery working. Counting them matters because a ``WARNING`` on
+    a 200 000-bar run is a line nobody reads: the defect surfaces downstream as
+    "this strategy took suspiciously few trades", which is indistinguishable from
+    a strategy that is merely selective. A count carried out with the results
+    tells the two apart.
+    """
+
+    #: The invalidation level landed on the wrong side of the entry, so the
+    #: setup's own definition was contradictory on that bar.
+    WRONG_SIDED_INVALIDATION = "wrong_sided_invalidation"
+
+    #: The invalidation level had no value on the signal bar — an indicator still
+    #: in warmup, or a swing that has not formed.
+    INVALIDATION_UNAVAILABLE = "invalidation_unavailable"
+
+
+def empty_drop_counts() -> dict[DropReason, int]:
+    """A zeroed count for every reason.
+
+    Every reason is present rather than only those that occurred, so that "no
+    wrong-sided invalidations" is a recorded fact rather than a missing key that
+    a reader has to interpret.
+
+    Returns:
+        Each :class:`DropReason` mapped to zero.
+    """
+    return dict.fromkeys(DropReason, 0)
+
+
+@dataclass(frozen=True)
+class EntryRun:
+    """The result of running an entry over a whole series.
+
+    Signals and drop counts travel together deliberately. Hanging the counts off
+    the evaluator as an attribute to be read afterwards would make forgetting
+    them the default, and they are meant to reach the backtest report.
+
+    Attributes:
+        signals: Every signal produced, oldest first.
+        drops: How many confirmed setups were discarded, by reason.
+        bars: Bars evaluated.
+    """
+
+    signals: tuple[EntrySignal, ...]
+    drops: Mapping[DropReason, int]
+    bars: int
+
+    @property
+    def dropped(self) -> int:
+        """Total confirmed setups discarded as defective."""
+        return sum(self.drops.values())
 
 
 @dataclass
@@ -395,6 +480,7 @@ class EntryEvaluator:
         self._order = order
         self._price_offset = _reference_offset(order, side)
         self._pending: _PendingSetup | None = None
+        self._drops = empty_drop_counts()
 
     @property
     def strategy_id(self) -> str:
@@ -411,9 +497,20 @@ class EntryEvaluator:
         """Whether a triggered setup is currently awaiting confirmation."""
         return self._pending is not None
 
+    @property
+    def drops(self) -> Mapping[DropReason, int]:
+        """Confirmed setups discarded as defective since the last :meth:`reset`."""
+        return MappingProxyType(self._drops)
+
     def reset(self) -> None:
-        """Discard any pending setup, returning to the pre-run state."""
+        """Discard any pending setup and zero the drop counts.
+
+        Both, because the two describe one run: keeping counts across a reset
+        would tally several walk-forward folds together, and keeping the pending
+        setup would carry one fold's state into the next.
+        """
         self._pending = None
+        self._drops = empty_drop_counts()
 
     def evaluate(self, ctx: BarContext) -> EntrySignal | None:
         """Advance by one closed bar.
@@ -448,18 +545,6 @@ class EntryEvaluator:
         self._pending = None
         return self._build_signal(ctx, setup)
 
-    def run(self, series: BarSeries) -> list[EntrySignal]:
-        """Evaluate every bar of a series in order, from a clean state.
-
-        Args:
-            series: Bars and features to run over.
-
-        Returns:
-            Every signal produced, oldest first.
-        """
-        self.reset()
-        return [signal for ctx in series.contexts() if (signal := self.evaluate(ctx)) is not None]
-
     def _setup_is_dead(self, setup: _PendingSetup, ctx: BarContext) -> bool:
         """Whether a pending setup expired or was invalidated on this bar."""
         if ctx.index - setup.trigger_index >= self._window:
@@ -480,9 +565,10 @@ class EntryEvaluator:
         close = ctx.price("close")
         level = self._invalidation_level(ctx, 0)
         if close is None or level is None:
+            self._drops[DropReason.INVALIDATION_UNAVAILABLE] += 1
             logger.warning(
                 "entry.signal_dropped",
-                reason="invalidation price unavailable on the signal bar",
+                reason=DropReason.INVALIDATION_UNAVAILABLE.value,
                 strategy_id=self._strategy_id,
                 symbol=ctx.symbol,
                 bar_index=ctx.index,
@@ -495,9 +581,10 @@ class EntryEvaluator:
             # A defective setup definition, not a risk decision: the Risk Engine
             # could only "fix" this with abs(), turning an inverted stop into a
             # plausible size computed from a meaningless distance.
+            self._drops[DropReason.WRONG_SIDED_INVALIDATION] += 1
             logger.warning(
                 "entry.signal_dropped",
-                reason="invalidation price on the wrong side of the reference price",
+                reason=DropReason.WRONG_SIDED_INVALIDATION.value,
                 strategy_id=self._strategy_id,
                 symbol=ctx.symbol,
                 bar_index=ctx.index,
@@ -550,52 +637,146 @@ class EntryEvaluator:
         }
 
 
-def compile_entry(strategy: StrategySpec, registry: FeatureRegistry) -> EntryEvaluator:
-    """Compile a strategy's entry into an evaluator.
+class EntryEngine:
+    """Every leg of one strategy, advanced together bar by bar.
 
-    Takes the whole :class:`StrategySpec` rather than its ``entry`` alone because
-    a signal needs two things the ``EntrySpec`` does not carry: the strategy id it
-    is attributed to, and the ``base_quality``/``quality_modifiers`` that score
-    it. Those modifiers are gated on bar conditions, so only something holding a
+    A strategy has one or two entries, at most one per direction. They are driven
+    as a unit because a bar can complete both, and only something holding both
+    results can say so.
+
+    **Both signals are emitted when that happens.** Choosing between them would
+    be a portfolio decision taken without any portfolio input: whether opposing
+    exposure is a contradiction, a hedge, or simply two fills that net out
+    depends on the book, the instrument and the prop rules, none of which the
+    Entry Engine can see. Picking the higher quality would look like a decision
+    while being a guess, and dropping both would destroy the more informative
+    outcome of the two. What the Entry Engine *can* do is state the fact, so the
+    Risk Engine is never in the position of inferring it: every signal carries
+    ``context["concurrent_sides"]``, listing the sides that fired on its bar.
+    Present always, not only on conflict — an absent key would mean "no conflict"
+    and "an older signal" at the same time.
+    """
+
+    def __init__(self, strategy_id: str, evaluators: Sequence[EntryEvaluator]) -> None:
+        """Bundle a strategy's compiled legs.
+
+        Args:
+            strategy_id: Id every signal is attributed to.
+            evaluators: One evaluator per direction the strategy trades.
+        """
+        self._strategy_id = strategy_id
+        self._evaluators = tuple(evaluators)
+
+    @property
+    def strategy_id(self) -> str:
+        """Id of the strategy this was compiled from."""
+        return self._strategy_id
+
+    @property
+    def evaluators(self) -> tuple[EntryEvaluator, ...]:
+        """The compiled legs, in spec order."""
+        return self._evaluators
+
+    @property
+    def sides(self) -> tuple[Side, ...]:
+        """Directions this strategy trades."""
+        return tuple(evaluator.side for evaluator in self._evaluators)
+
+    @property
+    def drops(self) -> Mapping[DropReason, int]:
+        """Defective setups discarded across every leg since the last reset."""
+        totals = empty_drop_counts()
+        for evaluator in self._evaluators:
+            for reason, count in evaluator.drops.items():
+                totals[reason] += count
+        return MappingProxyType(totals)
+
+    def reset(self) -> None:
+        """Return every leg to its pre-run state."""
+        for evaluator in self._evaluators:
+            evaluator.reset()
+
+    def evaluate(self, ctx: BarContext) -> tuple[EntrySignal, ...]:
+        """Advance every leg by one closed bar.
+
+        Args:
+            ctx: View of the bar that has just closed and the bars before it.
+
+        Returns:
+            Every signal completed on this bar, in leg order. Usually empty,
+            occasionally one, and — for a symmetric strategy at a level both legs
+            watch — occasionally two opposing ones.
+        """
+        fired = [
+            signal
+            for evaluator in self._evaluators
+            if (signal := evaluator.evaluate(ctx)) is not None
+        ]
+        if not fired:
+            return ()
+        concurrent = tuple(signal.side.value for signal in fired)
+        return tuple(
+            replace(signal, context={**signal.context, "concurrent_sides": concurrent})
+            for signal in fired
+        )
+
+    def run(self, series: BarSeries) -> EntryRun:
+        """Evaluate every bar of a series in order, from a clean state.
+
+        Args:
+            series: Bars, features and labels to run over.
+
+        Returns:
+            The signals produced and the defects discarded, together.
+        """
+        self.reset()
+        signals = tuple(signal for ctx in series.contexts() for signal in self.evaluate(ctx))
+        return EntryRun(signals=signals, drops=self.drops, bars=len(series))
+
+
+def compile_entry(strategy: StrategySpec, registry: FeatureRegistry) -> EntryEngine:
+    """Compile every entry of a strategy into a runnable engine.
+
+    Takes the whole :class:`StrategySpec` rather than an ``EntrySpec`` because a
+    signal needs two things an entry does not carry: the strategy id it is
+    attributed to, and the ``base_quality``/``quality_modifiers`` that score it.
+    Those modifiers are gated on bar conditions, so only something holding a
     :class:`~trading_system.entry.context.BarContext` can evaluate them, and this
-    is that thing.
+    is that thing. The risk profile is shared across the legs, which is the point
+    of them living under one spec.
 
     Args:
-        strategy: Strategy whose entry to compile.
+        strategy: Strategy whose entries to compile.
         registry: Features that will be available at evaluation time, normally
             :meth:`FeatureRegistry.from_strategy` of the same spec.
 
     Returns:
-        A fresh evaluator, bound to one symbol's bar stream.
+        A fresh engine, bound to one symbol's bar stream.
 
     Raises:
-        ValidationError: If the entry cannot be compiled — a ``BOTH`` direction,
-            a missing ``invalidation.price_level``, a categorical operator, or a
-            malformed leaf. Every one of these is a defect in the spec, and
-            surfacing it here means it cannot appear mid-backtest.
+        ValidationError: If any entry cannot be compiled — ``regime_is`` before
+            the Regime module exists, a malformed leaf, or a feature the registry
+            does not provide. Every one is a defect in the spec, and surfacing it
+            here means it cannot appear mid-backtest.
     """
-    entry = strategy.entry
-    side = _SIDES.get(entry.direction)
-    if side is None:
-        raise ValidationError(
-            f"{strategy.id}: direction {entry.direction.value} cannot be compiled — when the "
-            "trigger fires there is nothing in the condition tree saying which branch was the "
-            "long one, so the signal's side is not derivable. Split the spec into a LONG and a "
-            "SHORT variant."
-        )
+    return EntryEngine(
+        strategy.id,
+        [_compile_leg(strategy, entry, registry) for entry in strategy.entries],
+    )
 
+
+def _compile_leg(
+    strategy: StrategySpec, entry: EntrySpec, registry: FeatureRegistry
+) -> EntryEvaluator:
+    """Compile one direction of a strategy.
+
+    Raises:
+        ValidationError: If the entry contains something uncompilable.
+    """
     invalidation = entry.invalidation
-    if invalidation is None or invalidation.price_level is None:
-        raise ValidationError(
-            f"{strategy.id}: entry defines no invalidation.price_level, so no signal it emits "
-            "could say where its thesis is disproven and the Risk Engine would have nothing to "
-            "size from. Deriving one from risk_profile.stop_reference is the Risk Engine's job, "
-            "not the Entry Engine's."
-        )
-
     return EntryEvaluator(
         strategy_id=strategy.id,
-        side=side,
+        side=_SIDES[entry.direction],
         trigger=compile_condition(entry.trigger, registry),
         confirmations=[compile_condition(condition, registry) for condition in entry.confirmation],
         confirmation_window_bars=max(entry.confirmation_window_bars, 1),

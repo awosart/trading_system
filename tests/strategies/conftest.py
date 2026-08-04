@@ -33,6 +33,11 @@ def feature_ref(
     return ref
 
 
+def label_set(*labels: str) -> dict[str, Any]:
+    """Build a categorical label-set dict for a leaf operand."""
+    return {"labels": list(labels)}
+
+
 @pytest.fixture
 def minimal_spec_dict() -> dict[str, Any]:
     """The smallest strategy spec dict satisfying every required field.
@@ -49,11 +54,14 @@ def minimal_spec_dict() -> dict[str, Any]:
         "type": "SWING",
         "timeframes": {"signal_tf": "H4", "entry_tf": "H1"},
         "instruments": {"allowed_classes": ["FX"]},
-        "entry": {
-            "direction": "LONG",
-            "trigger": leaf("gt", "price:close", feature_ref("ema", {"period": 50})),
-            "entry_order": {"order": {"type": "MARKET"}},
-        },
+        "entries": [
+            {
+                "direction": "LONG",
+                "trigger": leaf("gt", "price:close", feature_ref("ema", {"period": 50})),
+                "invalidation": {"price_level": feature_ref("ema", {"period": 50})},
+                "entry_order": {"order": {"type": "MARKET"}},
+            }
+        ],
         "exit_ref": "test-exit",
         "risk_profile": {
             "base_quality": 0.5,

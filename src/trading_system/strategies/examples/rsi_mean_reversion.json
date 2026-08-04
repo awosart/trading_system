@@ -17,49 +17,56 @@
     "denied_symbols": ["EURUSD"]
   },
   "market_regimes": ["RANGE"],
-  "entry": {
-    "direction": "LONG",
-    "trigger": {
-      "type": "all_of",
-      "conditions": [
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": { "indicator": "rsi", "params": { "period": 14 } },
+            "right": 30.0
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": { "indicator": "adx", "params": { "period": 14 }, "channel": "adx" },
+            "right": 20.0
+          }
+        ]
+      },
+      "confirmation": [
         {
           "type": "leaf",
-          "op": "lt",
+          "op": "gt",
           "left": { "indicator": "rsi", "params": { "period": 14 } },
           "right": 30.0
         },
         {
           "type": "leaf",
-          "op": "lt",
-          "left": { "indicator": "adx", "params": { "period": 14 }, "channel": "adx" },
-          "right": 20.0
+          "op": "pattern_is",
+          "right": { "labels": ["HAMMER", "BULLISH_ENGULFING", "MORNING_STAR"] }
         }
-      ]
-    },
-    "confirmation": [
-      {
-        "type": "leaf",
-        "op": "gt",
-        "left": { "indicator": "rsi", "params": { "period": 14 } },
-        "right": 30.0
+      ],
+      "confirmation_window_bars": 3,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": { "lookback": 5 },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": { "type": "MARKET" },
+        "expire_after_bars": 2
       }
-    ],
-    "confirmation_window_bars": 3,
-    "invalidation": {
-      "price_level": {
-        "indicator": "swing",
-        "params": { "lookback": 5 },
-        "channel": "swing_low"
-      }
-    },
-    "entry_order": {
-      "order": { "type": "MARKET" },
-      "expire_after_bars": 2
     }
-  },
+  ],
   "exit_ref": "structure-target-v1",
   "filters": [
-    { "kind": "session", "sessions": ["LONDON", "NEW_YORK"] },
+    { "kind": "session", "sessions": ["LONDON", "NEWYORK"] },
     { "kind": "spread_max", "max_spread_pips": 1.5 },
     {
       "kind": "volatility_range",
@@ -87,7 +94,7 @@
     "cooldown_bars_after_loss": 5
   },
   "metadata": {
-    "tags": ["mean-reversion", "range", "rsi"],
-    "notes": "Fades oversold RSI back toward the range mean; ADX filter keeps it out of trending regimes."
+    "tags": ["mean-reversion", "range", "rsi", "candle-confirmation"],
+    "notes": "Fades oversold RSI back toward the range mean; ADX filter keeps it out of trending regimes. Confirmation waits for a bullish reversal candle, which is what pattern_is exists for."
   }
 }

@@ -17,42 +17,44 @@
     "denied_symbols": []
   },
   "market_regimes": ["TREND_UP", "TREND_DOWN"],
-  "entry": {
-    "direction": "LONG",
-    "trigger": {
-      "type": "all_of",
-      "conditions": [
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": { "indicator": "ema", "params": { "period": 50 } }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": { "indicator": "rsi", "params": { "period": 14 } },
+            "right": 50.0
+          }
+        ]
+      },
+      "confirmation": [
         {
           "type": "leaf",
-          "op": "gt",
+          "op": "cross_above",
           "left": "price:close",
-          "right": { "indicator": "ema", "params": { "period": 50 } }
-        },
-        {
-          "type": "leaf",
-          "op": "lt",
-          "left": { "indicator": "rsi", "params": { "period": 14 } },
-          "right": 50.0
+          "right": { "indicator": "ema", "params": { "period": 20 } }
         }
-      ]
-    },
-    "confirmation": [
-      {
-        "type": "leaf",
-        "op": "cross_above",
-        "left": "price:close",
-        "right": { "indicator": "ema", "params": { "period": 20 } }
+      ],
+      "confirmation_window_bars": 5,
+      "invalidation": {
+        "price_level": { "indicator": "ema", "params": { "period": 50 } }
+      },
+      "entry_order": {
+        "order": { "type": "LIMIT", "offset": 0.0005 },
+        "expire_after_bars": 5
       }
-    ],
-    "confirmation_window_bars": 5,
-    "invalidation": {
-      "price_level": { "indicator": "ema", "params": { "period": 50 } }
-    },
-    "entry_order": {
-      "order": { "type": "LIMIT", "offset": 0.0005 },
-      "expire_after_bars": 5
     }
-  },
+  ],
   "exit_ref": "atr-trailing-v1",
   "filters": [
     { "kind": "day_of_week", "allowed_days": ["MON", "TUE", "WED", "THU", "FRI"] },

@@ -25,15 +25,27 @@ would eventually disagree with it about what a valid reference is.
 from collections.abc import Iterable, Iterator
 
 from trading_system.core.exceptions import ValidationError
+from trading_system.entry.labels import LabelCategory
 from trading_system.features.pipeline import FeaturePipeline, FeatureSpec
 from trading_system.features.registry import build_indicator
 from trading_system.strategies.schema import (
+    Condition,
+    ConditionOp,
     FeatureRef,
     StrategySpec,
     VolatilityRangeFilter,
     iter_leaf_conditions,
 )
 from trading_system.strategies.validator import Severity, check_feature_reference
+
+#: Which label vocabulary each categorical operator draws on. The single
+#: definition: the compiler imports this rather than keeping its own copy, so a
+#: new categorical operator cannot be compilable without its column being built.
+LABEL_OPERATORS: dict[ConditionOp, LabelCategory] = {
+    ConditionOp.PATTERN_IS: LabelCategory.PATTERN,
+    ConditionOp.REGIME_IS: LabelCategory.REGIME,
+    ConditionOp.SESSION_IS: LabelCategory.SESSION,
+}
 
 
 def feature_key(ref: FeatureRef) -> str:
@@ -75,27 +87,59 @@ def iter_feature_refs(spec: StrategySpec) -> Iterator[FeatureRef]:
     Yields:
         Each reference found, with duplicates.
     """
-    conditions = [
-        spec.entry.trigger,
-        *spec.entry.confirmation,
-        *(modifier.condition for modifier in spec.risk_profile.quality_modifiers),
-    ]
-    invalidation = spec.entry.invalidation
-    if invalidation is not None and invalidation.condition is not None:
-        conditions.append(invalidation.condition)
-
-    for condition in conditions:
+    for condition in iter_entry_conditions(spec):
         for leaf in iter_leaf_conditions(condition):
             for operand in (leaf.left, leaf.right):
                 if isinstance(operand, FeatureRef):
                     yield operand
 
-    if invalidation is not None and isinstance(invalidation.price_level, FeatureRef):
-        yield invalidation.price_level
+    for entry in spec.entries:
+        if isinstance(entry.invalidation.price_level, FeatureRef):
+            yield entry.invalidation.price_level
 
     for filter_spec in spec.filters:
         if isinstance(filter_spec, VolatilityRangeFilter):
             yield filter_spec.feature
+
+
+def iter_entry_conditions(spec: StrategySpec) -> Iterator[Condition]:
+    """Every condition tree the Entry Engine evaluates on a bar.
+
+    Args:
+        spec: Strategy to walk.
+
+    Yields:
+        The trigger, confirmations and invalidation condition of every entry,
+        then the quality modifiers, which are shared across the legs.
+    """
+    for entry in spec.entries:
+        yield entry.trigger
+        yield from entry.confirmation
+        if entry.invalidation.condition is not None:
+            yield entry.invalidation.condition
+    for modifier in spec.risk_profile.quality_modifiers:
+        yield modifier.condition
+
+
+def required_label_categories(spec: StrategySpec) -> tuple[LabelCategory, ...]:
+    """The label categories a strategy's conditions actually ask about.
+
+    Classifying candlesticks walks every bar in Python, so a strategy that never
+    mentions patterns should not pay for them. Sorted for reproducibility.
+
+    Args:
+        spec: Strategy to walk.
+
+    Returns:
+        Each category referenced, once, in enum order.
+    """
+    found = {
+        LABEL_OPERATORS[leaf.op]
+        for condition in iter_entry_conditions(spec)
+        for leaf in iter_leaf_conditions(condition)
+        if leaf.op in LABEL_OPERATORS
+    }
+    return tuple(category for category in LabelCategory if category in found)
 
 
 class FeatureRegistry:

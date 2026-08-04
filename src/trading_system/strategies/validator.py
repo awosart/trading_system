@@ -18,6 +18,14 @@ constructor, and their values pass that indicator's own bounds checks. This
 registry is complete today, unlike the Exit DB: ``known_exit_ids`` is still
 supplied by the caller and defaults to skipping that check, because no Exit
 Engine exists yet to consult.
+
+Categorical labels are checked the same way, against the real enumerations
+rather than a copy of them: ``pattern_is`` against
+:class:`~trading_system.features.patterns.Pattern`, ``session_is`` against
+:class:`~trading_system.data.sessions.Session`, ``regime_is`` against
+:class:`~trading_system.strategies.schema.Regime`. A mistyped label is otherwise
+indistinguishable from a deliberate one until a backtest reports a strategy that
+never traded.
 """
 
 from collections.abc import Collection, Iterator, Sequence
@@ -28,16 +36,32 @@ from pathlib import Path
 import pydantic
 
 from trading_system.core.exceptions import ValidationError as IndicatorValidationError
+from trading_system.data.sessions import Session
+from trading_system.features.patterns import Pattern
 from trading_system.features.registry import INDICATOR_TYPES, build_indicator
 from trading_system.strategies.schema import (
     Condition,
     ConditionOp,
     FeatureRef,
+    LabelSet,
+    LeafCondition,
     Regime,
+    SessionFilter,
     StrategySpec,
     VolatilityRangeFilter,
     iter_leaf_conditions,
 )
+
+#: Operators whose operand is a :class:`LabelSet`, and the vocabulary each one
+#: draws from. Checked against the real enumerations for the same reason a
+#: :class:`FeatureRef` is checked against the indicator registry: a typo in a
+#: label is indistinguishable from a deliberate choice until something looks it
+#: up, and by then it is a condition that silently never fires.
+LABEL_VOCABULARIES: dict[ConditionOp, frozenset[str]] = {
+    ConditionOp.PATTERN_IS: frozenset(member.value for member in Pattern),
+    ConditionOp.REGIME_IS: frozenset(member.value for member in Regime),
+    ConditionOp.SESSION_IS: frozenset(member.value for member in Session),
+}
 
 
 class Severity(StrEnum):
@@ -83,10 +107,11 @@ class ParsedStrategy:
 
 def _iter_spec_conditions(spec: StrategySpec) -> Iterator[Condition]:
     """Every condition tree embedded in a spec: trigger, confirmation, and so on."""
-    yield spec.entry.trigger
-    yield from spec.entry.confirmation
-    if spec.entry.invalidation is not None and spec.entry.invalidation.condition is not None:
-        yield spec.entry.invalidation.condition
+    for entry in spec.entries:
+        yield entry.trigger
+        yield from entry.confirmation
+        if entry.invalidation.condition is not None:
+            yield entry.invalidation.condition
     for modifier in spec.risk_profile.quality_modifiers:
         yield modifier.condition
 
@@ -185,9 +210,139 @@ def check_feature_references(spec: StrategySpec) -> list[ValidationIssue]:
             for operand in (leaf.left, leaf.right):
                 if isinstance(operand, FeatureRef):
                     issues.extend(check_feature_reference(operand))
+    for entry in spec.entries:
+        # The invalidation level is an operand like any other and is routinely a
+        # feature (an EMA, a swing low). It is not inside any condition tree, so
+        # walking conditions alone would leave the one reference the Risk Engine
+        # depends on unchecked.
+        if isinstance(entry.invalidation.price_level, FeatureRef):
+            issues.extend(check_feature_reference(entry.invalidation.price_level))
     for filter_spec in spec.filters:
         if isinstance(filter_spec, VolatilityRangeFilter):
             issues.extend(check_feature_reference(filter_spec.feature))
+    return issues
+
+
+def check_leaf_labels(leaf: LeafCondition) -> list[ValidationIssue]:
+    """Validate one leaf's use of categorical labels.
+
+    Three things, all of which pydantic lets through because they are about the
+    *pairing* of an operator with its operands rather than about either alone:
+    a categorical operator must take a :class:`LabelSet`, its labels must exist
+    in that operator's vocabulary, and a numeric operator must not be handed a
+    :class:`LabelSet`.
+
+    Args:
+        leaf: Condition leaf to check.
+
+    Returns:
+        Every issue found. Empty means the leaf's operands fit its operator.
+    """
+    vocabulary = LABEL_VOCABULARIES.get(leaf.op)
+    if vocabulary is None:
+        if isinstance(leaf.left, LabelSet) or isinstance(leaf.right, LabelSet):
+            return [
+                ValidationIssue(
+                    severity=Severity.ERROR,
+                    code="unexpected_labels",
+                    message=(
+                        f"operator {leaf.op.value!r} compares numbers; a label set is only "
+                        f"meaningful to {sorted(op.value for op in LABEL_VOCABULARIES)}"
+                    ),
+                    path="entries",
+                )
+            ]
+        return []
+
+    if not isinstance(leaf.right, LabelSet):
+        return [
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="missing_labels",
+                message=(
+                    f"operator {leaf.op.value!r} requires a label set as its right operand, "
+                    f"got {leaf.right!r}; known labels: {sorted(vocabulary)}"
+                ),
+                path="entries",
+            )
+        ]
+
+    issues: list[ValidationIssue] = []
+    if leaf.left is not None:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="unexpected_left_operand",
+                message=(
+                    f"operator {leaf.op.value!r} tests the bar itself, not a series; "
+                    "left must be omitted"
+                ),
+                path="entries",
+            )
+        )
+    unknown = sorted(set(leaf.right.labels) - vocabulary)
+    if unknown:
+        issues.append(
+            ValidationIssue(
+                severity=Severity.ERROR,
+                code="unknown_label",
+                message=(
+                    f"operator {leaf.op.value!r} has no label(s) {unknown}; "
+                    f"known: {sorted(vocabulary)}"
+                ),
+                path="entries",
+            )
+        )
+    return issues
+
+
+def check_condition_labels(spec: StrategySpec) -> list[ValidationIssue]:
+    """Validate every categorical operand in a spec.
+
+    Args:
+        spec: Strategy to check.
+
+    Returns:
+        Every issue found across every leaf in the spec's conditions.
+    """
+    return [
+        issue
+        for condition in _iter_spec_conditions(spec)
+        for leaf in iter_leaf_conditions(condition)
+        for issue in check_leaf_labels(leaf)
+    ]
+
+
+def check_session_filters(spec: StrategySpec) -> list[ValidationIssue]:
+    """Flag session names a trading calendar would not recognise.
+
+    The same check as :func:`check_leaf_labels` applies to sessions, but the
+    names arrive by a second route — :class:`SessionFilter` carries bare strings
+    rather than a :class:`LabelSet`. An unrecognised name there does not fail
+    loudly; it produces a filter that blocks every bar, which reads downstream as
+    a strategy that simply never trades.
+
+    Args:
+        spec: Strategy to check.
+
+    Returns:
+        One ``ERROR`` per unrecognised session name.
+    """
+    known = frozenset(member.value for member in Session)
+    issues: list[ValidationIssue] = []
+    for filter_spec in spec.filters:
+        if not isinstance(filter_spec, SessionFilter):
+            continue
+        unknown = sorted(set(filter_spec.sessions) - known)
+        if unknown:
+            issues.append(
+                ValidationIssue(
+                    severity=Severity.ERROR,
+                    code="unknown_session",
+                    message=f"unknown session(s) {unknown}; known: {sorted(known)}",
+                    path="filters",
+                )
+            )
     return issues
 
 
@@ -278,7 +433,9 @@ def check_regime_trigger_contradiction(spec: StrategySpec) -> list[ValidationIss
     if Regime.RANGE not in spec.market_regimes:
         return []
     has_breakout_shape = any(
-        leaf.op in _BREAKOUT_OPS for leaf in iter_leaf_conditions(spec.entry.trigger)
+        leaf.op in _BREAKOUT_OPS
+        for entry in spec.entries
+        for leaf in iter_leaf_conditions(entry.trigger)
     )
     if not has_breakout_shape:
         return []
@@ -312,6 +469,8 @@ def validate_spec(
     """
     return [
         *check_feature_references(spec),
+        *check_condition_labels(spec),
+        *check_session_filters(spec),
         *check_exit_ref(spec, known_exit_ids),
         *check_timeframe_order(spec),
         *check_regime_trigger_contradiction(spec),

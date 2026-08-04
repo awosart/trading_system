@@ -9,10 +9,12 @@ import pytest
 from trading_system.strategies.schema import FeatureRef, StrategySpec
 from trading_system.strategies.validator import (
     Severity,
+    check_condition_labels,
     check_exit_ref,
     check_feature_reference,
     check_feature_references,
     check_regime_trigger_contradiction,
+    check_session_filters,
     check_timeframe_order,
     check_unique_ids,
     load_spec,
@@ -20,7 +22,7 @@ from trading_system.strategies.validator import (
     validate_spec,
 )
 
-from .conftest import EXAMPLE_FILES, feature_ref, leaf
+from .conftest import EXAMPLE_FILES, feature_ref, label_set, leaf
 
 
 class TestCheckFeatureReference:
@@ -80,7 +82,7 @@ class TestCheckFeatureReferences:
     def test_flags_unregistered_indicator_in_trigger(
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
-        minimal_spec_dict["entry"]["trigger"]["right"] = feature_ref("not_a_real_indicator")
+        minimal_spec_dict["entries"][0]["trigger"]["right"] = feature_ref("not_a_real_indicator")
         spec = StrategySpec.model_validate(minimal_spec_dict)
         issues = check_feature_references(spec)
         assert [issue.code for issue in issues] == ["unknown_indicator"]
@@ -162,7 +164,7 @@ class TestCheckRegimeTriggerContradiction:
         self, minimal_spec_dict: dict[str, Any]
     ) -> None:
         minimal_spec_dict["market_regimes"] = ["RANGE"]
-        minimal_spec_dict["entry"]["trigger"] = leaf(
+        minimal_spec_dict["entries"][0]["trigger"] = leaf(
             "cross_above", "price:close", feature_ref("donchian", {"period": 20}, "upper")
         )
         spec = StrategySpec.model_validate(minimal_spec_dict)
@@ -172,7 +174,7 @@ class TestCheckRegimeTriggerContradiction:
 
     def test_silent_without_range_regime(self, minimal_spec_dict: dict[str, Any]) -> None:
         minimal_spec_dict["market_regimes"] = ["TREND_UP"]
-        minimal_spec_dict["entry"]["trigger"] = leaf(
+        minimal_spec_dict["entries"][0]["trigger"] = leaf(
             "cross_above", "price:close", feature_ref("donchian", {"period": 20}, "upper")
         )
         spec = StrategySpec.model_validate(minimal_spec_dict)
@@ -257,3 +259,122 @@ class TestValidatePaths:
         for path, issues in results.items():
             errors = [issue for issue in issues if issue.severity is Severity.ERROR]
             assert not errors, f"{path}: {errors}"
+
+
+class TestCheckConditionLabels:
+    """Categorical operands, checked against the real enumerations."""
+
+    def _spec(self, spec_dict: dict[str, Any], condition: dict[str, Any]) -> StrategySpec:
+        spec_dict["entries"][0]["trigger"] = condition
+        return StrategySpec.model_validate(spec_dict)
+
+    def test_a_known_pattern_is_clean(self, minimal_spec_dict: dict[str, Any]) -> None:
+        spec = self._spec(minimal_spec_dict, leaf("pattern_is", right=label_set("HAMMER", "DOJI")))
+        assert check_condition_labels(spec) == []
+
+    def test_a_mistyped_pattern_is_flagged(self, minimal_spec_dict: dict[str, Any]) -> None:
+        # The whole point: a typo is otherwise indistinguishable from a choice
+        # until a backtest reports a strategy that never traded.
+        spec = self._spec(minimal_spec_dict, leaf("pattern_is", right=label_set("ENGULFING")))
+        issues = check_condition_labels(spec)
+        assert [issue.code for issue in issues] == ["unknown_label"]
+        assert "BULLISH_ENGULFING" in issues[0].message
+
+    def test_a_known_session_is_clean(self, minimal_spec_dict: dict[str, Any]) -> None:
+        spec = self._spec(
+            minimal_spec_dict, leaf("session_is", right=label_set("LONDON", "NEWYORK"))
+        )
+        assert check_condition_labels(spec) == []
+
+    def test_a_session_name_from_the_wrong_vocabulary_is_flagged(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        spec = self._spec(minimal_spec_dict, leaf("session_is", right=label_set("DOJI")))
+        assert [issue.code for issue in check_condition_labels(spec)] == ["unknown_label"]
+
+    def test_a_known_regime_is_clean_even_though_nothing_computes_regimes_yet(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        # The schema is open so specs can be written against the eventual
+        # contract; refusing to compile it is the compiler's job, not this one's.
+        spec = self._spec(minimal_spec_dict, leaf("regime_is", right=label_set("RANGE")))
+        assert check_condition_labels(spec) == []
+
+    def test_a_categorical_operator_without_a_label_set_is_flagged(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        spec = self._spec(minimal_spec_dict, leaf("pattern_is", right=30.0))
+        assert [issue.code for issue in check_condition_labels(spec)] == ["missing_labels"]
+
+    def test_a_left_operand_on_a_categorical_operator_is_flagged(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        spec = self._spec(
+            minimal_spec_dict,
+            leaf("pattern_is", left="price:close", right=label_set("DOJI")),
+        )
+        assert [issue.code for issue in check_condition_labels(spec)] == ["unexpected_left_operand"]
+
+    def test_labels_handed_to_a_numeric_operator_are_flagged(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        spec = self._spec(
+            minimal_spec_dict, leaf("gt", left="price:close", right=label_set("DOJI"))
+        )
+        assert [issue.code for issue in check_condition_labels(spec)] == ["unexpected_labels"]
+
+    def test_labels_are_checked_in_confirmations_too(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        minimal_spec_dict["entries"][0]["confirmation"] = [
+            leaf("pattern_is", right=label_set("NOT_A_PATTERN"))
+        ]
+        minimal_spec_dict["entries"][0]["confirmation_window_bars"] = 2
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert [issue.code for issue in check_condition_labels(spec)] == ["unknown_label"]
+
+
+class TestCheckSessionFilters:
+    """The second route session names arrive by."""
+
+    def test_known_session_names_are_clean(self, minimal_spec_dict: dict[str, Any]) -> None:
+        minimal_spec_dict["filters"] = [{"kind": "session", "sessions": ["LONDON", "NEWYORK"]}]
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert check_session_filters(spec) == []
+
+    def test_an_unrecognised_session_name_is_flagged(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        # This one was live in the shipped rsi_mean_reversion example: the enum
+        # member is NEWYORK, and "NEW_YORK" produced a filter that blocked every
+        # bar, which reads downstream as a strategy that simply never trades.
+        minimal_spec_dict["filters"] = [{"kind": "session", "sessions": ["NEW_YORK"]}]
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        issues = check_session_filters(spec)
+        assert [issue.code for issue in issues] == ["unknown_session"]
+        assert "NEWYORK" in issues[0].message
+
+
+class TestEntriesValidation:
+    """Checks now walk every leg, not one entry."""
+
+    def test_a_bad_reference_in_the_second_leg_is_found(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        short_leg = json.loads(json.dumps(minimal_spec_dict["entries"][0]))
+        short_leg["direction"] = "SHORT"
+        short_leg["trigger"] = leaf("lt", "price:close", feature_ref("not_a_real_indicator"))
+        minimal_spec_dict["entries"].append(short_leg)
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert any(issue.code == "unknown_indicator" for issue in validate_spec(spec))
+
+    def test_an_invalidation_price_level_reference_is_checked(
+        self, minimal_spec_dict: dict[str, Any]
+    ) -> None:
+        # Not inside any condition tree, and previously unchecked — yet it is the
+        # one reference the Risk Engine cannot do without.
+        minimal_spec_dict["entries"][0]["invalidation"] = {
+            "price_level": feature_ref("not_a_real_indicator")
+        }
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert any(issue.code == "unknown_indicator" for issue in validate_spec(spec))

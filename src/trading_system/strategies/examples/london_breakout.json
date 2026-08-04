@@ -1,7 +1,7 @@
 {
   "id": "london-breakout",
   "name": "London Breakout",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "trading_system",
   "source": "https://www.babypips.com/forexpedia/london-breakout",
   "type": "INTRADAY",
@@ -16,35 +16,52 @@
     "denied_symbols": []
   },
   "market_regimes": [],
-  "entry": {
-    "direction": "BOTH",
-    "trigger": {
-      "type": "any_of",
-      "conditions": [
-        {
-          "type": "leaf",
-          "op": "cross_above",
-          "left": "price:close",
-          "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "upper" }
-        },
-        {
-          "type": "leaf",
-          "op": "cross_below",
-          "left": "price:close",
-          "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "lower" }
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_above",
+        "left": "price:close",
+        "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "upper" }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": { "period": 20 },
+          "channel": "middle"
         }
-      ]
+      },
+      "entry_order": {
+        "order": { "type": "STOP", "offset": 0.0002 },
+        "expire_after_bars": 4
+      }
     },
-    "confirmation": [],
-    "confirmation_window_bars": 0,
-    "invalidation": {
-      "price_level": { "indicator": "donchian", "params": { "period": 20 }, "channel": "middle" }
-    },
-    "entry_order": {
-      "order": { "type": "STOP", "offset": 0.0002 },
-      "expire_after_bars": 4
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_below",
+        "left": "price:close",
+        "right": { "indicator": "donchian", "params": { "period": 20 }, "channel": "lower" }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": { "period": 20 },
+          "channel": "middle"
+        }
+      },
+      "entry_order": {
+        "order": { "type": "STOP", "offset": 0.0002 },
+        "expire_after_bars": 4
+      }
     }
-  },
+  ],
   "exit_ref": "atr-trailing-v1",
   "filters": [
     { "kind": "session", "sessions": ["LONDON"] },
@@ -64,6 +81,15 @@
         },
         "delta": 0.1,
         "reason": "Sufficient volatility for a breakout to run rather than stall"
+      },
+      {
+        "condition": {
+          "type": "leaf",
+          "op": "session_is",
+          "right": { "labels": ["LONDON_NY_OVERLAP"] }
+        },
+        "delta": 0.05,
+        "reason": "The overlap is the deepest book of the day, so a break is likelier to follow through"
       }
     ],
     "stop_reference": { "kind": "FIXED_PIPS", "pips": 15.0 },
@@ -72,6 +98,6 @@
   },
   "metadata": {
     "tags": ["breakout", "session", "london"],
-    "notes": "Trades the break of the Asian range at the London open; session and news filters do the real gatekeeping."
+    "notes": "Trades the break of the Asian range at the London open; session and news filters do the real gatekeeping. The two legs are separate entries because a shared any_of trigger left the side of a fired signal underivable — max_concurrent_positions of 1 still counts across both."
   }
 }
