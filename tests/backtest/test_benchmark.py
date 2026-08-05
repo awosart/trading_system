@@ -22,6 +22,14 @@ exit-management code this budget is also supposed to cover. It is raised to 20
 here, disclosed rather than silently changed, so the run actually opens,
 manages and closes positions throughout instead of mostly sizing signals it
 immediately refuses.
+
+Its shipped ``timeframes.signal_tf`` is ``H4``, but this budget trades every
+symbol at ``H1`` — throughput at H4 across five years is a much smaller loop
+and would not exercise per-bar cost the same way. ``signal_tf`` is overridden
+to ``H1`` alongside the concurrency cap, for the same reason: disclosed here
+rather than left for :class:`~trading_system.backtest.orchestrator.Orchestrator`
+to reject at construction, which it now does for any binding whose stream
+timeframe does not match the spec's own ``signal_tf``.
 """
 
 import json
@@ -124,9 +132,16 @@ def _wave_frame(symbol: str, base: float) -> OHLCVFrame:
 
 
 def _strategy() -> StrategySpec:
-    """The shipped ``ema_pullback.json``, with a benchmark-only concurrency cap."""
+    """The shipped ``ema_pullback.json``, with benchmark-only overrides.
+
+    Both deviations from the shipped file are disclosed in the module
+    docstring rather than made silently: the concurrency cap, and
+    ``signal_tf`` moved from its native ``H4`` to the ``H1`` this benchmark
+    actually trades at.
+    """
     raw = json.loads(EXAMPLE_PATH.read_text())
     raw["risk_profile"]["max_concurrent_positions"] = 20
+    raw["timeframes"]["signal_tf"] = "H1"
     return StrategySpec.model_validate(raw)
 
 

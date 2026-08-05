@@ -144,6 +144,18 @@ class TestBuildPlan:
         plan = build_plan(preset)
         assert plan.intrabar_policy is IntrabarPolicy.OPTIMISTIC
 
+    def test_with_no_override_the_presets_own_policy_governs(self) -> None:
+        """The fallback a caller with no run gets — ``ExitLibrary``, this test."""
+        preset = ExitPresetSpec.model_validate(minimal_preset(intrabar_policy="OPTIMISTIC"))
+        plan = build_plan(preset, intrabar_policy=None)
+        assert plan.intrabar_policy is IntrabarPolicy.OPTIMISTIC
+
+    def test_an_explicit_override_beats_the_presets_own_policy(self) -> None:
+        """What a run passes; see test_orchestrator.py for the end-to-end version."""
+        preset = ExitPresetSpec.model_validate(minimal_preset(intrabar_policy="OPTIMISTIC"))
+        plan = build_plan(preset, intrabar_policy=IntrabarPolicy.PESSIMISTIC)
+        assert plan.intrabar_policy is IntrabarPolicy.PESSIMISTIC
+
     def test_a_partial_ladder_summing_past_100_percent_fails_at_build_with_the_preset_id(
         self,
     ) -> None:

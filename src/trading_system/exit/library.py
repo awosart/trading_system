@@ -361,11 +361,21 @@ def _build_rule(spec: RuleSpec) -> FixedRR | PartialClose | TimeExit | SignalRev
     return SignalReverseExit()
 
 
-def build_plan(spec: ExitPresetSpec) -> ExitPlan:
+def build_plan(spec: ExitPresetSpec, *, intrabar_policy: IntrabarPolicy | None = None) -> ExitPlan:
     """Compose one validated preset into a runnable :class:`ExitPlan`.
 
     Args:
         spec: A single preset, already syntactically valid.
+        intrabar_policy: Overrides :attr:`ExitPresetSpec.intrabar_policy` when
+            given. How several exit levels touched in one bar resolve is a
+            property of the *run* (what the backtest is willing to assume about
+            intrabar order), not of any one exit's design — a run comparing the
+            same preset under both policies would otherwise have to duplicate
+            the preset with only that field changed. ``None`` (the default)
+            leaves the preset's own field in charge, which is what every
+            standalone use of this function outside a run — ``ExitLibrary``
+            construction, a test building a plan directly — wants: there is no
+            run to defer to.
 
     Returns:
         The composed plan.
@@ -384,7 +394,9 @@ def build_plan(spec: ExitPresetSpec) -> ExitPlan:
             protective_stop=ProtectiveStop(),
             rules=[_build_rule(rule) for rule in spec.rules],
             stop_modifiers=[_build_modifier(modifier) for modifier in spec.stop_modifiers],
-            intrabar_policy=spec.intrabar_policy,
+            intrabar_policy=(
+                intrabar_policy if intrabar_policy is not None else spec.intrabar_policy
+            ),
         )
     except (ValueError, ValidationError) as error:
         raise ValidationError(f"exit preset {spec.id!r}: {error}") from error

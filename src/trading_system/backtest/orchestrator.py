@@ -195,6 +195,44 @@ def empty_signal_drops() -> dict[SignalDrop, int]:
 
 
 @dataclass(frozen=True)
+class AtrRatioCoverage:
+    """How many bars of one stream had no ``atr_ratio`` measurement.
+
+    Distinct from :attr:`BacktestResult.cost_degradations`'s ``ATR_UNAVAILABLE``
+    entry, which is a share of *fills* — the cost model's own denominator,
+    correct for what it answers ("how much of what was actually priced used a
+    fallback"). It is the wrong denominator for "how much of the data itself
+    had no volatility measurement": a low-frequency strategy can take a
+    handful of fills across a run of thousands of bars, and the fills-based
+    figure then says nothing about the other bars a stop, a filter or any
+    future consumer of ``atr_ratio`` would have read. Bars is the only
+    denominator that answers that question, and this exists because ``atr_ratio``
+    warms up over ``atr_period + atr_baseline_bars - 1`` bars — visibly longer
+    than the raw ATR's own ``atr_period - 1`` — so the two counts read very
+    differently on the same run.
+
+    Attributes:
+        bars: Total bars in the stream.
+        unavailable: Bars where ``atr_ratio`` was ``None`` — still in warmup.
+    """
+
+    bars: int
+    unavailable: int
+
+    @property
+    def fraction(self) -> float:
+        """Share of bars with no ``atr_ratio``, in ``[0, 1]``.
+
+        Returns:
+            The share, or zero for an empty stream — no bars means nothing was
+            unmeasured, not that everything was.
+        """
+        if self.bars == 0:
+            return 0.0
+        return self.unavailable / self.bars
+
+
+@dataclass(frozen=True)
 class BacktestResult:
     """Everything a run produced.
 
@@ -210,7 +248,11 @@ class BacktestResult:
             ``rejections``: these never reached the Risk Engine.
         expired_orders: Entry orders that rested to their expiry unfilled.
         cost_degradations: Fraction of fills priced without each measurement,
-            from :class:`~trading_system.execution.costs.CostStats`.
+            from :class:`~trading_system.execution.costs.CostStats`. Filled
+            denominator, not a bar denominator — see :class:`AtrRatioCoverage`.
+        atr_ratio_coverage: Per stream, how many bars had no ``atr_ratio`` —
+            the bar-denominated counterpart to ``cost_degradations``'s
+            fill-denominated ``ATR_UNAVAILABLE``. See :class:`AtrRatioCoverage`.
         fills: How many fills the run executed.
         fx_fallback_marks: Marks priced at a stale rate.
         open_at_end: Positions still open when the data ran out. Not trades, and
@@ -227,6 +269,7 @@ class BacktestResult:
     signal_drops: Mapping[SignalDrop, int]
     expired_orders: int
     cost_degradations: Mapping[str, float]
+    atr_ratio_coverage: Mapping[StreamKey, AtrRatioCoverage]
     fills: int
     fx_fallback_marks: int
     open_at_end: int
@@ -321,7 +364,9 @@ class Orchestrator:
             run_seed: Seed for the per-fill random streams.
 
         Raises:
-            ValueError: If a binding names a stream that was not supplied.
+            ValueError: If a binding names a stream that was not supplied, or
+                binds a strategy to a stream whose timeframe does not match its
+                own ``timeframes.signal_tf``.
         """
         self._config = config
         self._instruments = instruments
@@ -341,6 +386,18 @@ class Orchestrator:
                 raise ValueError(
                     f"strategy {binding.spec.id} names streams not supplied: "
                     f"{', '.join(str(key) for key in missing)}"
+                )
+            signal_tf = binding.spec.timeframes.signal_tf
+            mistimed = [key for key in binding.keys if key.timeframe is not signal_tf]
+            if mistimed:
+                raise ValueError(
+                    f"strategy {binding.spec.id} has timeframes.signal_tf={signal_tf.value}, "
+                    f"but is bound to stream(s) at a different timeframe: "
+                    f"{', '.join(str(key) for key in mistimed)}. Every window and bar-count "
+                    "field on the spec (confirmation_window_bars, expire_after_bars, "
+                    "cooldown_bars_after_loss) means bars of signal_tf; trading it on another "
+                    "timeframe silently changes what all of them mean. Bind it to a stream at "
+                    f"{signal_tf.value}, or change the spec's signal_tf."
                 )
 
         # One FeatureRegistry per STREAM, not per strategy — built from the union
@@ -384,7 +441,9 @@ class Orchestrator:
             for key in binding.keys
         }
         self._smallest_fraction: dict[str, Decimal] = {
-            binding.spec.id: build_plan(binding.exit_preset).smallest_closing_fraction()
+            binding.spec.id: build_plan(
+                binding.exit_preset, intrabar_policy=config.intrabar_policy
+            ).smallest_closing_fraction()
             for binding in self._bindings
         }
 
@@ -477,6 +536,12 @@ class Orchestrator:
             signal_drops=dict(self._signal_drops),
             expired_orders=self._expired_orders,
             cost_degradations={reason.value: value for reason, value in stats.fractions.items()},
+            atr_ratio_coverage={
+                key: AtrRatioCoverage(
+                    bars=len(ratios), unavailable=sum(1 for ratio in ratios if ratio is None)
+                )
+                for key, ratios in self._atr_ratio.items()
+            },
             fills=stats.fills,
             fx_fallback_marks=self._portfolio.fx_fallback_marks,
             open_at_end=len(self._portfolio.open_positions),
@@ -863,7 +928,7 @@ class Orchestrator:
                 stop=stop,
             )
             return
-        plan = build_plan(pending.binding.exit_preset)
+        plan = build_plan(pending.binding.exit_preset, intrabar_policy=self._config.intrabar_policy)
         plan.reset()
         position = ManagedPosition(
             symbol=pending.key.symbol,

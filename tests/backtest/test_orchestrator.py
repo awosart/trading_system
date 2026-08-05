@@ -19,6 +19,7 @@ from trading_system.backtest.orchestrator import BacktestResult, SignalDrop, Str
 from trading_system.core.instruments import InstrumentRegistry
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
+from trading_system.exit.base import IntrabarPolicy
 from trading_system.exit.library import ExitLibrarySpec, ExitPresetSpec
 
 START = datetime(2024, 3, 4, 18, 0, tzinfo=UTC)
@@ -266,3 +267,136 @@ class TestSilentDropsAreCounted:
         flat = bars([1.1000] * 5)
         result = run(costless_registry(registry), preset, flat, invalidation=1.05)
         assert set(result.signal_drops) == set(SignalDrop)
+
+
+class TestIntrabarPolicyPrecedence:
+    """``BacktestConfig.intrabar_policy`` beats the preset's own field.
+
+    Resolving several exit levels touched in one bar is a property of what the
+    run is willing to assume about intrabar order, not of any one exit's
+    design — a run comparing the same preset under both policies would
+    otherwise have to duplicate the preset with only that field changed. The
+    preset's own field remains the fallback for building a plan with no run
+    behind it at all (``ExitLibrary`` construction, ``tests/exit/test_library.py``).
+
+    Both directions are tested, not just one: a config and a preset that happen
+    to agree cannot tell precedence from coincidence, the same reasoning
+    ``TestEntryOrderLifetime`` above already applies to ``expire_after_bars``.
+    """
+
+    def _open_position_plan(
+        self,
+        registry: InstrumentRegistry,
+        preset: ExitPresetSpec,
+        config: BacktestConfig,
+    ) -> IntrabarPolicy:
+        """Open one position under ``config`` and read its plan's actual policy.
+
+        The stop and target are both far outside the tiny, near-flat series that
+        follows the trigger bar, so the position is still open when the run
+        ends — closed positions' plans are not retained anywhere a test can
+        reach them, only :attr:`~trading_system.backtest.portfolio.Portfolio.open_positions`
+        survives past :meth:`~trading_system.backtest.orchestrator.Orchestrator.run`.
+        """
+        spec = strategy(invalidation=1.05, stop_pips=200.0)
+        frame = bars([1.1000, 1.0995, 1.0995, 1.0995], first_open=1.0980)
+        instance = orchestrator(
+            registry=costless_registry(registry),
+            streams={EURUSD_H1: frame},
+            bindings=[StrategyBinding(spec=spec, exit_preset=preset, keys=(EURUSD_H1,))],
+            config=config,
+            costs=flat_costs(),
+        )
+        instance.run()
+        open_positions = instance.portfolio.open_positions
+        assert len(open_positions) == 1, "fixture must leave exactly one position open"
+        return open_positions[0].plan.intrabar_policy
+
+    def test_a_pessimistic_config_overrides_an_optimistic_preset(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        optimistic_preset = preset.model_copy(update={"intrabar_policy": IntrabarPolicy.OPTIMISTIC})
+        config = BacktestConfig(
+            atr_baseline_bars=5, atr_period=3, intrabar_policy=IntrabarPolicy.PESSIMISTIC
+        )
+        policy = self._open_position_plan(registry, optimistic_preset, config)
+        assert policy is IntrabarPolicy.PESSIMISTIC
+
+    def test_an_optimistic_config_overrides_a_pessimistic_preset(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        assert preset.intrabar_policy is IntrabarPolicy.PESSIMISTIC, "fixture assumes the default"
+        config = BacktestConfig(
+            atr_baseline_bars=5, atr_period=3, intrabar_policy=IntrabarPolicy.OPTIMISTIC
+        )
+        policy = self._open_position_plan(registry, preset, config)
+        assert policy is IntrabarPolicy.OPTIMISTIC
+
+
+class TestAtrRatioCoverage:
+    """The bar-denominated ATR_UNAVAILABLE counterpart to CostStats' fill-denominated one.
+
+    ``cost_degradations``'s ``ATR_UNAVAILABLE`` divides by fills; a low-frequency
+    strategy can take a handful of fills across thousands of bars, and that
+    fraction then says nothing about the rest of the data. ``atr_ratio_coverage``
+    divides by bars instead, so warmup shows up honestly regardless of how many
+    fills a run happened to produce.
+    """
+
+    def test_warmup_is_counted_against_every_bar_of_the_stream(
+        self, registry: InstrumentRegistry
+    ) -> None:
+        frame = bars([1.1000 + 0.0001 * i for i in range(10)])
+        config = BacktestConfig(atr_period=3, atr_baseline_bars=5)
+        result = orchestrator(
+            registry=costless_registry(registry),
+            streams={EURUSD_H1: frame},
+            bindings=[],
+            config=config,
+            costs=flat_costs(),
+        ).run()
+        coverage = result.atr_ratio_coverage[EURUSD_H1]
+        assert coverage.bars == 10
+        # atr_ratio warms up over atr_period + atr_baseline_bars - 1 bars.
+        assert coverage.unavailable == 3 + 5 - 1
+        assert coverage.fraction == pytest.approx(0.7)
+
+    def test_the_fraction_is_zero_for_an_empty_stream_not_undefined(self) -> None:
+        from trading_system.backtest.orchestrator import AtrRatioCoverage
+
+        assert AtrRatioCoverage(bars=0, unavailable=0).fraction == 0.0
+
+
+class TestSignalTimeframeMustMatchTheStream:
+    """A mismatched stream timeframe changes what every bar-count field means.
+
+    A strategy trades at ``timeframes.signal_tf``; binding it to a stream at a
+    different timeframe silently changes what ``confirmation_window_bars``,
+    ``expire_after_bars`` and ``cooldown_bars_after_loss`` all mean.
+    """
+
+    def test_a_mismatched_stream_timeframe_is_rejected_at_construction(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        spec = strategy(signal_tf=Timeframe.H4)
+        frame = bars([1.1000] * 5)  # EURUSD H1, from the conftest default
+        with pytest.raises(ValueError, match="signal_tf"):
+            orchestrator(
+                registry=costless_registry(registry),
+                streams={EURUSD_H1: frame},
+                bindings=[StrategyBinding(spec=spec, exit_preset=preset, keys=(EURUSD_H1,))],
+                costs=flat_costs(),
+            )
+
+    def test_a_matching_stream_timeframe_is_accepted(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        spec = strategy(signal_tf=Timeframe.H1)
+        frame = bars([1.1000] * 5)
+        instance = orchestrator(
+            registry=costless_registry(registry),
+            streams={EURUSD_H1: frame},
+            bindings=[StrategyBinding(spec=spec, exit_preset=preset, keys=(EURUSD_H1,))],
+            costs=flat_costs(),
+        )
+        assert instance is not None

@@ -57,7 +57,14 @@ class BacktestConfig(BaseModel):
             authority, and the name says so, because two lifetimes with different
             values and equal standing is exactly how they drift apart.
         intrabar_policy: How several exit levels touched in one bar are resolved.
-            Pessimistic unless deliberately changed.
+            Pessimistic unless deliberately changed. **Authoritative over any
+            exit preset's own** :attr:`~trading_system.exit.library.ExitPresetSpec.intrabar_policy`
+            — the run decides what it is willing to assume about intrabar
+            order, not any one exit's design, so this field wins whenever a
+            plan is built inside a run. A preset's own field is only the
+            fallback for building a plan with no run behind it at all (an
+            :class:`~trading_system.exit.library.ExitLibrary`, a standalone
+            test).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
