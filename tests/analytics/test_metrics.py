@@ -562,10 +562,10 @@ class TestStabilityStats:
         assert result.profitable_months_fraction == pytest.approx(1.0)
 
     def test_best_trade_contribution_and_concentration_flag(self) -> None:
-        # total_net = 100+200-50-100-200+300 = 250; best trade nets 300,
-        # i.e. 300/250 = 1.2 of the total (>100% is correct and expected:
-        # the other trades were net losers, so the best trade contributes
-        # more than the whole final result).
+        # gross turnover = 100+200+50+100+200+300 = 950; best trade nets 300,
+        # i.e. 300/950 = 0.3157894737 of everything this system did (win or
+        # lose) — the denominator is turnover, not net PnL (see
+        # StabilityStats.best_trade_contribution's docstring for why).
         days = (date(2024, 1, 1), date(2024, 1, 2))
         equity = (Decimal(1000), Decimal(1010))
         daily = DailyCurve(days=days, equity=equity, balance=equity)
@@ -573,23 +573,53 @@ class TestStabilityStats:
 
         result = stability_stats(daily, trades)
         assert result.n_trades == 6
-        assert result.best_trade_contribution == pytest.approx(1.2)
+        assert result.best_trade_contribution == pytest.approx(300 / 950)
         assert result.best_trade_position_id == "s5"
         assert BEST_TRADE_CONCENTRATION_THRESHOLD == 0.30
         assert result.concentrated is True
 
-    def test_a_non_positive_total_net_reports_no_contribution(self) -> None:
+    def test_a_losing_run_still_reports_a_meaningful_contribution(self) -> None:
+        # The motivating case: 5 trades net to a loss overall, but one trade
+        # (+280) is nearly half of everything this system did. A net-PnL
+        # denominator would report None here and hide exactly the fact this
+        # field exists to surface. gross turnover = 280+50+80+100+60 = 570;
+        # 280/570 = 0.4912280702.
         days = (date(2024, 1, 1), date(2024, 1, 2))
-        equity = (Decimal(1000), Decimal(900))
+        equity = (Decimal(1000), Decimal(990))
+        daily = DailyCurve(days=days, equity=equity, balance=equity)
+        base = datetime(2024, 1, 1, tzinfo=UTC)
+        nets = [280.0, -50.0, -80.0, -100.0, -60.0]
+        trades = [
+            trade(
+                position_id=f"loss-run-{i}",
+                opened_at=base + timedelta(days=i),
+                closed_at=base + timedelta(days=i, hours=1),
+                net=net,
+                realized_r=net / 100,
+            )
+            for i, net in enumerate(nets)
+        ]
+        assert sum(nets) < 0  # the run is a net loser overall
+
+        result = stability_stats(daily, trades)
+        assert result.best_trade_contribution == pytest.approx(280 / 570)
+        assert result.best_trade_position_id == "loss-run-0"
+        assert result.concentrated is True
+
+    def test_zero_turnover_reports_no_contribution(self) -> None:
+        # Every trade broke exactly even: turnover itself is zero (0/0), the
+        # one case where no denominator is meaningful.
+        days = (date(2024, 1, 1), date(2024, 1, 2))
+        equity = (Decimal(1000), Decimal(1010))
         daily = DailyCurve(days=days, equity=equity, balance=equity)
         base = datetime(2024, 1, 1, tzinfo=UTC)
         trades = [
-            trade(opened_at=base, closed_at=base + timedelta(days=1), net=-100.0, realized_r=-1.0),
+            trade(opened_at=base, closed_at=base + timedelta(days=1), net=0.0, realized_r=0.0),
             trade(
                 opened_at=base + timedelta(days=1),
                 closed_at=base + timedelta(days=2),
-                net=-50.0,
-                realized_r=-0.5,
+                net=0.0,
+                realized_r=0.0,
             ),
         ]
         result = stability_stats(daily, trades)

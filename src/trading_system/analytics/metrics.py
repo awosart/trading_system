@@ -1014,9 +1014,20 @@ class StabilityStats:
         n_months: Number of calendar months ``profitable_months_fraction`` was
             computed over.
         best_trade_contribution: Best single trade's ``net`` as a fraction of
-            total net PnL across all trades, or ``None`` when total net PnL is
-            not positive (the fraction is not a meaningful reading of a losing
-            or breakeven run).
+            gross turnover — ``sum(abs(trade.net) for trade in trades)`` —
+            not of net PnL. Net PnL is unusable as a denominator on a losing
+            or breakeven run: it can be zero (division by zero), negative
+            (flipping the sign of an otherwise-informative fraction), or
+            merely small (inflating the ratio past 100% for a reason that has
+            nothing to do with concentration). A gross-turnover denominator
+            answers "what share of everything this system did was its single
+            best trade," which stays meaningful — and is exactly the question
+            that matters — whether the run finished up or down: 20 trades
+            that net negative overall, one of them +2.6R, is precisely the
+            "held together by (and in this case, in spite of) one trade" case
+            this field exists to catch, and a net-PnL denominator would have
+            hidden it entirely as ``None``. ``None`` only when every trade's
+            ``net`` is exactly zero (turnover itself is zero, 0/0).
         best_trade_position_id: ``position_id`` of the best trade.
         concentrated: Whether ``best_trade_contribution`` exceeds
             :data:`BEST_TRADE_CONCENTRATION_THRESHOLD` — the result holding
@@ -1064,9 +1075,9 @@ def stability_stats(daily: DailyCurve, trades: Sequence[TradeRecord]) -> Stabili
         profitable_fraction = math.nan
     n_months = len(months)
 
-    total_net = sum((trade.net for trade in trades), Decimal(0))
+    gross_turnover = sum((abs(trade.net) for trade in trades), Decimal(0))
     best_trade = max(trades, key=lambda trade: trade.net)
-    contribution = float(best_trade.net / total_net) if total_net > 0 else None
+    contribution = float(best_trade.net / gross_turnover) if gross_turnover > 0 else None
     concentrated = contribution is not None and contribution > BEST_TRADE_CONCENTRATION_THRESHOLD
 
     return StabilityStats(
