@@ -45,6 +45,7 @@ from trading_system.backtest.orchestrator import (
     SignalDrop,
     StrategyBinding,
 )
+from trading_system.backtest.parallel import run_one, run_parallel, run_sequential
 from trading_system.backtest.portfolio import (
     EquityPoint,
     OpenPosition,
@@ -63,6 +64,7 @@ from trading_system.backtest.reproducibility import (
     result_digest,
     write_run,
 )
+from trading_system.backtest.spec import RunInputs
 
 __all__ = [
     "BacktestConfig",
@@ -81,6 +83,7 @@ __all__ = [
     "Phases",
     "Portfolio",
     "ReproducibilityError",
+    "RunInputs",
     "RunManifest",
     "SignalDrop",
     "StoredRun",
@@ -94,5 +97,8 @@ __all__ = [
     "digest_frame",
     "read_run",
     "result_digest",
+    "run_one",
+    "run_parallel",
+    "run_sequential",
     "write_run",
 ]

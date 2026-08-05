@@ -14,7 +14,6 @@ does not yet assemble per stream.
 import json
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -25,7 +24,8 @@ import pytest
 
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
-from trading_system.backtest.orchestrator import BacktestResult, Orchestrator, StrategyBinding
+from trading_system.backtest.orchestrator import Orchestrator, StrategyBinding
+from trading_system.backtest.spec import RunInputs
 from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
@@ -40,10 +40,10 @@ from trading_system.execution.config import (
 )
 from trading_system.execution.costs import CostModel
 from trading_system.exit.library import ExitLibrarySpec, ExitPresetSpec
-from trading_system.risk.circuit_breakers import CircuitBreakerConfig, CircuitBreakers
+from trading_system.risk.circuit_breakers import CircuitBreakerConfig
 from trading_system.risk.conversion import SameCurrencyConverter
 from trading_system.risk.engine import RiskEngine
-from trading_system.risk.portfolio_risk import PortfolioLimitsConfig, PortfolioRisk
+from trading_system.risk.portfolio_risk import PortfolioLimitsConfig
 from trading_system.risk.sizing.methods import FixedAmount, FixedFractional
 from trading_system.strategies.schema import StrategySpec
 
@@ -299,74 +299,6 @@ def orchestrator(
 # shipped — a leak the harness cannot see in the strategy people actually run is
 # a leak the harness does not check for.
 # ----------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class RunInputs:
-    """Everything one run is wired from, in one picklable place.
-
-    Held as data rather than as an assembled :class:`Orchestrator` so the same
-    description can be digested into a run id, varied one field at a time, and
-    (from P13 stage 2's parallel half) shipped to another process.
-
-    Attributes:
-        config: Run parameters.
-        streams: Bars per stream.
-        bindings: Strategies, exit presets and the streams they trade.
-        instruments: Contract specifications.
-        costs: Spread, slippage, commission and financing.
-        sizing: How much money goes at stake per trade.
-        limits: Concurrent-risk ceilings.
-        breakers: When trading stops altogether.
-    """
-
-    config: BacktestConfig
-    streams: Mapping[StreamKey, OHLCVFrame]
-    bindings: tuple[StrategyBinding, ...]
-    instruments: InstrumentRegistry
-    costs: CostConfig
-    sizing: FixedFractional | FixedAmount
-    limits: PortfolioLimitsConfig
-    breakers: CircuitBreakerConfig
-
-    def orchestrator(self) -> Orchestrator:
-        """Assemble the run these inputs describe."""
-        return Orchestrator(
-            config=self.config,
-            streams=self.streams,
-            bindings=self.bindings,
-            instruments=self.instruments,
-            risk_engine=RiskEngine(
-                instruments=self.instruments,
-                sizing=self.sizing,
-                converter=SameCurrencyConverter(),
-                portfolio=PortfolioRisk(self.limits),
-                breakers=CircuitBreakers(self.breakers),
-            ),
-            cost_model=CostModel(
-                {key.symbol: self.instruments[key.symbol] for key in self.streams}, self.costs
-            ),
-            converter=SameCurrencyConverter(),
-            run_seed=self.costs.run_seed,
-        )
-
-    def run(self) -> BacktestResult:
-        """Walk the whole run and return what it produced."""
-        return self.orchestrator().run()
-
-    def components(self) -> dict[str, object]:
-        """The named components a run manifest digests beyond bars and strategies."""
-        return {
-            "costs": self.costs,
-            "sizing": self.sizing,
-            "converter": SameCurrencyConverter(),
-            "portfolio_limits": self.limits,
-            "circuit_breakers": self.breakers,
-        }
-
-    def with_streams(self, streams: Mapping[StreamKey, OHLCVFrame]) -> "RunInputs":
-        """The same run over different bars — what truncation and poisoning vary."""
-        return replace(self, streams=dict(streams))
 
 
 def ema_pullback(

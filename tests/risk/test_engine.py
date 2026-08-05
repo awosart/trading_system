@@ -24,7 +24,7 @@ from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.types import Price, Side
 from trading_system.entry.signal import EntrySignal
 from trading_system.risk.conversion import StaticFxConverter
-from trading_system.risk.engine import RiskEngine, RiskEngineConfig
+from trading_system.risk.engine import RISK_AMOUNT_STEP, RiskEngine, RiskEngineConfig
 from trading_system.risk.models import AccountState, RiskReason
 from trading_system.risk.sizing.base import SizingMethod
 from trading_system.risk.sizing.methods import (
@@ -615,13 +615,77 @@ class TestRiskCap:
         assert decision.risk_amount <= Decimal("2000")
 
 
+class TestReportedRiskIsMoney:
+    """``risk_amount`` is an amount of the account's currency, to the cent.
+
+    Found by the portfolio property test, which produced an open risk of
+    ``5000.000000000000000000000001`` against a ceiling of ``5000.00000``. The
+    residue is decimal division: ``requested / stop_value_per_lot`` is exact
+    only while the quotient fits 28 significant digits, and the last of those
+    digits rounding up is enough to make ``size * stop_value_per_lot`` exceed
+    what was asked for by a septillionth of a dollar.
+
+    The fix is not a tolerance in the comparison — a risk cap asserted with an
+    epsilon is a risk cap that can be argued with — and not rounding the
+    division down either, which costs a whole lot step whenever an FX rate is
+    inexact. It is that the *reported* figure is quantised to the smallest
+    amount the account can move by, downwards, so the comparisons above stay
+    exact ``<=`` on a number that means something.
+    """
+
+    def test_the_report_carries_no_digits_the_account_could_hold(
+        self, registry: InstrumentRegistry, account: AccountState, engine_factory: EngineFactory
+    ) -> None:
+        """GBPJPY: the one instrument whose sizing runs through an inexact rate."""
+        decision = engine_factory().evaluate(
+            signal_with_stop_points(registry, "GBPJPY", points=37),
+            account=account,
+            stop_reference=NEVER_BINDING,
+            smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
+        )
+
+        assert decision.approved
+        assert decision.risk_amount == decision.risk_amount.quantize(RISK_AMOUNT_STEP)
+        assert decision.risk_amount <= account.equity * Decimal("0.005")
+
+    def test_the_quantisation_goes_down_and_therefore_never_over_the_cap(
+        self, registry: InstrumentRegistry, engine_factory: EngineFactory
+    ) -> None:
+        """A cap that is not a whole number of cents still binds exactly.
+
+        2.077% of 9 999.99 is 207.699… — the cap itself has more decimal places
+        than money does, which is the case where rounding to nearest would
+        report a risk above it.
+        """
+        account = AccountState(
+            currency="USD", balance=Decimal("9999.99"), equity=Decimal("9999.99"), as_of=NOW
+        )
+        cap = account.equity * Decimal("0.02077")
+        decision = engine_factory(FixedAmount(Decimal("5000")), max_risk_pct=0.02077).evaluate(
+            signal_with_stop_points(registry, "GBPJPY", points=37),
+            account=account,
+            stop_reference=NEVER_BINDING,
+            smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
+        )
+
+        assert decision.approved
+        assert decision.risk_amount <= cap
+        assert decision.risk_amount == decision.risk_amount.quantize(RISK_AMOUNT_STEP)
+
+
 class TestRiskNeverExceedsTheCap:
     """DoD property: ``risk_amount`` never exceeds ``max_risk_pct * equity``.
 
     Across every sizing method, every instrument in the registry, every account
-    size and every stop distance. The claim is exact rather than approximate
-    because the reported figure is recomputed from the quantised size, and
-    quantisation only ever rounds down.
+    size and every stop distance. The claim is exact rather than approximate:
+    the reported figure is recomputed from the quantised size, quantisation
+    only ever rounds down, and the figure is then rounded down again to
+    :data:`~trading_system.risk.engine.RISK_AMOUNT_STEP` so that no residue of
+    decimal division survives into it. See :class:`TestReportedRiskIsMoney`.
     """
 
     @settings(max_examples=300, deadline=None)

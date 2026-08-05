@@ -67,18 +67,14 @@ def inputs(registry: InstrumentRegistry) -> RunInputs:
 def manifest_of(inputs: RunInputs) -> RunManifest:
     """The manifest of a run described by ``inputs``.
 
-    The code version is measured once and pinned, so tests comparing two
-    manifests are comparing the inputs rather than racing an edit to the tree.
+    Through :meth:`~trading_system.backtest.spec.RunInputs.manifest`, which is
+    the path a real run takes — a helper that assembled the components itself
+    would be testing a second, private notion of what a run is made of.
+
+    The code version is pinned rather than measured, so tests comparing two
+    manifests compare the inputs rather than racing an edit to the tree.
     """
-    return RunManifest.build(
-        config=inputs.config,
-        streams=inputs.streams,
-        bindings=inputs.bindings,
-        instruments=inputs.instruments,
-        seed=inputs.costs.run_seed,
-        components=inputs.components(),
-        code=CodeVersion(source_digest="fixed", commit="fixed", dirty=False),
-    )
+    return inputs.manifest(code=CodeVersion(source_digest="fixed", commit="fixed", dirty=False))
 
 
 class TestTheSameRunTwice:

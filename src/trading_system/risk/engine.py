@@ -54,7 +54,7 @@ Exit Engine — the mirror of the Exit Engine not importing this one.
 """
 
 from collections.abc import Mapping, Sequence
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal, localcontext
 from types import MappingProxyType
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -88,6 +88,25 @@ logger = get_logger(__name__)
 #: Placeholder threshold used when no correlation provider is configured. With
 #: no matrix, clustering is by manual groups alone and no comparison happens.
 DEFAULT_CORRELATION_THRESHOLD = 1.0
+
+#: Step the reported ``risk_amount`` is quantised to, always downwards.
+#:
+#: A hundredth of the account currency: the smallest amount the account can
+#: actually move by, so the figure is money rather than an artefact of decimal
+#: division. It is **not** an epsilon and not a tolerance — the comparisons
+#: against the cap and the headroom stay exact ``<=`` — it is the observation
+#: that a risk figure carrying twenty-five significant digits is claiming a
+#: precision no account has. Currencies with no minor unit (JPY) are unharmed:
+#: two extra decimal places on a figure that never uses them cost nothing, while
+#: a per-currency table of minor units would be a second source of truth about
+#: money for the sake of one rounding step.
+#:
+#: Downwards for the reason every quantisation in this layer is downwards: the
+#: reported risk must be at or below what was asked for, never above, because a
+#: figure above the cap is the one thing the cap exists to prevent. Rounding to
+#: nearest here would let a decision report a risk a hundredth above its
+#: ceiling, which is a smaller error than the one it replaced and the same kind.
+RISK_AMOUNT_STEP = Decimal("0.01")
 
 
 class RiskEngineConfig(BaseModel):
@@ -421,6 +440,16 @@ class RiskEngine:
 
         point_value = instrument.value_per_point_quote * fx_rate
         stop_value_per_lot = stop.distance_points_exact * point_value
+        # Divided at the default half-even, deliberately. Rounding this division
+        # downwards instead looks like the same discipline the lot quantisation
+        # follows, and is not: ``stop_value_per_lot`` is itself an inexact
+        # decimal whenever an FX rate is (1/150 is 0.006666…667, rounded *up*),
+        # so the exact quotient sits a whisker below the answer the arithmetic
+        # is meant to give. Rounding that whisker down costs a whole lot step —
+        # GBPJPY at 150.00 sizes to 1.49 lots instead of 1.50 — which is a far
+        # larger error than the 1e-24 residue it would be protecting against.
+        # That residue is dealt with where it belongs, on the reported money
+        # figure, at RISK_AMOUNT_STEP.
         unquantised = requested / stop_value_per_lot
         size = instrument.round_volume(unquantised)
 
@@ -466,8 +495,11 @@ class RiskEngine:
             )
 
         # Recomputed from the quantised size: what the account actually stands to
-        # lose, which after rounding down is at or below what was asked for.
-        risk_amount = size * stop_value_per_lot
+        # lose, which after rounding down is at or below what was asked for. Then
+        # quantised to the account's minor unit, downwards — see RISK_AMOUNT_STEP.
+        with localcontext() as context:
+            context.rounding = ROUND_DOWN
+            risk_amount = (size * stop_value_per_lot).quantize(RISK_AMOUNT_STEP)
         return RiskDecision(
             approved=True,
             size=size,
