@@ -1,0 +1,268 @@
+"""Where decisions become fills: the two-bar delay, and how long an order rests."""
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import polars as pl
+import pytest
+
+from tests.backtest.conftest import (
+    EURUSD_H1,
+    bars,
+    costless_registry,
+    flat_costs,
+    orchestrator,
+    strategy,
+)
+from trading_system.backtest.config import BacktestConfig
+from trading_system.backtest.orchestrator import BacktestResult, SignalDrop, StrategyBinding
+from trading_system.core.instruments import InstrumentRegistry
+from trading_system.core.types import Timeframe
+from trading_system.data.models import OHLCVFrame
+from trading_system.exit.library import ExitLibrarySpec, ExitPresetSpec
+
+START = datetime(2024, 3, 4, 18, 0, tzinfo=UTC)
+
+
+def run(
+    registry: InstrumentRegistry,
+    preset: ExitPresetSpec,
+    frame: OHLCVFrame,
+    *,
+    config: BacktestConfig | None = None,
+    **strategy_kwargs: Any,
+) -> BacktestResult:
+    """One run of a price-only strategy over ``frame``."""
+    spec = strategy(**strategy_kwargs)
+    return orchestrator(
+        registry=registry,
+        streams={EURUSD_H1: frame},
+        bindings=[StrategyBinding(spec=spec, exit_preset=preset, keys=(EURUSD_H1,))],
+        config=config,
+        costs=flat_costs(),
+    ).run()
+
+
+class TestBarCloseFillsAtTheNextOpen:
+    """A ``BAR_CLOSE`` exit fills at ``open(t+1)``, never at ``close(t)``.
+
+    The two prices are equal in a gapless series, which is why every test here
+    runs over one that gaps: with ``open(t+1) == close(t)`` an implementation
+    that fills on the close passes, and the defect ships.
+    """
+
+    #: How far bar 11 opens above bar 10's close. Large enough that filling at
+    #: the wrong one of the two is a difference no rounding can explain.
+    GAP = 0.0100
+
+    @pytest.fixture
+    def gapped(self) -> OHLCVFrame:
+        """Rising hourly bars where bar 11 opens a full point above bar 10's close.
+
+        The exit is decided on bar 10's close and fills on bar 11's open, so the
+        gap sits exactly across the handover this test is about.
+        """
+        closes = [1.1000 + 0.0010 * i for i in range(1, 13)]
+        opens = [1.1000, *closes[:-1]]
+        opens[11] += self.GAP
+        rows: list[dict[str, Any]] = []
+        for index, (opening, close) in enumerate(zip(opens, closes, strict=True)):
+            top = max(opening, close)
+            bottom = min(opening, close)
+            rows.append(
+                {
+                    "timestamp": START + timedelta(hours=index),
+                    "open": opening,
+                    "high": top + 0.0005,
+                    "low": bottom - 0.0005,
+                    "close": close,
+                    "volume": 1000.0,
+                }
+            )
+        return OHLCVFrame(pl.DataFrame(rows), symbol="EURUSD", timeframe=Timeframe.H1)
+
+    @pytest.fixture
+    def time_boxed(self, library: ExitLibrarySpec) -> ExitPresetSpec:
+        """Close after ten bars — a ``BAR_CLOSE`` rule, which names no price."""
+        spec = next(item for item in library.presets if item.id == "time_boxed")
+        return spec.model_copy(
+            update={"rules": [rule.model_copy(update={"max_bars_held": 10}) for rule in spec.rules]}
+        )
+
+    def test_the_exit_fills_at_the_next_bars_open_and_not_at_the_decision_close(
+        self, registry: InstrumentRegistry, time_boxed: ExitPresetSpec, gapped: OHLCVFrame
+    ) -> None:
+        result = run(costless_registry(registry), time_boxed, gapped, invalidation=1.05)
+        trade = result.trades[0]
+
+        prices = gapped.df
+        close_of_decision_bar = prices["close"][10]
+        open_of_fill_bar = prices["open"][11]
+        assert open_of_fill_bar == pytest.approx(close_of_decision_bar + self.GAP)
+
+        # With costs removed a fill is its mid price exactly, so this is a
+        # direct reading of which of the two prices the exit was booked at.
+        exit_price = float(trade.gross) / float(trade.size) / 100_000 + trade.entry_price
+        assert exit_price == pytest.approx(open_of_fill_bar, abs=1e-9)
+        assert exit_price != pytest.approx(close_of_decision_bar, abs=1e-6)
+
+    def test_the_fill_is_stamped_at_the_next_bars_open_time(
+        self, registry: InstrumentRegistry, time_boxed: ExitPresetSpec, gapped: OHLCVFrame
+    ) -> None:
+        """The instant, not only the price: bar 11 opens one hour after bar 10."""
+        result = run(costless_registry(registry), time_boxed, gapped, invalidation=1.05)
+        trade = result.trades[0]
+        assert trade.closed_at == START + timedelta(hours=11)
+
+    def test_the_gap_is_carried_by_the_trade_rather_than_smoothed_away(
+        self, registry: InstrumentRegistry, time_boxed: ExitPresetSpec, gapped: OHLCVFrame
+    ) -> None:
+        """A run that filled on the close would report a materially smaller profit."""
+        result = run(costless_registry(registry), time_boxed, gapped, invalidation=1.05)
+        trade = result.trades[0]
+        gap_value = (
+            float(trade.size) * 100_000 * self.GAP
+        )  # what the gap alone is worth on this size
+        assert float(trade.gross) > gap_value
+
+
+class TestEntryOrderLifetime:
+    """``EntryOrderSpec.expire_after_bars`` is the authority; the config is a fallback.
+
+    P06 stage 1 left the field unread, on the grounds that an order's lifetime is
+    Execution's business. This is the layer that reads it, and these tests pin
+    which of the two numbers wins — the point of naming the config field
+    ``default_entry_order_ttl_bars`` rather than ``entry_order_ttl_bars``.
+    """
+
+    #: A limit 30 points below the trigger bar's close. Bars 1 and 2 stay above
+    #: it; bar 3 trades through it.
+    OFFSET = 0.0030
+
+    @pytest.fixture
+    def late_touch(self) -> OHLCVFrame:
+        """Exactly one trigger, and the limit only reachable three bars later.
+
+        Bar 0 closes up, so the setup triggers there and the order is placed for
+        bar 1 onwards, resting at ``1.1000 - 0.0030``. Bars 1 and 2 close *down*,
+        which matters twice over: their lows stay clear of the level, and — the
+        part a first draft of this fixture got wrong — they raise no new setup.
+        With them rising, the order placed on bar 2 would reach the level on bar
+        3 under any lifetime at all, and "the order expired" would be
+        indistinguishable from "a later order filled instead".
+
+        Bar 3 trades through the level; bar 4 closes down, so nothing new is
+        triggered before the data ends.
+        """
+        return bars(
+            [1.1000, 1.0998, 1.0996, 1.0950, 1.0949],
+            start=START,
+            first_open=1.0990,
+            spread=0.0005,
+        )
+
+    def _limit_strategy(self, **kwargs: Any) -> dict[str, Any]:
+        """A strategy placing a limit order at ``close - OFFSET``."""
+        return {
+            "order": {"type": "LIMIT", "offset": self.OFFSET},
+            "invalidation": 1.0900,
+            **kwargs,
+        }
+
+    def test_an_order_with_expire_after_bars_three_rests_long_enough_to_fill(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec, late_touch: OHLCVFrame
+    ) -> None:
+        result = run(
+            costless_registry(registry),
+            preset,
+            late_touch,
+            **self._limit_strategy(expire_after_bars=3),
+        )
+        assert result.expired_orders == 0
+        assert result.fills >= 1
+        assert result.open_at_end + len(result.trades) == 1
+
+    def test_an_order_with_no_lifetime_of_its_own_rests_one_bar_and_expires(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec, late_touch: OHLCVFrame
+    ) -> None:
+        """The config's fallback applies, and it is one bar by default."""
+        result = run(
+            costless_registry(registry),
+            preset,
+            late_touch,
+            **self._limit_strategy(expire_after_bars=None),
+        )
+        assert result.expired_orders >= 1
+        assert result.trades == []
+        assert result.open_at_end == 0
+
+    def test_the_specs_lifetime_beats_the_configs_fallback(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec, late_touch: OHLCVFrame
+    ) -> None:
+        """Set the fallback to something else entirely; the spec still decides.
+
+        With the fallback at 1 and the spec at 3 the two agree on "it fills", so
+        that pairing cannot tell precedence from coincidence. Here the fallback
+        would keep the order alive well past bar 3 and the spec cuts it short at
+        1 — so a run that filled would be reading the wrong number.
+        """
+        config = BacktestConfig(atr_baseline_bars=5, atr_period=3, default_entry_order_ttl_bars=9)
+        result = run(
+            costless_registry(registry),
+            preset,
+            late_touch,
+            config=config,
+            **self._limit_strategy(expire_after_bars=1),
+        )
+        assert result.expired_orders >= 1
+        assert result.trades == []
+
+    def test_the_same_fallback_governs_when_the_spec_stays_silent(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec, late_touch: OHLCVFrame
+    ) -> None:
+        """The mirror of the previous test: silence defers to the config."""
+        config = BacktestConfig(atr_baseline_bars=5, atr_period=3, default_entry_order_ttl_bars=9)
+        result = run(
+            costless_registry(registry),
+            preset,
+            late_touch,
+            config=config,
+            **self._limit_strategy(expire_after_bars=None),
+        )
+        assert result.expired_orders == 0
+        assert result.fills >= 1
+
+
+class TestSilentDropsAreCounted:
+    """A run that produced few trades must be able to say why."""
+
+    def test_signals_blocked_by_the_position_limit_are_counted_not_discarded(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        """Otherwise this is indistinguishable from a selective strategy.
+
+        The same reasoning P06 applied to dropped entry signals: the defect
+        surfaces downstream as "not many trades", which is exactly what a
+        working, choosy strategy looks like.
+        """
+        rising = bars([1.1000 + 0.0010 * i for i in range(1, 30)], first_open=1.0990)
+        result = run(
+            costless_registry(registry),
+            preset,
+            rising,
+            invalidation=1.05,
+            max_concurrent_positions=1,
+        )
+        assert result.signal_drops[SignalDrop.POSITION_LIMIT] > 0
+
+    def test_every_reason_is_present_even_at_zero(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        """A missing key is indistinguishable from a counter somebody forgot.
+
+        So every reason is present from the start, and a run in which the limit
+        never bound records that as a fact rather than as an absence.
+        """
+        flat = bars([1.1000] * 5)
+        result = run(costless_registry(registry), preset, flat, invalidation=1.05)
+        assert set(result.signal_drops) == set(SignalDrop)

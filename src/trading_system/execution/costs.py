@@ -214,6 +214,18 @@ class CostModel:
         return f"CostModel({len(self._instruments)} instruments, {self._fills} fills)"
 
     @property
+    def config(self) -> CostConfig:
+        """The cost configuration this model was built with.
+
+        Exposed because the pieces of it that are *not* about pricing a fill —
+        the financing model per asset class, the gap and limit-fill parameters
+        the resting-order models need, the run seed — belong to the same run and
+        would otherwise have to be passed alongside this object and kept in step
+        with it by hand.
+        """
+        return self._config
+
+    @property
     def stats(self) -> CostStats:
         """How many fills were priced and how many degraded, with shares."""
         return CostStats(fills=self._fills, degradations=MappingProxyType(dict(self._degradations)))

@@ -190,6 +190,14 @@ class ExitDropReason(StrEnum):
     #: :meth:`~trading_system.exit.plan.ExitPlan.smallest_closing_fraction`.
     PARTIAL_QUANTIZED_TO_ZERO = "partial_quantized_to_zero"
 
+    #: A resting order whose level the bar reached did not execute. Only an
+    #: injected :class:`~trading_system.exit.pricing.RestingExitPricer` can
+    #: produce this — the reference model has no notion of it — and in practice
+    #: only for a limit resting exactly at the bar's extreme, where the order sat
+    #: behind a queue at that price which the bar did not clear. A stop that is
+    #: reached always fills, so a protective stop is never turned away here.
+    RESTING_ORDER_NOT_FILLED = "resting_order_not_filled"
+
 
 def empty_drop_counts() -> dict[ExitDropReason, int]:
     """A zeroed count for every reason.

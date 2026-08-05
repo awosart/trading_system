@@ -62,8 +62,14 @@ from trading_system.exit.base import (
     empty_drop_counts,
 )
 from trading_system.exit.context import ExitContext
-from trading_system.exit.fills import approaches_from_below, resting_fill_price
+from trading_system.exit.fills import approaches_from_below
 from trading_system.exit.position import WHOLE, ClosedLeg, ManagedPosition
+from trading_system.exit.pricing import (
+    ReferencePricer,
+    RestingExitPricer,
+    bar_open,
+    decision_level,
+)
 
 logger = get_logger(__name__)
 
@@ -158,6 +164,7 @@ class ExitPlan:
         rules: Sequence[ExitRule] = (),
         stop_modifiers: Sequence[StopModifier] = (),
         intrabar_policy: IntrabarPolicy = IntrabarPolicy.PESSIMISTIC,
+        pricer: RestingExitPricer | None = None,
     ) -> None:
         """Compose one exit.
 
@@ -172,6 +179,10 @@ class ExitPlan:
                 Applied before the exit rules on every bar.
             intrabar_policy: How to resolve several levels touched in one bar.
                 Pessimistic unless deliberately changed.
+            pricer: Where a touched level fills. Defaults to
+                :class:`~trading_system.exit.pricing.ReferencePricer`, which is
+                P07's own model; a backtest injects one built over the P12
+                execution stack, per bar, through :meth:`on_bar`.
 
         Raises:
             ValidationError: If ``exit_id`` is empty.
@@ -183,6 +194,7 @@ class ExitPlan:
         self._rules: tuple[ExitRule, ...] = (protective_stop, *rules)
         self._stop_modifiers = tuple(stop_modifiers)
         self._intrabar_policy = intrabar_policy
+        self._pricer: RestingExitPricer = pricer if pricer is not None else ReferencePricer()
         self._drops = empty_drop_counts()
 
     def __repr__(self) -> str:
@@ -283,13 +295,24 @@ class ExitPlan:
             modifier.reset()
         self._drops = empty_drop_counts()
 
-    def on_bar(self, position: ManagedPosition, ctx: ExitContext) -> BarOutcome:
+    def on_bar(
+        self,
+        position: ManagedPosition,
+        ctx: ExitContext,
+        *,
+        pricer: RestingExitPricer | None = None,
+    ) -> BarOutcome:
         """Advance the plan by one closed bar.
 
         Args:
             position: The position being managed. Mutated in place by any fill
                 and by any accepted stop move.
             ctx: View of the bar that has just closed and the bars before it.
+            pricer: Where touched levels fill on *this* bar, overriding the
+                plan's own. A backtest passes a fresh one per bar, because the
+                execution stack prices against the bar and the instant; passing
+                it here rather than mutating the plan keeps a plan reusable
+                across positions without carrying a bar's state.
 
         Returns:
             What was filled inside this bar, and what was deferred to the next
@@ -312,7 +335,7 @@ class ExitPlan:
         ]
 
         applied: list[ExitFill] = []
-        for name, decision, fill_price in self._intrabar_order(position, ctx, touched):
+        for name, decision, fill_price in self._intrabar_order(position, ctx, touched, pricer):
             if not position.is_open:
                 break
             # Timestamped at the bar's close: the instant by which the fill had
@@ -376,9 +399,7 @@ class ExitPlan:
         for ctx in contexts:
             bars += 1
             if deferred is not None:
-                leg = self._book(
-                    position, deferred.decision, Price(_bar_open(ctx)), ctx.bar_open_ts
-                )
+                leg = self._book(position, deferred.decision, Price(bar_open(ctx)), ctx.bar_open_ts)
                 fills.append(
                     ExitFill(
                         rule=deferred.rule,
@@ -410,6 +431,7 @@ class ExitPlan:
         position: ManagedPosition,
         ctx: ExitContext,
         touched: Sequence[tuple[str, ExitDecision]],
+        pricer: RestingExitPricer | None,
     ) -> list[tuple[str, ExitDecision, Price]]:
         """Order the levels touched in one bar, and price each of them.
 
@@ -417,21 +439,30 @@ class ExitPlan:
         makes "worst first" a definition rather than a table of rule names, and
         keeps the ordering meaningful for rules that do not exist yet. Ties fall
         back to priority and then to declaration order, so a run is reproducible.
+
+        Pricing happens before ordering, not after, and that is the reason the
+        pricer is a port rather than a repricing pass: "worst first" is defined
+        by the outcome at the price the order actually got, so sorting on a
+        reference price and booking an executable one would order the bar's
+        events by a number nobody trades at. A decision the pricer declines is
+        dropped here and counted — see
+        :attr:`~trading_system.exit.base.ExitDropReason.RESTING_ORDER_NOT_FILLED`.
         """
-        priced = [
-            (
-                declared,
-                name,
-                decision,
-                resting_fill_price(
-                    _level(decision),
-                    bar_open=_bar_open(ctx),
-                    exit_side=position.exit_side,
-                    order_type=decision.order_type,
-                ),
-            )
-            for declared, (name, decision) in enumerate(touched)
-        ]
+        model = pricer if pricer is not None else self._pricer
+        priced: list[tuple[int, str, ExitDecision, Price]] = []
+        for declared, (name, decision) in enumerate(touched):
+            fill = model.price(decision, position=position, ctx=ctx)
+            if fill is None:
+                self._count(
+                    ExitDropReason.RESTING_ORDER_NOT_FILLED,
+                    symbol=position.symbol,
+                    bar_index=ctx.index,
+                    rule=name,
+                    exit_reason=decision.reason.value,
+                    level=decision.price,
+                )
+                continue
+            priced.append((declared, name, decision, fill))
         if len(priced) > 1:
             policy = self._intrabar_policy
             if policy is IntrabarPolicy.TICK_BASED and not ctx.has_ticks:
@@ -488,31 +519,6 @@ class ExitPlan:
         logger.warning("exit.drop", reason=drop.value, exit_id=self._exit_id, **details)
 
 
-def _level(decision: ExitDecision) -> Price:
-    """The level a ``LEVEL_TOUCH`` decision rests at.
-
-    Raises:
-        ValidationError: If the decision carries no level, which
-            :class:`~trading_system.exit.base.ExitDecision` should have made
-            impossible.
-    """
-    if decision.price is None:
-        raise ValidationError(f"{decision.reason.value}: a LEVEL_TOUCH decision has no level")
-    return decision.price
-
-
-def _bar_open(ctx: ExitContext) -> float:
-    """The open of the bar a context sits at.
-
-    Raises:
-        ValidationError: If the bar has no open price.
-    """
-    bar_open = ctx.price("open")
-    if bar_open is None:
-        raise ValidationError(f"{ctx.symbol} bar {ctx.index} has no open price")
-    return bar_open
-
-
 def _first_touching_tick(
     ctx: ExitContext, position: ManagedPosition, decision: ExitDecision
 ) -> int:
@@ -522,7 +528,7 @@ def _first_touching_tick(
     and the tick stream disagrees, which is a data defect, and putting it first
     would let a bad tick file reorder good fills.
     """
-    level = _level(decision)
+    level = decision_level(decision)
     rising = approaches_from_below(position.exit_side, decision.order_type)
     for index, tick in enumerate(ctx.ticks):
         if (tick.price >= level) if rising else (tick.price <= level):

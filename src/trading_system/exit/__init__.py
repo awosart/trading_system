@@ -58,6 +58,7 @@ from trading_system.exit.plan import (
     ExitRun,
 )
 from trading_system.exit.position import INITIAL_STOP_SOURCE, WHOLE, ClosedLeg, ManagedPosition
+from trading_system.exit.pricing import ReferencePricer, RestingExitPricer
 from trading_system.exit.rules import (
     ATRStop,
     AtrTrail,
@@ -106,6 +107,8 @@ __all__ = [
     "FixedRR",
     "IntrabarPolicy",
     "ManagedPosition",
+    "ReferencePricer",
+    "RestingExitPricer",
     "MaTrail",
     "PartialClose",
     "PartialRung",
