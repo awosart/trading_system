@@ -23,3 +23,7 @@ build/
 .env
 *.log
 .claude/
+
+# Stored runs. Anchored for the same reason /data/ is: a bare "runs/" would also
+# match any package directory of that name.
+/runs/

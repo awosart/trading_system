@@ -8,6 +8,14 @@ which would publish a daily bar twenty-four hours before it finishes — and
 :class:`~trading_system.backtest.engine.BarStore` refuses to hand out a bar the
 merged clock has not reached.
 
+**And it is proven rather than asserted.** ``tests/test_no_lookahead.py`` runs
+the shipped strategy twice over truncated, poisoned and permuted data and demands
+the results agree byte for byte; each of its checks has been made to fail against
+a leak deliberately introduced into this package and then reverted. What the
+checks agree *about* is :func:`~trading_system.backtest.reproducibility.digest`,
+which is also what gives a run its id and what makes two runs of one id a
+comparison rather than an impression.
+
 **The same strategy code runs here and live.** A bar arrives, engines read a
 context that counts backwards only, and orders execute no earlier than the next
 open. What differs in live trading is the broker behind the fill, not the loop.
@@ -43,6 +51,18 @@ from trading_system.backtest.portfolio import (
     Portfolio,
     TradeRecord,
 )
+from trading_system.backtest.reproducibility import (
+    CodeVersion,
+    ReproducibilityError,
+    RunManifest,
+    StoredRun,
+    code_version,
+    digest,
+    digest_frame,
+    read_run,
+    result_digest,
+    write_run,
+)
 
 __all__ = [
     "BacktestConfig",
@@ -50,6 +70,7 @@ __all__ = [
     "BacktestResult",
     "BarEvent",
     "BarStore",
+    "CodeVersion",
     "DataHandler",
     "EquityPoint",
     "Instant",
@@ -59,10 +80,19 @@ __all__ = [
     "PendingEntry",
     "Phases",
     "Portfolio",
+    "ReproducibilityError",
+    "RunManifest",
     "SignalDrop",
+    "StoredRun",
     "StrategyBinding",
     "StreamKey",
     "TradeRecord",
     "bar_close_ts",
+    "code_version",
     "day_close_ts",
+    "digest",
+    "digest_frame",
+    "read_run",
+    "result_digest",
+    "write_run",
 ]

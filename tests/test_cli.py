@@ -237,6 +237,39 @@ class TestEndToEnd:
         assert "high_below_low" in result.stdout
         assert "[ERROR]" in result.stdout
 
+    def test_calendar_option_suppresses_weekend_missing_bars(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from trading_system.data.sessions import AssetClass, TradingCalendar
+
+        calendar = TradingCalendar(asset_class=AssetClass.FX)
+        start = datetime(2024, 1, 1, tzinfo=UTC)  # Monday
+        hours = [start + timedelta(hours=i) for i in range(24 * 9)]  # spans one weekend
+        open_hours = [hour for hour in hours if calendar.is_open(hour)]
+
+        lines = [MINUTE_CSV_HEADER]
+        for index, ts in enumerate(open_hours):
+            price = 1.1 + index * 0.0001
+            lines.append(
+                f"{ts:%Y-%m-%dT%H:%M:%S},{price:.5f},{price + 0.0002:.5f},"
+                f"{price - 0.0002:.5f},{price + 0.0001:.5f},{100 + index}\n"
+            )
+        source = tmp_path / "EURUSD.csv"
+        source.write_text("".join(lines), encoding="utf-8")
+        runner.invoke(
+            app, ["data", "import", "--symbol", "EURUSD", "--tf", "H1", "--path", str(source)]
+        )
+
+        without_calendar = runner.invoke(
+            app, ["data", "quality", "--symbol", "EURUSD", "--tf", "H1"]
+        )
+        assert "missing_bars" in without_calendar.stdout
+
+        with_calendar = runner.invoke(
+            app, ["data", "quality", "--symbol", "EURUSD", "--tf", "H1", "--calendar", "FX"]
+        )
+        assert "missing_bars" not in with_calendar.stdout
+
 
 def test_coverage_on_empty_store() -> None:
     result = runner.invoke(app, ["data", "coverage"])

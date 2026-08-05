@@ -139,7 +139,10 @@ class PendingEntry:
     """An approved entry order awaiting its fill.
 
     Attributes:
-        order_id: Unique within the run; seeds the fill's random stream.
+        order_id: Unique within the run, and derived from the signal's own
+            identity rather than from a counter — it seeds the fill's random
+            stream, so anything else in the run being able to shift it would
+            make this order's fills depend on that. See :meth:`Orchestrator._order_id`.
         key: Stream the order rests on.
         binding: Strategy that placed it.
         signal: The signal it came from.
@@ -468,7 +471,7 @@ class Orchestrator:
         self._exit_drops = empty_drop_counts()
         self._signal_drops = empty_signal_drops()
         self._expired_orders = 0
-        self._order_seq = 0
+        self._issued_ids: set[str] = set()
         self._instant_index = -1
 
     def __repr__(self) -> str:
@@ -839,10 +842,9 @@ class Orchestrator:
         ttl = entry_spec.entry_order.expire_after_bars
         if ttl is None:
             ttl = self._config.default_entry_order_ttl_bars
-        self._order_seq += 1
         self._pending_orders.append(
             PendingEntry(
-                order_id=f"e{self._order_seq}",
+                order_id=self._order_id(binding, event, signal.side),
                 key=event.key,
                 binding=binding,
                 signal=signal,
@@ -852,6 +854,49 @@ class Orchestrator:
                 last_fillable_index=event.index + ttl,
             )
         )
+
+    def _order_id(self, binding: StrategyBinding, event: BarEvent, side: Side) -> str:
+        """The identifier of the one order this signal can be, derived from itself.
+
+        Composed of what already identifies the signal — the strategy, the
+        stream, the bar and the side — and of **nothing else**. Never a running
+        counter, and the difference is not cosmetic:
+        :func:`~trading_system.execution.rng.fill_seed` keys a fill's random
+        stream on ``(run_seed, symbol, ts, order_id)`` precisely so that a fill
+        draws the same number no matter what else the run contains. A shared
+        counter puts the position in the queue back into the id, so adding a
+        second instrument renumbers the first's orders and silently redraws
+        every slippage jitter on it — the exact artefact
+        :mod:`trading_system.execution.rng` exists to remove, reintroduced one
+        layer up. The no-lookahead harness caught this; the id is now
+        independent by construction.
+
+        Unique by the same argument the compiler makes: an
+        :class:`~trading_system.entry.compiler.EntryEvaluator` tracks one pending
+        setup per leg, so one strategy on one stream can produce at most one
+        signal per side per bar. The set is kept anyway, because "the id scheme
+        turned out not to be unique" must be a raised error rather than two
+        positions quietly sharing an identity.
+
+        Args:
+            binding: Strategy the order comes from.
+            event: Bar the decision was taken on.
+            side: Direction the order takes.
+
+        Returns:
+            The identifier, carried by the order, its fills and the position.
+
+        Raises:
+            ValueError: If the same identifier has already been issued.
+        """
+        order_id = f"{binding.spec.id}@{event.key}#{event.index}{side.value[0]}"
+        if order_id in self._issued_ids:
+            raise ValueError(
+                f"order id {order_id} was issued twice; one strategy on one stream may "
+                "produce at most one signal per side per bar"
+            )
+        self._issued_ids.add(order_id)
+        return order_id
 
     def _try_fill_entry(self, pending: PendingEntry, event: BarEvent) -> bool:
         """Attempt one entry order against the bar that has just closed.
@@ -967,7 +1012,6 @@ class Orchestrator:
         if instrument.round_volume(size) <= 0:
             self.count_exit_drop(ExitDropReason.PARTIAL_QUANTIZED_TO_ZERO)
             return
-        self._order_seq += 1
         order = ExecutionOrder(
             order_id=f"{held.position_id}:d{event.index}",
             symbol=held.symbol,

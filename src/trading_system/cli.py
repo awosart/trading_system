@@ -16,8 +16,10 @@ from trading_system.core.exceptions import ValidationError
 from trading_system.core.logging import get_logger, setup_logging
 from trading_system.core.types import Timeframe
 from trading_system.data.providers.csv_provider import CSVProvider, CSVSchema
-from trading_system.data.quality import check_frame
+from trading_system.data.providers.dukascopy_provider import DukascopyProvider
+from trading_system.data.quality import QualityConfig, check_frame
 from trading_system.data.resample import FX_DAY_ORIGIN, resample
+from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.data.store import ParquetStore
 from trading_system.exit.library import DEFAULT_LIBRARY_PATH, known_exit_ids
 from trading_system.strategies.schema import SCHEMA_JSON_PATH, strategy_json_schema
@@ -80,6 +82,31 @@ def data_import(
     typer.echo(f"Imported {len(frame)} bars for {symbol} {timeframe}; partition holds {written}.")
 
 
+@data_app.command("download")
+def data_download(
+    ctx: typer.Context,
+    symbol: str = typer.Option(..., "--symbol", help="Instrument identifier, e.g. EURUSD."),
+    timeframe: Timeframe = typer.Option(..., "--tf", help="Bar size to fetch."),
+    start: datetime = typer.Option(..., "--start", help="Inclusive lower bound, e.g. 2024-08-05."),
+    end: datetime | None = typer.Option(
+        None, "--end", help="Exclusive upper bound. Defaults to now."
+    ),
+) -> None:
+    """Download bars from Dukascopy and store them.
+
+    Fetches bid and ask separately and averages them into mid OHLCV bars, per
+    the project convention that stored bars are mid prices.
+    """
+    provider = DukascopyProvider()
+    frame = provider.fetch(symbol, timeframe, _as_utc(start), _as_utc(end))
+    if frame.is_empty:
+        typer.echo(f"No data returned for {symbol} {timeframe} in the requested range.")
+        raise typer.Exit(code=1)
+    written = _store(ctx).upsert(frame)
+    logger.info("data_downloaded", symbol=symbol, timeframe=str(timeframe), bars=len(frame))
+    typer.echo(f"Downloaded {len(frame)} bars for {symbol} {timeframe}; partition holds {written}.")
+
+
 @data_app.command("coverage")
 def data_coverage(
     ctx: typer.Context,
@@ -109,13 +136,23 @@ def data_quality(
     ctx: typer.Context,
     symbol: str = typer.Option(..., "--symbol", help="Instrument identifier."),
     timeframe: Timeframe = typer.Option(..., "--tf", help="Bar size to inspect."),
+    calendar: AssetClass | None = typer.Option(
+        None,
+        "--calendar",
+        help=(
+            "Asset class of the instrument. Excludes its regular closed periods "
+            "(weekends for FX/EQUITY) from missing_bars, which otherwise reports "
+            "every closed hour as a defect."
+        ),
+    ),
 ) -> None:
     """Run data-quality detectors over stored bars."""
     frame = _store(ctx).get(symbol, timeframe)
     if frame.is_empty:
         typer.echo(f"No data stored for {symbol} {timeframe}.")
         raise typer.Exit(code=1)
-    report = check_frame(frame)
+    config = QualityConfig(calendar=TradingCalendar(asset_class=calendar)) if calendar else None
+    report = check_frame(frame, config)
     typer.echo(f"{symbol} {timeframe}: {report.bars_checked} bars checked")
     if not report.issues:
         typer.echo("  no issues found")

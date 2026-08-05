@@ -11,7 +11,10 @@ execution wiring without also depending on the feature pipeline, which stage 1
 does not yet assemble per stream.
 """
 
-from collections.abc import Sequence
+import json
+import math
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -22,7 +25,7 @@ import pytest
 
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
-from trading_system.backtest.orchestrator import Orchestrator, StrategyBinding
+from trading_system.backtest.orchestrator import BacktestResult, Orchestrator, StrategyBinding
 from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
@@ -30,19 +33,26 @@ from trading_system.execution.config import (
     CostConfig,
     GapConfig,
     LimitFillConfig,
+    PerLotRolloverSwap,
     SlippageConfig,
+    SlippageParams,
     SpreadConfig,
 )
 from trading_system.execution.costs import CostModel
 from trading_system.exit.library import ExitLibrarySpec, ExitPresetSpec
+from trading_system.risk.circuit_breakers import CircuitBreakerConfig, CircuitBreakers
 from trading_system.risk.conversion import SameCurrencyConverter
 from trading_system.risk.engine import RiskEngine
-from trading_system.risk.sizing.methods import FixedFractional
+from trading_system.risk.portfolio_risk import PortfolioLimitsConfig, PortfolioRisk
+from trading_system.risk.sizing.methods import FixedAmount, FixedFractional
 from trading_system.strategies.schema import StrategySpec
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = ROOT / "configs" / "instruments.yaml"
 LIBRARY_PATH = ROOT / "src" / "trading_system" / "exit" / "library.json"
+EMA_PULLBACK_PATH = (
+    ROOT / "src" / "trading_system" / "strategies" / "examples" / "ema_pullback.json"
+)
 
 #: Start of every synthetic series. A Monday, so trading-day labels and session
 #: lookups do not depend on when the suite runs.
@@ -50,6 +60,11 @@ START = datetime(2024, 3, 4, tzinfo=UTC)
 
 #: The stream almost every test trades.
 EURUSD_H1 = StreamKey("EURUSD", Timeframe.H1)
+
+#: The streams the no-lookahead harness trades. ``ema_pullback`` reasons on H4,
+#: and the orchestrator refuses a stream at any other timeframe.
+EURUSD_H4 = StreamKey("EURUSD", Timeframe.H4)
+XAUUSD_H4 = StreamKey("XAUUSD", Timeframe.H4)
 
 
 @pytest.fixture(scope="session")
@@ -274,4 +289,243 @@ def orchestrator(
         cost_model=CostModel({symbol: registry[symbol] for symbol in symbols}, cost_config),
         converter=SameCurrencyConverter(),
         run_seed=cost_config.run_seed,
+    )
+
+
+# ----------------------------------------------------------------------------
+# The no-lookahead harness, and the reproducibility tests, run one shared setup:
+# the shipped ``ema_pullback`` strategy over a synthetic H4 series. Shipped
+# rather than hand-built for the reason the registry and the exit library are
+# shipped — a leak the harness cannot see in the strategy people actually run is
+# a leak the harness does not check for.
+# ----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class RunInputs:
+    """Everything one run is wired from, in one picklable place.
+
+    Held as data rather than as an assembled :class:`Orchestrator` so the same
+    description can be digested into a run id, varied one field at a time, and
+    (from P13 stage 2's parallel half) shipped to another process.
+
+    Attributes:
+        config: Run parameters.
+        streams: Bars per stream.
+        bindings: Strategies, exit presets and the streams they trade.
+        instruments: Contract specifications.
+        costs: Spread, slippage, commission and financing.
+        sizing: How much money goes at stake per trade.
+        limits: Concurrent-risk ceilings.
+        breakers: When trading stops altogether.
+    """
+
+    config: BacktestConfig
+    streams: Mapping[StreamKey, OHLCVFrame]
+    bindings: tuple[StrategyBinding, ...]
+    instruments: InstrumentRegistry
+    costs: CostConfig
+    sizing: FixedFractional | FixedAmount
+    limits: PortfolioLimitsConfig
+    breakers: CircuitBreakerConfig
+
+    def orchestrator(self) -> Orchestrator:
+        """Assemble the run these inputs describe."""
+        return Orchestrator(
+            config=self.config,
+            streams=self.streams,
+            bindings=self.bindings,
+            instruments=self.instruments,
+            risk_engine=RiskEngine(
+                instruments=self.instruments,
+                sizing=self.sizing,
+                converter=SameCurrencyConverter(),
+                portfolio=PortfolioRisk(self.limits),
+                breakers=CircuitBreakers(self.breakers),
+            ),
+            cost_model=CostModel(
+                {key.symbol: self.instruments[key.symbol] for key in self.streams}, self.costs
+            ),
+            converter=SameCurrencyConverter(),
+            run_seed=self.costs.run_seed,
+        )
+
+    def run(self) -> BacktestResult:
+        """Walk the whole run and return what it produced."""
+        return self.orchestrator().run()
+
+    def components(self) -> dict[str, object]:
+        """The named components a run manifest digests beyond bars and strategies."""
+        return {
+            "costs": self.costs,
+            "sizing": self.sizing,
+            "converter": SameCurrencyConverter(),
+            "portfolio_limits": self.limits,
+            "circuit_breakers": self.breakers,
+        }
+
+    def with_streams(self, streams: Mapping[StreamKey, OHLCVFrame]) -> "RunInputs":
+        """The same run over different bars — what truncation and poisoning vary."""
+        return replace(self, streams=dict(streams))
+
+
+def ema_pullback(
+    *,
+    strategy_id: str | None = None,
+    asset_class: str | None = None,
+    symbol: str | None = None,
+) -> StrategySpec:
+    """The shipped ``ema_pullback`` example, optionally re-scoped to another instrument.
+
+    Re-validated rather than copied field by field, so a re-scoping typo fails
+    here instead of producing a strategy that silently never trades — the defect
+    P06 stage 1.5 found in ``SessionFilter.sessions``.
+
+    Args:
+        strategy_id: Id to give the spec. Its own by default.
+        asset_class: Instrument class to allow instead of FX.
+        symbol: Symbol to allow instead of EURUSD/GBPUSD.
+
+    Returns:
+        The validated spec.
+    """
+    payload: dict[str, Any] = json.loads(EMA_PULLBACK_PATH.read_text())
+    if strategy_id is not None:
+        payload["id"] = strategy_id
+    if asset_class is not None or symbol is not None:
+        payload["instruments"] = {
+            "allowed_classes": [asset_class] if asset_class is not None else ["FX"],
+            "allowed_symbols": [symbol] if symbol is not None else ["EURUSD"],
+            "denied_symbols": [],
+        }
+    return StrategySpec.model_validate(payload)
+
+
+def swing_series(
+    length: int,
+    *,
+    symbol: str = "EURUSD",
+    base: float = 1.10,
+    scale: float = 1.0,
+    phase: float = 0.0,
+    macro_period: int = 90,
+    micro_period: int = 18,
+    timeframe: Timeframe = Timeframe.H4,
+    start: datetime = START,
+) -> OHLCVFrame:
+    """A trending series that turns over, so positions both open and close.
+
+    Two sine components: a slow one that produces up-legs for the strategy to buy
+    and down-legs for the structure trail to stop out on, and a fast one that
+    produces the pullbacks the entry is looking for. Deterministic rather than a
+    random walk, for the reason P07 stage 3's combinatorial test gives — a run
+    that produces no trades proves nothing, and a random series makes "no trades"
+    a property of the seed.
+
+    Args:
+        length: How many bars.
+        symbol: Instrument the frame is for.
+        base: Price the series oscillates around.
+        scale: Multiplier on both amplitudes and on the bar's range, so the same
+            shape works at EURUSD's 1.10 and at gold's 2000.
+        phase: Phase offset applied to both components, in radians, for making a
+            second instrument's series its own series rather than a copy of the
+            first. Not every offset produces trades — the entry is looking for a
+            pullback that recrosses, and some alignments of the two components
+            never present one — so a new value belongs with a check that the
+            run it produces is not empty.
+        macro_period: Bars per slow cycle.
+        micro_period: Bars per pullback cycle.
+        timeframe: Bar size.
+        start: Open time of bar 0.
+
+    Returns:
+        The frame.
+    """
+    closes = [
+        base
+        + 0.02 * scale * math.sin(2 * math.pi * (index / macro_period) + phase)
+        + 0.01 * scale * math.sin(2 * math.pi * (index / micro_period) + phase)
+        for index in range(length)
+    ]
+    rows: list[dict[str, Any]] = []
+    previous = closes[0] - 0.001 * scale
+    for index, close in enumerate(closes):
+        opening = previous
+        rows.append(
+            {
+                "timestamp": start + timeframe.duration * index,
+                "open": opening,
+                "high": max(opening, close) + 0.0006 * scale,
+                "low": min(opening, close) - 0.0006 * scale,
+                "close": close,
+                "volume": 1000.0 + 10 * (index % 7),
+            }
+        )
+        previous = close
+    return OHLCVFrame(pl.DataFrame(rows), symbol=symbol, timeframe=timeframe)
+
+
+def noisy_costs(seed: int = 11) -> CostConfig:
+    """Costs with every random and volatility-dependent component switched **on**.
+
+    The opposite of :func:`flat_costs`, and deliberately so. A harness run under
+    flat costs would exercise none of the paths where a leak is cheapest to
+    introduce: ``jitter_points`` is what makes a fill consult
+    :func:`~trading_system.execution.rng.fill_seed` at all, and
+    ``atr_coefficient`` is what makes a fill's price depend on a rolling
+    statistic. With both at zero the permutation check cannot see a shared random
+    stream and the poisoning check cannot see a whole-series normalisation.
+
+    Args:
+        seed: The run seed.
+
+    Returns:
+        The configuration.
+    """
+    return CostConfig(
+        slippage=SlippageConfig(
+            market=SlippageParams(base_points=0.3, atr_coefficient=0.2, jitter_points=0.4),
+            stop=SlippageParams(base_points=0.5, atr_coefficient=0.3, jitter_points=0.6),
+            limit=SlippageParams(),
+        ),
+        swap={"FX": PerLotRolloverSwap(), "COMMODITY": PerLotRolloverSwap()},
+        run_seed=seed,
+    )
+
+
+def harness_inputs(
+    registry: InstrumentRegistry,
+    *,
+    streams: Mapping[StreamKey, OHLCVFrame],
+    bindings: Sequence[StrategyBinding],
+    costs: CostConfig | None = None,
+    sizing: FixedFractional | FixedAmount | None = None,
+    limits: PortfolioLimitsConfig | None = None,
+    breakers: CircuitBreakerConfig | None = None,
+) -> RunInputs:
+    """Wire one harness run.
+
+    Args:
+        registry: Instrument specifications.
+        streams: Bars per stream.
+        bindings: Strategies and the streams they trade.
+        costs: Cost configuration. :func:`noisy_costs` by default.
+        sizing: Sizing method. One percent of equity by default.
+        limits: Concurrent-risk ceilings. The conservative defaults unless a
+            test needs them out of the way.
+        breakers: Circuit breakers. The defaults unless a test needs them off.
+
+    Returns:
+        The inputs.
+    """
+    return RunInputs(
+        config=BacktestConfig(atr_period=14, atr_baseline_bars=30),
+        streams=dict(streams),
+        bindings=tuple(bindings),
+        instruments=registry,
+        costs=costs if costs is not None else noisy_costs(),
+        sizing=sizing if sizing is not None else FixedFractional(risk_pct=0.01),
+        limits=limits if limits is not None else PortfolioLimitsConfig(),
+        breakers=breakers if breakers is not None else CircuitBreakerConfig(),
     )
