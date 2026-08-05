@@ -13,6 +13,10 @@
 # Money fields (commission_per_lot, swap_long, swap_short) are in ACCOUNT
 # currency. Everything derived from price (value_per_point_quote) is in the
 # instrument's quote currency and needs converting; see risk/conversion.py.
+#
+# commission_basis is required on every entry and has no default. "7.00 per
+# lot" is ambiguous between per-side and round-turn, the readings differ by
+# exactly 2x, and a default would make one of them a silent assumption.
 
 instruments:
   # --- FX: quote currency is the account's, so no conversion ---------------
@@ -29,6 +33,7 @@ instruments:
     margin_rate: 0.0333
     typical_spread_points: 0.8
     commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
     swap_long: "-7.50"
     swap_short: "2.10"
     min_stop_distance_points: 1.0
@@ -47,6 +52,7 @@ instruments:
     margin_rate: 0.0333
     typical_spread_points: 2.4
     commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
     swap_long: "-12.40"
     swap_short: "-4.80"
     min_stop_distance_points: 2.0
@@ -65,6 +71,7 @@ instruments:
     margin_rate: 0.05
     typical_spread_points: 25.0
     commission_per_lot: "0"
+    commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
     swap_long: "-18.60"
     swap_short: "6.20"
     min_stop_distance_points: 30.0
@@ -83,6 +90,7 @@ instruments:
     margin_rate: 0.01
     typical_spread_points: 1.5
     commission_per_lot: "0"
+    commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
     swap_long: "-9.80"
     swap_short: "-2.40"
     min_stop_distance_points: 5.0
@@ -100,6 +108,7 @@ instruments:
     margin_rate: 0.01
     typical_spread_points: 2.0
     commission_per_lot: "0"
+    commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
     swap_long: "-11.20"
     swap_short: "-3.10"
     min_stop_distance_points: 8.0
@@ -118,6 +127,7 @@ instruments:
     margin_rate: 0.5
     typical_spread_points: 22.0
     commission_per_lot: "0"
+    commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
     swap_long: "-45.00"
     swap_short: "-45.00"
     min_stop_distance_points: 50.0

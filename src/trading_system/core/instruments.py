@@ -35,6 +35,15 @@ module's.
 ``base_currency`` takes no part in point value at all. It is needed for margin
 (``contract_size * price_of_base_in_account_currency * margin_rate``), which
 belongs to the portfolio limits of stage 2.
+
+**Commission states its basis, and there is no default.** ``commission_per_lot``
+alone is half a number: brokers quote the same figure as "7 dollars per lot"
+meaning either seven per side or seven for the whole round turn, and the two
+readings differ by exactly a factor of two in the direction that flatters a
+backtest. :attr:`InstrumentSpec.commission_basis` is therefore required, so
+every registry file has to say which it means rather than inherit a guess.
+Everything downstream reads :attr:`InstrumentSpec.commission_per_side`, which is
+the normalised figure charged on each of the two fills.
 """
 
 from collections.abc import Iterator, Mapping
@@ -75,6 +84,23 @@ class InstrumentClass(StrEnum):
     FUTURES = "FUTURES"
     INDEX = "INDEX"
     COMMODITY = "COMMODITY"
+
+
+class CommissionBasis(StrEnum):
+    """Whether a per-lot commission figure covers one fill or two.
+
+    Deliberately has no "unspecified" member and no default anywhere. A broker's
+    symbol table quoting "7.00 per lot" is genuinely ambiguous, and picking
+    either reading silently doubles or halves every trade's cost — an error that
+    survives any test which does not compare against a hand-computed figure,
+    because both readings produce entirely plausible equity curves.
+    """
+
+    #: The figure is charged on each fill. A round turn costs twice it.
+    PER_SIDE = "PER_SIDE"
+
+    #: The figure covers the whole round turn. Each fill is charged half.
+    ROUND_TURN = "ROUND_TURN"
 
 
 def _decimal(value: float) -> Decimal:
@@ -120,7 +146,12 @@ class InstrumentSpec(BaseModel):
         margin_rate: Fraction of notional required as margin, in ``(0, 1]``.
         typical_spread_points: Representative spread, in points. A backtest
             default; a run with real spread data should use that instead.
-        commission_per_lot: Round-turn commission per lot, in account currency.
+        commission_per_lot: Commission per lot, in account currency. What it
+            covers is stated by ``commission_basis`` and is not assumed; read
+            :attr:`commission_per_side` rather than this field.
+        commission_basis: Whether ``commission_per_lot`` is charged per fill or
+            per round turn. Required, with no default — see
+            :class:`CommissionBasis`.
         swap_long: Overnight financing per lot for a long, account currency.
             Signed — usually negative.
         swap_short: Overnight financing per lot for a short, account currency.
@@ -145,6 +176,7 @@ class InstrumentSpec(BaseModel):
     margin_rate: float = Field(gt=0, le=1)
     typical_spread_points: float = Field(ge=0)
     commission_per_lot: Decimal = Field(ge=0)
+    commission_basis: CommissionBasis
     swap_long: Decimal
     swap_short: Decimal
     min_stop_distance_points: float = Field(ge=0)
@@ -197,6 +229,25 @@ class InstrumentSpec(BaseModel):
         ``str``, at this single boundary.
         """
         return _decimal(self.point_size) * self.contract_size
+
+    @property
+    def commission_per_side(self) -> Decimal:
+        """Commission charged on **one** fill, per lot, in account currency.
+
+        The single place the round-turn halving happens, and therefore the
+        single place the factor-of-two error can live. Charging this on each of
+        the two fills makes the round turn equal ``commission_per_lot`` under
+        ``ROUND_TURN`` and twice it under ``PER_SIDE``, which is what each
+        basis asserts.
+
+        Kept at full decimal precision rather than quantised to cents: an odd
+        round-turn figure halves to a fraction of a cent, and rounding it here
+        would make the sum of two sides disagree with the stated round turn.
+        Quantisation belongs at the reporting boundary.
+        """
+        if self.commission_basis is CommissionBasis.PER_SIDE:
+            return self.commission_per_lot
+        return self.commission_per_lot / 2
 
     @property
     def min_stop_distance_price(self) -> float:
@@ -266,6 +317,41 @@ class InstrumentSpec(BaseModel):
             The least quotable price not below ``price``.
         """
         return self._quantize_price(price, ROUND_CEILING)
+
+    def shift_price(self, price: float, points: float) -> Price:
+        """Move ``price`` by a signed number of points, never shortening the shift.
+
+        The rounding direction follows the sign: a positive shift snaps up, a
+        negative one snaps down, so the result is always at least as far from
+        ``price`` as asked for. That is what a cost wants — snapping a fill back
+        toward the trader hands back up to a tick per fill, in a direction that
+        looks like noise and is not.
+
+        **The arithmetic is decimal throughout**, and that is load-bearing rather
+        than tidy. Adding half a spread to a price as floats gives
+        ``1.1 + 0.00005 == 1.1000500000000001``; snapping that away from the
+        entry rounds up a full tick, and a round turn that should cost exactly
+        one spread comes back costing one spread plus two ticks. Both operands
+        cross into decimal through ``str``, so a shift that lands on the tick
+        grid stays on it.
+
+        Args:
+            price: Starting price.
+            points: Signed distance to move, in the instrument's points.
+
+        Returns:
+            The shifted price, on the tick grid.
+        """
+        shifted = _decimal(price) + _decimal(points) * _decimal(self.point_size)
+        if points > 0:
+            rounding = ROUND_CEILING
+        elif points < 0:
+            rounding = ROUND_FLOOR
+        else:
+            rounding = ROUND_HALF_UP
+        tick = _decimal(self.tick_size)
+        ticks = (shifted / tick).to_integral_value(rounding=rounding)
+        return Price(float(ticks * tick))
 
     def round_volume(self, volume: Decimal) -> Decimal:
         """Snap a size **down** to a whole number of lot steps.

@@ -1,0 +1,110 @@
+# Execution costs. Loaded by trading_system.execution.load_execution_config.
+#
+# These are representative retail-CFD numbers, not a measured venue. They exist
+# so that a run has costs at all rather than zero, and so that comparing two
+# venues is a config edit. A run that matters should replace them with figures
+# reconciled against the broker's own fills.
+#
+# Every spread figure is a MULTIPLIER on the instrument's typical_spread_points.
+# Every slippage figure is in POINTS, in the instrument's own point_size.
+
+costs:
+  spread:
+    source: TYPICAL
+
+    # Liquidity adds, so resolution takes the MINIMUM over the sessions open at
+    # the fill instant. Configuring the overlap below both of its parents
+    # therefore just works: no precedence rule to get wrong.
+    session_multipliers:
+      LONDON_NY_OVERLAP: 0.9
+      LONDON: 1.0
+      NEWYORK: 1.05
+      TOKYO: 1.4
+      SYDNEY: 1.6
+
+    # Nothing open: the rollover hour and the Asian pre-open, where spreads are
+    # at their widest and a backtest that assumes otherwise books trades nobody
+    # could have got.
+    off_session_multiplier: 1.8
+
+    # multiplier = 1 + beta * (atr_ratio - 1), clamped. Exactly 1.0 at typical
+    # volatility whatever beta is.
+    volatility_beta: 0.6
+    volatility_multiplier_min: 0.85
+    volatility_multiplier_max: 4.0
+
+    news_multipliers:
+      NONE: 1.0
+      LOW: 1.3
+      MEDIUM: 2.0
+      HIGH: 4.0
+
+  # stop >= market >= limit is enforced by the config validator, not merely
+  # intended: a triggered stop is a market order into a book already moving
+  # away, and a limit never crosses the spread at all.
+  slippage:
+    stop:
+      base_points: 0.6
+      atr_coefficient: 0.4
+      jitter_points: 0.5
+      news_points:
+        LOW: 0.5
+        MEDIUM: 1.5
+        HIGH: 4.0
+    market:
+      base_points: 0.2
+      atr_coefficient: 0.15
+      jitter_points: 0.2
+      news_points:
+        LOW: 0.2
+        MEDIUM: 0.6
+        HIGH: 1.5
+    limit:
+      base_points: 0.0
+      atr_coefficient: 0.0
+      jitter_points: 0.0
+
+  # Replaces P07's reference model, which filled a gapped order at the bar open
+  # and said in its own docstring that this was optimistic. The penalty is
+  # proportional to the hole: a 40-point gap means the book was empty for 40
+  # points, and a flat penalty would claim that costs the same as a 5-point one.
+  gap:
+    penalty_base_points: 0.5
+    penalty_fraction: 0.10
+    # P07 gave a gapped limit the better of level and open. Free positive
+    # slippage on every gap through a target is the most flattering assumption
+    # available, so it is off unless a venue is known to fill that way.
+    grant_improvement_to_limits: false
+
+  limit_fill:
+    # At the level you are behind everything already queued there, and a bar
+    # that turned around exactly on it is a bar where the queue never cleared.
+    touch_fill_probability: 0.0
+
+  swap:
+    FX:
+      kind: per_lot_rollover
+      triple_weekday: 2       # Wednesday: value date T+2 lands on Monday
+    INDEX:
+      kind: per_lot_rollover
+      triple_weekday: 2
+    COMMODITY:
+      kind: per_lot_rollover
+      triple_weekday: 2
+    EQUITY:
+      kind: per_lot_rollover
+      triple_weekday: 2
+    FUTURES:
+      kind: per_lot_rollover
+      triple_weekday: 2
+    CRYPTO:
+      kind: funding_rate
+      rate_per_interval: 0.0001    # positive: longs pay shorts
+
+  run_seed: 20240101
+
+# A copy of the Risk Engine's stop_buffer.spread_multiple. The two are here
+# together because neither is wrong alone and the pair can be: a quote-aware
+# spread source plus a stop buffered by a spread pays the same half spread
+# twice. ExecutionRunConfig refuses to construct when they contradict.
+stop_buffer_spread_multiple: 1.0

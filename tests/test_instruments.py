@@ -12,6 +12,7 @@ import pytest
 
 from trading_system.core.exceptions import ValidationError
 from trading_system.core.instruments import (
+    CommissionBasis,
     InstrumentClass,
     InstrumentRegistry,
     InstrumentSpec,
@@ -37,6 +38,7 @@ def spec(**overrides: object) -> InstrumentSpec:
         "margin_rate": 0.0333,
         "typical_spread_points": 0.8,
         "commission_per_lot": Decimal("7"),
+        "commission_basis": CommissionBasis.ROUND_TURN,
         "swap_long": Decimal("-7.5"),
         "swap_short": Decimal("2.1"),
         "min_stop_distance_points": 1.0,
@@ -74,6 +76,49 @@ class TestPointsAreNotTicks:
     def test_price_to_points_inverts_points_to_price(self) -> None:
         instrument = spec()
         assert instrument.price_to_points(instrument.points_to_price(37.5)) == pytest.approx(37.5)
+
+
+class TestShiftPrice:
+    """Moving a price by a signed distance, without ever shortening the move."""
+
+    def test_a_shift_landing_on_the_grid_is_exact(self) -> None:
+        # Half a one-point spread is five ticks on a five-digit feed. As floats
+        # `1.1 + 0.00005` is 1.1000500000000001, and rounding that away from the
+        # start would add a whole tick nobody asked for; the decimal arithmetic
+        # inside shift_price is what keeps this exact.
+        assert spec().shift_price(1.10000, 0.5) == pytest.approx(1.10005)
+        assert spec().shift_price(1.10000, -0.5) == pytest.approx(1.09995)
+
+    def test_an_off_grid_shift_rounds_away_from_the_start(self) -> None:
+        # 0.15 points is one and a half ticks, so the move is two ticks, not one.
+        assert spec().shift_price(1.10000, 0.15) == pytest.approx(1.10002)
+        assert spec().shift_price(1.10000, -0.15) == pytest.approx(1.09998)
+
+    def test_the_shift_is_never_shorter_than_asked_for(self) -> None:
+        instrument = spec()
+        for points in (0.01, 0.15, 0.5, 1.0, 2.7):
+            up = instrument.shift_price(1.10000, points)
+            down = instrument.shift_price(1.10000, -points)
+            assert up - 1.10000 >= instrument.points_to_price(points) - 1e-12
+            assert 1.10000 - down >= instrument.points_to_price(points) - 1e-12
+
+    def test_a_zero_shift_just_snaps_to_the_grid(self) -> None:
+        assert spec().shift_price(1.084567, 0.0) == pytest.approx(1.08457)
+
+
+class TestCommissionBasisIsStated:
+    """The per-side figure, and the absence of a default."""
+
+    def test_round_turn_halves_and_per_side_does_not(self) -> None:
+        assert spec(commission_basis=CommissionBasis.ROUND_TURN).commission_per_side == Decimal(
+            "3.5"
+        )
+        assert spec(commission_basis=CommissionBasis.PER_SIDE).commission_per_side == Decimal("7")
+
+    def test_the_basis_is_required(self) -> None:
+        # "7.00 per lot" is genuinely ambiguous and the readings differ by
+        # exactly two, so a registry that omits the basis does not load.
+        assert InstrumentSpec.model_fields["commission_basis"].is_required()
 
 
 class TestRounding:
@@ -194,6 +239,7 @@ class TestRegistryFile:
                 "    margin_rate: 0.0333\n"
                 "    typical_spread_points: 0.8\n"
                 '    commission_per_lot: "7"\n'
+                "    commission_basis: ROUND_TURN\n"
                 '    swap_long: "-7.5"\n'
                 '    swap_short: "2.1"\n'
                 "    min_stop_distance_points: 1.0\n"
