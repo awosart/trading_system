@@ -44,7 +44,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from trading_system.core.logging import get_logger
 from trading_system.core.types import ensure_utc
-from trading_system.data.resample import FX_DAY_ORIGIN, DayOrigin, trading_day
+from trading_system.data.resample import FX_DAY_ORIGIN, DayOrigin, trading_day, trading_day_of_close
+from trading_system.data.sessions import TradingCalendar
 from trading_system.risk.models import RiskReason
 
 logger = get_logger(__name__)
@@ -124,6 +125,15 @@ class CircuitBreakerConfig(BaseModel):
             wall-clock time. Defaults to the FX convention of 17:00 New York; a
             prop account should set the firm's own boundary, which is the whole
             reason this is a parameter.
+        calendar: When the market is open, for folding an instant that lands in
+            a shut window back onto the trading day that actually produced it
+            (see :func:`~trading_system.data.resample.trading_day_of_close`).
+            ``None`` keeps the plain ``trading_day(instant, trading_day)`` label
+            unconditionally — the right default for a config built directly in
+            a test, not through an
+            :class:`~trading_system.backtest.orchestrator.Orchestrator`, which
+            always supplies a real one when the run's instruments make one
+            unambiguous.
         week_starts_on: Day the trading week rolls over. Sunday by default,
             following the firm conventions this is most often measured against
             rather than the ISO calendar.
@@ -143,6 +153,7 @@ class CircuitBreakerConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     trading_day: DayOrigin = FX_DAY_ORIGIN
+    calendar: TradingCalendar | None = None
     week_starts_on: Weekday = Weekday.SUNDAY
     max_daily_loss_pct: float | None = Field(default=0.05, gt=0, le=1)
     max_weekly_loss_pct: float | None = Field(default=0.08, gt=0, le=1)
@@ -216,6 +227,18 @@ class CircuitBreakers:
     def config(self) -> CircuitBreakerConfig:
         """The configured limits."""
         return self._config
+
+    def _trading_day(self, instant: datetime) -> date:
+        """The trading day ``instant`` counts against, calendar-aware when configured.
+
+        The single place this class turns an instant into a day label — both
+        ``today`` and every historical trade's own day go through it, so a
+        boundary bar's signal and its eventual close are never counted into
+        two different trading days by accident.
+        """
+        if self._config.calendar is not None:
+            return trading_day_of_close(instant, self._config.trading_day, self._config.calendar)
+        return trading_day(instant, self._config.trading_day)
 
     @property
     def slippage_events(self) -> tuple[SlippageReport, ...]:
@@ -301,7 +324,7 @@ class CircuitBreakers:
         if paused is not None:
             return paused
 
-        today = trading_day(moment, self._config.trading_day)
+        today = self._trading_day(moment)
         periods = (
             (
                 self._config.max_daily_loss_pct,
@@ -330,11 +353,7 @@ class CircuitBreakers:
             if limit_pct is None:
                 continue
             realised = sum(
-                (
-                    trade.pnl
-                    for trade in trades
-                    if in_period(trading_day(trade.closed_at, self._config.trading_day))
-                ),
+                (trade.pnl for trade in trades if in_period(self._trading_day(trade.closed_at))),
                 Decimal(0),
             )
             allowance = equity * Decimal(str(limit_pct))

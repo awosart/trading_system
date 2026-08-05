@@ -50,10 +50,11 @@ from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
 from trading_system.backtest.engine import BacktestEngine, BarEvent, BarStore, DataHandler
 from trading_system.backtest.portfolio import EquityPoint, OpenPosition, Portfolio, TradeRecord
-from trading_system.core.instruments import InstrumentRegistry, InstrumentSpec
+from trading_system.core.instruments import InstrumentClass, InstrumentRegistry, InstrumentSpec
 from trading_system.core.logging import get_logger
 from trading_system.core.types import Bar, OrderType, Price, Side
 from trading_system.data.models import OHLCVFrame
+from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.entry.compiler import EntryEngine, compile_entry
 from trading_system.entry.context import BarSeries
 from trading_system.entry.features import (
@@ -132,6 +133,50 @@ class StrategyBinding:
     spec: StrategySpec
     exit_preset: ExitPresetSpec
     keys: tuple[StreamKey, ...]
+
+
+#: Only the instrument classes with an unambiguous weekly open/closed calendar.
+#: Deliberately partial: FUTURES/INDEX/COMMODITY don't have one settlement-wide
+#: convention the way FX, equities and crypto do, and guessing one would be
+#: exactly the kind of silent wrong answer this module's day-labelling fix
+#: exists to avoid, not a place to reproduce it.
+_CALENDAR_ASSET_CLASS: dict[InstrumentClass, AssetClass] = {
+    InstrumentClass.FX: AssetClass.FX,
+    InstrumentClass.CRYPTO: AssetClass.CRYPTO,
+    InstrumentClass.EQUITY: AssetClass.EQUITY,
+}
+
+
+def derive_run_calendar(
+    streams: Mapping[StreamKey, OHLCVFrame], instruments: InstrumentRegistry
+) -> TradingCalendar | None:
+    """The one calendar a run's instruments make unambiguous, or ``None``.
+
+    A :class:`~trading_system.data.sessions.TradingCalendar` needs a single
+    asset class, and a portfolio does not always have one — FX and crypto
+    traded together have no shared weekly closure, since crypto never closes
+    at all. This measures what is actually being traded rather than assuming
+    it: when every stream's symbol resolves to the same, calendar-mappable
+    :class:`~trading_system.core.instruments.InstrumentClass`, that class's
+    calendar is unambiguous and is returned. Otherwise — no streams, more
+    than one asset class among them, or one this module has no calendar
+    mapping for — ``None``, so the day-of-close fold-back is simply not
+    applied rather than applied on a guess.
+
+    Args:
+        streams: Bars per instrument and timeframe, as a run is built from.
+        instruments: Contract specifications the streams' symbols resolve
+            against.
+
+    Returns:
+        The run's calendar, or ``None`` when none is unambiguous.
+    """
+    classes = {instruments[key.symbol].asset_class for key in streams}
+    if len(classes) != 1:
+        return None
+    (only,) = classes
+    mapped = _CALENDAR_ASSET_CLASS.get(only)
+    return TradingCalendar(mapped) if mapped is not None else None
 
 
 @dataclass
@@ -463,6 +508,7 @@ class Orchestrator:
             instruments=instruments,
             converter=converter,
             day_origin=config.day_origin,
+            calendar=derive_run_calendar(streams, instruments),
         )
 
         self._pending_orders: list[PendingEntry] = []

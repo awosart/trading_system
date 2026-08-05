@@ -20,6 +20,26 @@ spring-forward Sunday and happens twice on the autumn one — and that only day
 :func:`~trading_system.data.resample.trading_day` says the label actually turns
 over. The authority is the label function throughout; the search is bounded
 because a DST shift moves the boundary by at most an hour.
+
+**A bar's close can land inside a window the market never opened in at all.**
+This module gives every intraday timeframe a plain ``open + duration`` close —
+correct as an instant, since that really is when the bar is complete and may
+be published. But for a timeframe whose duration does not evenly divide the
+trading week (H4 chief among them), the very last bar before a weekly close can
+finish a few hours *into* the following ``trading_day`` window, and FX's week
+is shut for the whole of that window. ``trading_day`` labels it anyway — it
+only knows about 24-hour slices, not about when a market is open — and the
+result is a trading day with exactly one bar in it, a fact nothing downstream
+expects. The instant computed here is not what changes: it really is when the
+bar closes, and moving it would be lookahead by another name. What changes is
+which *label* consumers of that instant attach to it —
+:func:`~trading_system.data.resample.trading_day_of_close` is where that
+correction lives, next to :func:`~trading_system.data.resample.trading_day`
+itself rather than here, because both :class:`~trading_system.backtest.portfolio.Portfolio`
+and :class:`~trading_system.risk.circuit_breakers.CircuitBreakers` need it and
+``risk`` sits below ``backtest`` in this project's import direction — a
+function only this module could reach would have put the fix out of one of
+its two consumers' reach.
 """
 
 from dataclasses import dataclass

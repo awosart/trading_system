@@ -53,7 +53,8 @@ from trading_system.backtest.clock import StreamKey
 from trading_system.core.instruments import InstrumentRegistry, InstrumentSpec
 from trading_system.core.logging import get_logger
 from trading_system.core.types import Price, Side, ensure_utc
-from trading_system.data.resample import DayOrigin, trading_day
+from trading_system.data.resample import DayOrigin, trading_day, trading_day_of_close
+from trading_system.data.sessions import TradingCalendar
 from trading_system.execution.orders import Fill
 from trading_system.exit.plan import DeferredExit, ExitPlan
 from trading_system.exit.position import ClosedLeg, ManagedPosition
@@ -214,6 +215,7 @@ class Portfolio:
         instruments: InstrumentRegistry,
         converter: FxConverter,
         day_origin: DayOrigin,
+        calendar: TradingCalendar | None = None,
     ) -> None:
         """Open an account.
 
@@ -223,6 +225,15 @@ class Portfolio:
             instruments: Contract specifications, for contract size and currency.
             converter: Where quote-to-account rates come from.
             day_origin: Where the trading day is cut, for the row labels.
+            calendar: When the market is open, for folding a bar whose close
+                lands in a shut window back onto the trading day that
+                actually produced it (see ``backtest/clock.py``). ``None``
+                keeps the plain ``trading_day(instant, day_origin)`` label
+                unconditionally — the right default for a ``Portfolio`` built
+                directly in a test, not passing through an
+                :class:`~trading_system.backtest.orchestrator.Orchestrator`,
+                which always derives and passes a real one when the run's
+                instruments make one unambiguous.
 
         Raises:
             ValueError: If the starting balance is not positive.
@@ -234,6 +245,7 @@ class Portfolio:
         self._instruments = instruments
         self._converter = converter
         self._day_origin = day_origin
+        self._calendar = calendar
 
         self._realized = Decimal(0)
         self._commission = Decimal(0)
@@ -495,9 +507,14 @@ class Portfolio:
             The row, which is also appended to :attr:`curve`.
         """
         instant = ensure_utc(at)
+        day = (
+            trading_day_of_close(instant, self._day_origin, self._calendar)
+            if self._calendar is not None
+            else trading_day(instant, self._day_origin)
+        )
         point = EquityPoint(
             ts=instant,
-            day=trading_day(instant, self._day_origin),
+            day=day,
             balance=self.balance,
             equity=self.equity,
             realized=self._realized,

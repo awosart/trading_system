@@ -1,13 +1,20 @@
 """Resampling correctness, with lookahead as the headline concern."""
 
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 
 import pytest
 
 from trading_system.core.exceptions import DataError
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
-from trading_system.data.resample import FX_DAY_ORIGIN, DayOrigin, resample
+from trading_system.data.resample import (
+    FX_DAY_ORIGIN,
+    DayOrigin,
+    resample,
+    trading_day,
+    trading_day_of_close,
+)
+from trading_system.data.sessions import AssetClass, TradingCalendar
 
 from .conftest import make_frame
 
@@ -218,3 +225,58 @@ def test_gap_in_source_does_not_shift_window_boundaries() -> None:
     hourly = resample(with_hole, Timeframe.H1)
     assert hourly.df["timestamp"].item(0) == datetime(2024, 1, 1, 0, 0, tzinfo=UTC)
     assert hourly.df["volume"].item(0) == 59.0
+
+
+class TestTradingDayOfClose:
+    """A bar's close can land inside a window the market never opened in.
+
+    2024-08-23 is a Friday, 2024-08-22 the Thursday before it. An H4 bar
+    opening at 13:00 EDT (17:00 UTC) that Friday — the last one before the
+    weekly close — finishes at 2024-08-24T00:00 UTC (20:00 EDT), three hours
+    into the ``[Fri 17:00 NY, Sat 17:00 NY)`` window FX never trades in at
+    all. ``trading_day`` alone labels it "Friday" anyway; this is the
+    instant the fold-back exists for.
+    """
+
+    #: The verified spillover instant: naively labelled 2024-08-23 (Friday),
+    #: correctly 2024-08-22 (Thursday) once the market being shut is known.
+    SPILLOVER = datetime(2024, 8, 24, 0, 0, tzinfo=UTC)
+
+    def test_the_naive_label_is_the_defect_this_function_fixes(self) -> None:
+        """Establishes what's being corrected, independent of the fix itself."""
+        assert trading_day(self.SPILLOVER, FX_DAY_ORIGIN) == date(2024, 8, 23)
+
+    def test_an_open_market_instant_passes_through_unchanged(self) -> None:
+        normal_tuesday = datetime(2024, 8, 6, 14, 0, tzinfo=UTC)
+        calendar = TradingCalendar(AssetClass.FX)
+        assert calendar.is_open(normal_tuesday)
+        assert trading_day_of_close(normal_tuesday, FX_DAY_ORIGIN, calendar) == trading_day(
+            normal_tuesday, FX_DAY_ORIGIN
+        )
+
+    def test_a_weekend_spillover_folds_back_to_the_thursday_that_produced_it(self) -> None:
+        calendar = TradingCalendar(AssetClass.FX)
+        assert not calendar.is_open(self.SPILLOVER)
+        assert trading_day_of_close(self.SPILLOVER, FX_DAY_ORIGIN, calendar) == date(2024, 8, 22)
+
+    def test_a_crypto_calendar_never_folds_back(self) -> None:
+        """The exact same closed-for-FX instant is a normal Saturday for crypto."""
+        calendar = TradingCalendar(AssetClass.CRYPTO)
+        assert calendar.is_open(self.SPILLOVER)
+        assert trading_day_of_close(self.SPILLOVER, FX_DAY_ORIGIN, calendar) == trading_day(
+            self.SPILLOVER, FX_DAY_ORIGIN
+        )
+
+    def test_an_instant_needing_more_than_one_days_step_still_resolves(self) -> None:
+        """Sunday before the reopen: one day back lands on Saturday, still shut."""
+        deep_sunday = datetime(2024, 8, 25, 18, 0, tzinfo=UTC)  # Sunday 14:00 EDT
+        calendar = TradingCalendar(AssetClass.FX)
+        assert not calendar.is_open(deep_sunday)
+        assert not calendar.is_open(deep_sunday - timedelta(days=1))
+        assert trading_day_of_close(deep_sunday, FX_DAY_ORIGIN, calendar) == date(2024, 8, 22)
+
+    def test_a_closure_longer_than_the_search_limit_is_refused_not_guessed(self) -> None:
+        holidays = frozenset(date(2024, 1, day) for day in range(1, 20))
+        calendar = TradingCalendar(AssetClass.EQUITY, holidays=holidays)
+        with pytest.raises(ValueError, match="market-closed window"):
+            trading_day_of_close(datetime(2024, 1, 18, tzinfo=UTC), FX_DAY_ORIGIN, calendar)

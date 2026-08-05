@@ -22,6 +22,7 @@ import polars as pl
 from trading_system.core.exceptions import DataError
 from trading_system.core.types import Timeframe
 from trading_system.data.models import TIMESTAMP_COLUMN, OHLCVFrame
+from trading_system.data.sessions import TradingCalendar
 
 _POLARS_EVERY: dict[Timeframe, str] = {
     Timeframe.M1: "1m",
@@ -105,6 +106,77 @@ def trading_day(timestamp: datetime, origin: DayOrigin) -> date:
         raise ValueError("timestamp must be tz-aware to be placed in a trading day")
     local = timestamp.astimezone(ZoneInfo(origin.tz)).replace(tzinfo=None)
     return (local - anchor_offset(origin)).date()
+
+
+#: How far back :func:`trading_day_of_close` steps at a time while searching for
+#: the most recent instant a closed calendar was actually open. A day, not an
+#: hour like :func:`~trading_system.backtest.clock.day_close_ts`'s boundary
+#: search: that one is chasing a DST shift of at most an hour, this one a market
+#: closure that spans a weekend (~48h for FX) or, occasionally, a holiday block.
+_CLOSED_WINDOW_STEP = timedelta(days=1)
+
+#: Steps allowed before giving up. Ten days comfortably covers the weekly FX
+#: closure (two steps) and any ordinary holiday block, with room to spare.
+_CLOSED_WINDOW_SEARCH_LIMIT = 10
+
+
+def trading_day_of_close(instant: datetime, origin: DayOrigin, calendar: TradingCalendar) -> date:
+    """The trading day an instant belongs to, folding a market-closed instant backward.
+
+    :func:`trading_day` alone only knows how time is sliced into 24-hour
+    labels — it has no idea whether a market was open in any given slice.
+    That is fine for an instant that really is inside an open window, but an
+    intraday bar's close is a plain ``open + duration`` (see
+    ``backtest/clock.py::bar_close_ts``), and for a timeframe whose duration
+    does not evenly divide the trading week (H4 chief among them) the very
+    last bar before a weekly close can finish a few hours *into* the
+    following window while the market stays shut for the whole of it.
+    Feeding that instant to :func:`trading_day` alone mints it a trading day
+    of its own, with nothing else ever in it — the defect this function
+    exists to close for both :class:`~trading_system.backtest.portfolio.Portfolio`
+    (the equity curve's day label) and
+    :class:`~trading_system.risk.circuit_breakers.CircuitBreakers` (the daily
+    loss limit), which independently call :func:`trading_day` on instants
+    that come from exactly the same ``bar_close_ts``.
+
+    The instant itself is never adjusted — only the label. Moving the instant
+    would change when a bar is allowed to be published, which is a lookahead
+    question this function has no business touching.
+
+    Args:
+        instant: The instant to label, tz-aware.
+        origin: Trading-day anchor, passed straight through to
+            :func:`trading_day`, never reimplemented here.
+        calendar: Says whether the market is open at a given instant. A
+            calendar that is never closed (crypto) makes this function behave
+            exactly like ``trading_day(instant, origin)`` — the fold-back
+            branch below is simply never taken, with no branch on asset class
+            written here to make that so.
+
+    Returns:
+        ``trading_day(instant, origin)`` when the market is open at
+        ``instant``. Otherwise, the label of the most recent instant at or
+        before ``instant`` when it was.
+
+    Raises:
+        ValueError: If the market has not been open at any point in the
+            preceding :data:`_CLOSED_WINDOW_SEARCH_LIMIT` days — far longer
+            than any calendar this project models actually stays shut, so
+            this means the calendar and the data have drifted apart, not that
+            the search needs to go further.
+    """
+    if calendar.is_open(instant):
+        return trading_day(instant, origin)
+    probe = instant
+    for _ in range(_CLOSED_WINDOW_SEARCH_LIMIT):
+        probe -= _CLOSED_WINDOW_STEP
+        if calendar.is_open(probe):
+            return trading_day(probe, origin)
+    raise ValueError(
+        f"{instant:%F %T%z} sits in a market-closed window that stayed closed for "
+        f"{_CLOSED_WINDOW_SEARCH_LIMIT} days without reopening; this is not the kind of "
+        "weekly or holiday closure this fallback is meant to cross"
+    )
 
 
 def resample(

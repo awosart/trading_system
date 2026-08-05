@@ -21,7 +21,12 @@ from dataclasses import dataclass, field, replace
 
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
-from trading_system.backtest.orchestrator import BacktestResult, Orchestrator, StrategyBinding
+from trading_system.backtest.orchestrator import (
+    BacktestResult,
+    Orchestrator,
+    StrategyBinding,
+    derive_run_calendar,
+)
 from trading_system.backtest.reproducibility import CodeVersion, RunManifest
 from trading_system.core.instruments import InstrumentRegistry
 from trading_system.data.models import OHLCVFrame
@@ -73,6 +78,17 @@ class RunInputs:
             accumulate counters over one run, so a second run through the same
             instance would report the first one's as well.
         """
+        breakers = self.breakers
+        if breakers.calendar is None:
+            # Same derivation Orchestrator applies to Portfolio, applied here
+            # too: a run built through RunInputs always gets a real calendar
+            # when its instruments make one unambiguous. `None` stays
+            # reachable only by constructing CircuitBreakerConfig directly,
+            # not through this assembly point — an explicit calendar the
+            # caller already set is left alone rather than overridden.
+            breakers = breakers.model_copy(
+                update={"calendar": derive_run_calendar(self.streams, self.instruments)}
+            )
         return Orchestrator(
             config=self.config,
             streams=self.streams,
@@ -84,7 +100,7 @@ class RunInputs:
                 converter=self.converter,
                 config=self.risk,
                 portfolio=PortfolioRisk(self.limits),
-                breakers=CircuitBreakers(self.breakers),
+                breakers=CircuitBreakers(breakers),
             ),
             cost_model=CostModel(
                 {key.symbol: self.instruments[key.symbol] for key in self.streams}, self.costs
