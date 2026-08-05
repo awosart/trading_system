@@ -10,7 +10,7 @@ BIN := $(VENV)/bin
 install:
 	$(PYTHON) -m venv $(VENV)
 	$(BIN)/python -m pip install -qU pip uv
-	VIRTUAL_ENV=$(VENV) $(BIN)/uv pip install -e ".[dev]"
+	VIRTUAL_ENV=$(VENV) $(BIN)/uv pip install -e ".[dev,analytics]"
 
 lint:
 	$(BIN)/ruff check src/ tests/
