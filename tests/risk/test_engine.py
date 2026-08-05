@@ -62,6 +62,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("1.00")
@@ -82,6 +84,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("1.50")
@@ -98,6 +102,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("10")
@@ -114,6 +120,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("0.5")
@@ -129,6 +137,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("10")
@@ -143,6 +153,8 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("2")
@@ -158,12 +170,16 @@ class TestHandComputedSizes:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         short = engine.evaluate(
             signal_with_stop_points(registry, "EURUSD", points=50, side=Side.SELL),
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert long.size == short.size
         assert long.stop_price < PRICES["EURUSD"] < short.stop_price
@@ -188,6 +204,8 @@ class TestQualityFloor:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.QUALITY_BELOW_FLOOR
@@ -209,6 +227,8 @@ class TestQualityFloor:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.risk_amount == Decimal("200")
@@ -227,6 +247,8 @@ class TestQualityFloor:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.risk_amount == Decimal("1000")
@@ -246,6 +268,8 @@ class TestQualityFloor:
                 account=account,
                 stop_reference=NEVER_BINDING,
                 smallest_exit_fraction=WHOLE,
+                bar_index=0,
+                trades=(),
             )
         assert engine.rejections[RiskReason.QUALITY_BELOW_FLOOR] == 3
         assert engine.refused == 3
@@ -274,6 +298,8 @@ class TestQualityFloor:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         engine.reset()
         assert engine.refused == 0
@@ -296,6 +322,8 @@ class TestMinimumLot:
             account=tiny,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.BELOW_MIN_LOT
@@ -314,6 +342,8 @@ class TestMinimumLot:
             account=tiny,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.stop_price == pytest.approx(1.0800)
 
@@ -331,6 +361,8 @@ class TestMinimumLot:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("0.27")
@@ -354,6 +386,8 @@ class TestMinimumLot:
             account=big,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.ABOVE_MAX_LOT
@@ -381,6 +415,8 @@ class TestExitLadderExecutability:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert whole.approved
         assert whole.size == Decimal("0.10")
@@ -390,6 +426,8 @@ class TestExitLadderExecutability:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=Decimal("0.05"),
+            bar_index=0,
+            trades=(),
         )
         assert not laddered.approved
         assert laddered.rejection is RiskReason.EXIT_LADDER_UNEXECUTABLE
@@ -405,6 +443,8 @@ class TestExitLadderExecutability:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=Decimal("0.05"),
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.size == Decimal("1.00")
@@ -420,6 +460,8 @@ class TestExitLadderExecutability:
                 account=account,
                 stop_reference=NEVER_BINDING,
                 smallest_exit_fraction=Decimal("1.5"),
+                bar_index=0,
+                trades=(),
             )
 
 
@@ -442,6 +484,8 @@ class TestMissingFxRate:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.FX_RATE_UNAVAILABLE
@@ -463,6 +507,8 @@ class TestMissingFxRate:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
 
@@ -485,6 +531,8 @@ class TestPreArithmeticRefusals:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.UNKNOWN_INSTRUMENT
@@ -502,6 +550,8 @@ class TestPreArithmeticRefusals:
             account=dead,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert not decision.approved
         assert decision.rejection is RiskReason.NON_POSITIVE_EQUITY
@@ -516,6 +566,8 @@ class TestPreArithmeticRefusals:
             account=account,
             stop_reference=AtrStop(multiple=2.0),
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
             atr_price=None,
         )
         assert not decision.approved
@@ -537,6 +589,8 @@ class TestRiskCap:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
         )
         assert decision.approved
         assert decision.risk_amount == Decimal("200")
@@ -553,6 +607,8 @@ class TestRiskCap:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=WHOLE,
+            bar_index=0,
+            trades=(),
             atr_price=0.00005,
         )
         assert decision.approved
@@ -623,6 +679,8 @@ class TestRiskNeverExceedsTheCap:
             account=account,
             stop_reference=NEVER_BINDING,
             smallest_exit_fraction=smallest_fraction,
+            bar_index=0,
+            trades=(),
             atr_price=atr_price,
         )
         ceiling = equity * Decimal(str(max_risk_pct))

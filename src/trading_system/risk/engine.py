@@ -7,25 +7,38 @@ on are invisible here by design.
 
 **Order of operations, and why it is this one.**
 
-1. Refusals that need no arithmetic come first — unknown instrument, dead
-   account — so nothing further is computed against nonsense.
-2. The stop is placed. Size depends on the stop; the stop never depends on size.
-   :mod:`trading_system.risk.stop_calculator` guarantees the one-way direction.
-3. The sizing method proposes an amount of money to risk, or refuses.
-4. The proposal is **capped** at ``max_risk_pct`` of equity. One cap, one line,
-   applied to every method including a flat ``FixedAmount`` on a shrunken
-   account.
-5. Point value is converted into account currency. A missing rate refuses here,
-   after the stop is known, so the refusal still reports where the stop would
-   have gone.
-6. The size is quantised **down** to the lot grid, then checked against the
-   instrument's bounds and against the exit plan's smallest close.
+0. Refusals that need no arithmetic — unknown instrument, dead account — so
+   nothing below is computed against nonsense.
+1. **Circuit breakers.** Whether trading is permitted at all. First, because
+   nothing else matters if it is not, and because a size computed past a
+   tripped breaker is a number somebody will eventually read.
+2. **Portfolio limits.** Which bucket — portfolio, instrument, cluster,
+   strategy, direction — has the least headroom. No headroom anywhere means a
+   refusal here, before a stop is even placed.
+3. **The stop.** Size depends on the stop; the stop never depends on size.
+   :mod:`trading_system.risk.stop_calculator` guarantees that direction.
+4. **Sizing.** The method proposes an amount of money to risk, or refuses.
+5. **The cap and the correlation adjustment.** The proposal is capped at
+   ``max_risk_pct`` of equity, then trimmed to the tightest limit's headroom.
+   Both act on one number on one line, so no sizing method can escape either.
+6. **Lot rounding**, always down, then the instrument's bounds and the exit
+   plan's smallest close.
 7. ``risk_amount`` is recomputed from the quantised size. What the decision
    reports is what the account actually stands to lose, not what was asked for.
 
-Step 7 is what makes the cap exact rather than approximate. Quantisation only
-rounds down, so recomputing after it can only lower the figure — the reported
-risk is at or below the cap for every input, which is the property test's claim.
+Step 7 is what makes both ceilings exact rather than approximate. Quantisation
+only rounds down, so recomputing after it can only lower the figure — the
+reported risk is at or below the cap *and* at or below the headroom for every
+input, which is what the two property tests claim.
+
+**The portfolio guarantee is per decision, not across concurrent ones.** The
+engine has no memory of what it approved, so two signals evaluated against the
+same snapshot can jointly breach a limit neither breaches alone. Closing that
+inside the engine would take a reservation ledger with a confirm/discard
+protocol, and a forgotten discard is phantom heat that never expires. Instead
+the orchestrator feeds each approval back through
+:meth:`~trading_system.risk.models.AccountState.with_opened`, which makes the
+update a one-liner it cannot compute incorrectly.
 
 **The exit ladder check lives here**, because this is the only place that holds
 both a size in lots and the instrument's ``min_lot``. The Exit Engine deliberately
@@ -40,7 +53,7 @@ the same class of defect that made ``source`` mandatory on
 Exit Engine — the mirror of the Exit Engine not importing this one.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from types import MappingProxyType
 
@@ -50,7 +63,9 @@ from trading_system.core.instruments import InstrumentRegistry
 from trading_system.core.logging import get_logger
 from trading_system.core.types import Price
 from trading_system.entry.signal import EntrySignal
+from trading_system.risk.circuit_breakers import CircuitBreakers, ClosedTrade
 from trading_system.risk.conversion import FxConverter, FxRateUnavailableError
+from trading_system.risk.correlation import CorrelationProvider
 from trading_system.risk.models import (
     NO_STOP,
     AccountState,
@@ -59,6 +74,7 @@ from trading_system.risk.models import (
     empty_rejection_counts,
     reason_line,
 )
+from trading_system.risk.portfolio_risk import PortfolioRisk, binding_limit
 from trading_system.risk.sizing.base import SizingMethod, SizingRequest
 from trading_system.risk.stop_calculator import (
     StopBufferConfig,
@@ -68,6 +84,10 @@ from trading_system.risk.stop_calculator import (
 from trading_system.strategies.schema import StopReference
 
 logger = get_logger(__name__)
+
+#: Placeholder threshold used when no correlation provider is configured. With
+#: no matrix, clustering is by manual groups alone and no comparison happens.
+DEFAULT_CORRELATION_THRESHOLD = 1.0
 
 
 class RiskEngineConfig(BaseModel):
@@ -90,7 +110,17 @@ class RiskEngineConfig(BaseModel):
 class RiskEngine:
     """Turns scored signals into sizes, and counts everything it refuses."""
 
-    __slots__ = ("_config", "_converter", "_instruments", "_rejections", "_sizing")
+    __slots__ = (
+        "_breakers",
+        "_config",
+        "_converter",
+        "_correlations",
+        "_degradations",
+        "_instruments",
+        "_portfolio",
+        "_rejections",
+        "_sizing",
+    )
 
     def __init__(
         self,
@@ -99,6 +129,9 @@ class RiskEngine:
         sizing: SizingMethod,
         converter: FxConverter,
         config: RiskEngineConfig | None = None,
+        portfolio: PortfolioRisk | None = None,
+        breakers: CircuitBreakers | None = None,
+        correlations: CorrelationProvider | None = None,
     ) -> None:
         """Wire the engine to its dependencies.
 
@@ -109,12 +142,51 @@ class RiskEngine:
                 would have to be a converter that answers something, and every
                 answer it could invent is a wrong position size.
             config: Engine-wide settings. Defaults are conservative.
+            portfolio: Concurrent-risk limits. Defaults to
+                :class:`~trading_system.risk.portfolio_risk.PortfolioRisk`'s own
+                conservative ceilings with no manual groups.
+            breakers: When to stop trading altogether. Defaults to the three
+                period loss limits with no bar-counted pauses.
+            correlations: Measured co-movement, or ``None`` to cluster by the
+                configured manual groups alone. ``None`` is a *choice* — the run
+                is stating it has no return history to measure — and is distinct
+                from a provider that has too little history for a given pair,
+                which is recorded as a degradation.
         """
         self._instruments = instruments
         self._sizing = sizing
         self._converter = converter
         self._config = config if config is not None else RiskEngineConfig()
+        self._portfolio = portfolio if portfolio is not None else PortfolioRisk()
+        self._breakers = breakers if breakers is not None else CircuitBreakers()
+        self._correlations = correlations
         self._rejections = empty_rejection_counts()
+        self._degradations: dict[RiskReason, int] = {RiskReason.CORRELATION_UNAVAILABLE: 0}
+
+    @property
+    def _correlation_threshold(self) -> float:
+        """Absolute correlation at which two instruments become one cluster."""
+        return (
+            self._correlations.config.threshold
+            if self._correlations is not None
+            else DEFAULT_CORRELATION_THRESHOLD
+        )
+
+    @property
+    def breakers(self) -> CircuitBreakers:
+        """The circuit breakers, for the execution layer to report fills to."""
+        return self._breakers
+
+    @property
+    def degradations(self) -> Mapping[RiskReason, int]:
+        """How often a decision was made on a weaker basis than configured.
+
+        Separate from :attr:`rejections` because these signals were *traded*.
+        Folding "sized on the manual prior because the correlation window was
+        short" into the refusal counts would hide both: the refusals would look
+        inflated and the degradations would look like no-trades.
+        """
+        return MappingProxyType(dict(self._degradations))
 
     def __repr__(self) -> str:
         """Compact description naming the sizing method and the cap."""
@@ -140,8 +212,15 @@ class RiskEngine:
         return sum(self._rejections.values())
 
     def reset(self) -> None:
-        """Zero the refusal counters, for the start of a new run or fold."""
+        """Return every counter and pause to its pre-run state.
+
+        Covers the breakers' bar-counted pauses too: a pause left armed from the
+        previous walk-forward fold would silently suppress the opening bars of
+        the next one.
+        """
         self._rejections = empty_rejection_counts()
+        self._degradations = {RiskReason.CORRELATION_UNAVAILABLE: 0}
+        self._breakers.reset()
 
     def evaluate(
         self,
@@ -150,6 +229,8 @@ class RiskEngine:
         account: AccountState,
         stop_reference: StopReference,
         smallest_exit_fraction: Decimal,
+        bar_index: int,
+        trades: Sequence[ClosedTrade],
         atr_price: float | None = None,
     ) -> RiskDecision:
         """Size one signal, or refuse it and say why.
@@ -163,6 +244,14 @@ class RiskEngine:
                 paired exit plan can ever close in one go, from
                 :meth:`~trading_system.exit.plan.ExitPlan.smallest_closing_fraction`.
                 Required, with no default — see the module docstring.
+            bar_index: Index of the bar being evaluated, for the bar-counted
+                pauses. Required rather than defaulted for the same reason
+                ``smallest_exit_fraction`` is: a default would turn "forgot to
+                pass it" into "the pause never expires" or "never starts".
+            trades: Every trade realised so far, for the period loss limits and
+                the losing-streak pause. Required and with no default: an empty
+                tuple is a legitimate state at the start of a run, but omission
+                would silently disable every breaker that was configured.
             atr_price: ATR in price units on the signal bar, when the run
                 computes one. Required by some stop and sizing configurations,
                 which refuse rather than substitute zero when it is absent.
@@ -192,13 +281,70 @@ class RiskEngine:
                 RiskReason.NON_POSITIVE_EQUITY,
                 f"equity is {account.equity}; there is nothing left to size against",
             )
+
+        # --- 1. Circuit breakers, before anything is computed ----------------
+        # Nothing below matters if trading is stopped, and a breaker that only
+        # ran after sizing would burn the work and, worse, invite someone to
+        # read the size it produced.
+        tripped = self._breakers.check(
+            at=signal.bar_close_ts, bar_index=bar_index, equity=account.equity, trades=trades
+        )
+        if tripped is not None:
+            return self._refuse(tripped.reason, tripped.detail)
+
+        # --- 2. Portfolio limits ---------------------------------------------
+        matrix = (
+            self._correlations.matrix(as_of=signal.bar_close_ts)
+            if self._correlations is not None
+            else None
+        )
+        reasons: list[str] = []
+        if matrix is not None:
+            unmeasured = [
+                position.symbol
+                for position in account.open_risks
+                if position.symbol != signal.symbol
+                and matrix.get(signal.symbol, position.symbol) is None
+            ]
+            if unmeasured:
+                # Not a refusal: the signal is still sized, on the manual prior
+                # instead of a measurement. Counted separately so that neither
+                # fact hides the other.
+                self._degradations[RiskReason.CORRELATION_UNAVAILABLE] += 1
+                reasons.append(
+                    reason_line(
+                        RiskReason.CORRELATION_UNAVAILABLE,
+                        f"{signal.symbol} has too little overlapping history against "
+                        f"{sorted(set(unmeasured))}; clustered by the configured groups alone",
+                    )
+                )
+
+        checks = self._portfolio.checks(
+            account=account,
+            symbol=signal.symbol,
+            strategy_id=signal.strategy_id,
+            side=signal.side,
+            matrix=matrix,
+            threshold=self._correlation_threshold,
+        )
+        binding = binding_limit(checks)
+        if binding.headroom <= 0:
+            return self._refuse(
+                binding.reason,
+                f"{binding.bucket} already carries {binding.used} against a ceiling of "
+                f"{binding.ceiling}; no headroom for another position",
+                reasons=tuple(reasons),
+            )
+
         if requires_atr(stop_reference, self._config.stop_buffer) and atr_price is None:
             return self._refuse(
                 RiskReason.ATR_UNAVAILABLE,
                 f"{signal.symbol}: the stop configuration needs an ATR and none was computed "
                 "for this bar",
+                reasons=tuple(reasons),
             )
 
+        # --- 3. The stop, which the size then adapts to ----------------------
         stop = calculate_stop(
             side=signal.side,
             reference_price=signal.reference_price,
@@ -208,8 +354,11 @@ class RiskEngine:
             buffer=self._config.stop_buffer,
             atr_price=atr_price,
         )
-        reasons = [reason_line(RiskReason.STOP_FROM_INVALIDATION, line) for line in stop.reasons]
+        reasons.extend(
+            reason_line(RiskReason.STOP_FROM_INVALIDATION, line) for line in stop.reasons
+        )
 
+        # --- 4. Sizing -------------------------------------------------------
         outcome = self._sizing.size(
             SizingRequest(
                 equity=account.equity,
@@ -238,6 +387,22 @@ class RiskEngine:
                 )
             )
             requested = ceiling
+
+        # --- 5. Correlation adjustment: trim to the tightest limit's headroom -
+        # Trimmed rather than refused. Cutting size to fit a risk budget is this
+        # layer doing its job; contrast max_lot below, where hitting the venue's
+        # ceiling means the sizing has diverged from what the instrument
+        # supports and is worth surfacing instead of quietly shrinking.
+        if requested > binding.headroom:
+            reasons.append(
+                reason_line(
+                    RiskReason.TRIMMED_TO_LIMIT,
+                    f"{requested} trimmed to {binding.headroom}, the headroom left under the "
+                    f"{binding.reason.value} limit on {binding.bucket} "
+                    f"({binding.used} of {binding.ceiling} used)",
+                )
+            )
+            requested = binding.headroom
 
         try:
             fx_rate = self._converter.rate(

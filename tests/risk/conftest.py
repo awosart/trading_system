@@ -15,9 +15,12 @@ import pytest
 from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.types import Price, Side
 from trading_system.entry.signal import EntrySignal
+from trading_system.risk.circuit_breakers import CircuitBreakerConfig, CircuitBreakers
 from trading_system.risk.conversion import StaticFxConverter
+from trading_system.risk.correlation import CorrelationProvider
 from trading_system.risk.engine import RiskEngine, RiskEngineConfig
 from trading_system.risk.models import AccountState
+from trading_system.risk.portfolio_risk import PortfolioLimitsConfig, PortfolioRisk
 from trading_system.risk.sizing.base import SizingMethod
 from trading_system.risk.sizing.methods import FixedFractional
 from trading_system.risk.stop_calculator import StopBufferConfig
@@ -81,6 +84,21 @@ def exact_buffer() -> StopBufferConfig:
     return StopBufferConfig(spread_multiple=0.0, fixed_points=0.0, atr_multiple=0.0)
 
 
+#: Ceilings loose enough never to bind, for tests about something else.
+PERMISSIVE_LIMITS = PortfolioLimitsConfig(
+    max_portfolio_risk_pct=1.0,
+    max_instrument_risk_pct=1.0,
+    max_cluster_risk_pct=1.0,
+    max_strategy_risk_pct=1.0,
+    max_direction_risk_pct=1.0,
+)
+
+#: Breakers that never trip, for tests about something else.
+NO_BREAKERS = CircuitBreakerConfig(
+    max_daily_loss_pct=None, max_weekly_loss_pct=None, max_monthly_loss_pct=None
+)
+
+
 class EngineFactory(Protocol):
     """Builds a :class:`RiskEngine` with the pieces a test wants to vary."""
 
@@ -90,6 +108,9 @@ class EngineFactory(Protocol):
         *,
         max_risk_pct: float = 0.02,
         buffer: StopBufferConfig | None = None,
+        portfolio: PortfolioRisk | None = None,
+        breakers: CircuitBreakers | None = None,
+        correlations: CorrelationProvider | None = None,
     ) -> RiskEngine:
         """Build the engine."""
         ...
@@ -101,13 +122,21 @@ def engine_factory(
     converter: StaticFxConverter,
     exact_buffer: StopBufferConfig,
 ) -> EngineFactory:
-    """Build an engine with a given sizing method and cap."""
+    """Build an engine with a given sizing method and cap.
+
+    Portfolio limits and breakers default to inert, so a test about sizing is
+    not silently also a test of the portfolio ceilings. Tests that are about
+    those pass their own.
+    """
 
     def build(
         sizing: SizingMethod | None = None,
         *,
         max_risk_pct: float = 0.02,
         buffer: StopBufferConfig | None = None,
+        portfolio: PortfolioRisk | None = None,
+        breakers: CircuitBreakers | None = None,
+        correlations: CorrelationProvider | None = None,
     ) -> RiskEngine:
         return RiskEngine(
             instruments=registry,
@@ -117,6 +146,9 @@ def engine_factory(
                 max_risk_pct=max_risk_pct,
                 stop_buffer=buffer if buffer is not None else exact_buffer,
             ),
+            portfolio=portfolio if portfolio is not None else PortfolioRisk(PERMISSIVE_LIMITS),
+            breakers=breakers if breakers is not None else CircuitBreakers(NO_BREAKERS),
+            correlations=correlations,
         )
 
     return build

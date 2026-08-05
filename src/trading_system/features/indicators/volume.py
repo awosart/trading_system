@@ -13,14 +13,18 @@ unweighted mean of the typical price rather than dividing by zero.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import ClassVar
-from zoneinfo import ZoneInfo
 
 import polars as pl
 
 from trading_system.data.models import TIMESTAMP_COLUMN
-from trading_system.data.resample import FX_DAY_ORIGIN, DayOrigin
+from trading_system.data.resample import (
+    FX_DAY_ORIGIN,
+    DayOrigin,
+    anchor_offset,
+    trading_day,
+)
 from trading_system.features.base import BaseStreaming, ScalarIndicator
 from trading_system.features.expressions import (
     safe_divide,
@@ -30,11 +34,6 @@ from trading_system.features.expressions import (
 from trading_system.features.rolling import RollingWindow
 
 
-def _anchor_offset(origin: DayOrigin) -> timedelta:
-    """Distance from local midnight to the session anchor."""
-    return timedelta(hours=origin.at.hour, minutes=origin.at.minute, seconds=origin.at.second)
-
-
 def _session_key(origin: DayOrigin) -> pl.Expr:
     """Expression bucketing bars into trading days under ``origin``.
 
@@ -42,13 +41,7 @@ def _session_key(origin: DayOrigin) -> pl.Expr:
     arithmetic wall-clock, so a 23- or 25-hour DST day still maps to one bucket.
     """
     local = pl.col(TIMESTAMP_COLUMN).dt.convert_time_zone(origin.tz).dt.replace_time_zone(None)
-    return (local - _anchor_offset(origin)).dt.date()
-
-
-def _session_of(timestamp: datetime, origin: DayOrigin, offset: timedelta) -> object:
-    """Trading day a timestamp falls in, matching :func:`_session_key` exactly."""
-    local = timestamp.astimezone(ZoneInfo(origin.tz)).replace(tzinfo=None)
-    return (local - offset).date()
+    return (local - anchor_offset(origin)).dt.date()
 
 
 @dataclass(frozen=True)
@@ -158,7 +151,7 @@ class SessionVwapStream(BaseStreaming[SessionVwap, float]):
     def reset(self) -> None:
         """Drop the accumulators and the current session key."""
         self._origin = self._indicator.origin
-        self._offset = _anchor_offset(self._origin)
+        self._offset = anchor_offset(self._origin)
         self._session: object | None = None
         self._flow = 0.0
         self._weight = 0.0
@@ -176,7 +169,7 @@ class SessionVwapStream(BaseStreaming[SessionVwap, float]):
         /,
     ) -> float | None:
         """Accumulate within the session, restarting when the trading day rolls."""
-        session = _session_of(timestamp, self._origin, self._offset)
+        session = trading_day(timestamp, self._origin)
         if session != self._session:
             self._session = session
             self._flow = 0.0

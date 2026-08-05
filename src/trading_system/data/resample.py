@@ -14,7 +14,8 @@ summer, and the transition days are 23 or 25 hours long.
 """
 
 from dataclasses import dataclass
-from datetime import time
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import polars as pl
 
@@ -58,6 +59,52 @@ class DayOrigin:
 
 #: FX convention: the trading day rolls at 17:00 New York, tracking US DST.
 FX_DAY_ORIGIN = DayOrigin(tz="America/New_York", at=time(17, 0))
+
+
+def anchor_offset(origin: DayOrigin) -> timedelta:
+    """Distance from local midnight to the trading day's anchor.
+
+    Args:
+        origin: Trading-day anchor.
+
+    Returns:
+        The offset as a duration.
+    """
+    return timedelta(hours=origin.at.hour, minutes=origin.at.minute, seconds=origin.at.second)
+
+
+def trading_day(timestamp: datetime, origin: DayOrigin) -> date:
+    """Which trading day an instant belongs to under ``origin``.
+
+    The one definition of "what day is it" in this system. A session VWAP resets
+    on this boundary and so does a daily loss limit; if those were two functions
+    they could disagree, and the disagreement would be invisible — a trade booked
+    into one day by the indicator and the next day by the risk limit.
+
+    **The anchor instant is never constructed**, only the day label is computed.
+    Building "02:30 local on the reset date" and comparing against it breaks on
+    the spring-forward Sunday, when that local time does not exist, and is
+    ambiguous on the autumn one, when it happens twice. Converting the instant
+    into the zone and subtracting the offset in wall-clock terms is defined
+    everywhere and monotone. The consequence is correct rather than merely
+    tolerable: on a transition day the trading day really is 23 or 25 hours long.
+
+    Args:
+        timestamp: A tz-aware instant.
+        origin: Trading-day anchor: an IANA zone plus a local wall-clock time.
+            Never a fixed UTC offset — 17:00 New York is 22:00 UTC in winter and
+            21:00 UTC in summer, and a stored offset silently drifts twice a year.
+
+    Returns:
+        The date labelling the trading day the instant falls in.
+
+    Raises:
+        ValueError: If ``timestamp`` is naive.
+    """
+    if timestamp.tzinfo is None:
+        raise ValueError("timestamp must be tz-aware to be placed in a trading day")
+    local = timestamp.astimezone(ZoneInfo(origin.tz)).replace(tzinfo=None)
+    return (local - anchor_offset(origin)).date()
 
 
 def resample(

@@ -29,12 +29,12 @@ it is an edit with a test, not a config flag nobody remembers setting.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from trading_system.core.types import Price, ensure_utc
+from trading_system.core.types import Price, Side, ensure_utc
 
 #: Stop level on a refusal taken before any stop was computed.
 NO_STOP = Price(0.0)
@@ -60,12 +60,36 @@ class RiskReason(StrEnum):
     ABOVE_MAX_LOT = "above_max_lot"
     EXIT_LADDER_UNEXECUTABLE = "exit_ladder_unexecutable"
 
+    # --- refusals from portfolio limits (stage 2) -------------------------
+    PORTFOLIO_HEAT_EXCEEDED = "portfolio_heat_exceeded"
+    INSTRUMENT_LIMIT_EXCEEDED = "instrument_limit_exceeded"
+    CLUSTER_LIMIT_EXCEEDED = "cluster_limit_exceeded"
+    STRATEGY_LIMIT_EXCEEDED = "strategy_limit_exceeded"
+    DIRECTION_LIMIT_EXCEEDED = "direction_limit_exceeded"
+
+    # --- refusals from circuit breakers (stage 2) -------------------------
+    DAILY_LOSS_LIMIT = "daily_loss_limit"
+    WEEKLY_LOSS_LIMIT = "weekly_loss_limit"
+    MONTHLY_LOSS_LIMIT = "monthly_loss_limit"
+    CONSECUTIVE_LOSS_PAUSE = "consecutive_loss_pause"
+    SLIPPAGE_ANOMALY_PAUSE = "slippage_anomaly_pause"
+
     # --- explanations ---------------------------------------------------
     SIZED = "sized"
     STOP_FROM_INVALIDATION = "stop_from_invalidation"
     STOP_WIDENED_TO_BROKER_MINIMUM = "stop_widened_to_broker_minimum"
     RISK_CAPPED = "risk_capped"
     SIZE_ROUNDED_DOWN = "size_rounded_down"
+
+    #: Risk was cut to fit the headroom left under a portfolio limit. An
+    #: explanation, not a refusal: the trade still happens, smaller.
+    TRIMMED_TO_LIMIT = "trimmed_to_limit"
+
+    #: Clustering fell back to the configured manual groups because the
+    #: correlation window had too little overlapping history. Recorded rather
+    #: than counted as a refusal — the signal was sized, on a prior instead of
+    #: a measurement, and conflating that with "no trade" would hide both.
+    CORRELATION_UNAVAILABLE = "correlation_unavailable"
 
 
 #: Every refusal reason. A decision carrying one of these is never approved.
@@ -80,6 +104,16 @@ REJECTION_REASONS: frozenset[RiskReason] = frozenset(
         RiskReason.BELOW_MIN_LOT,
         RiskReason.ABOVE_MAX_LOT,
         RiskReason.EXIT_LADDER_UNEXECUTABLE,
+        RiskReason.PORTFOLIO_HEAT_EXCEEDED,
+        RiskReason.INSTRUMENT_LIMIT_EXCEEDED,
+        RiskReason.CLUSTER_LIMIT_EXCEEDED,
+        RiskReason.STRATEGY_LIMIT_EXCEEDED,
+        RiskReason.DIRECTION_LIMIT_EXCEEDED,
+        RiskReason.DAILY_LOSS_LIMIT,
+        RiskReason.WEEKLY_LOSS_LIMIT,
+        RiskReason.MONTHLY_LOSS_LIMIT,
+        RiskReason.CONSECUTIVE_LOSS_PAUSE,
+        RiskReason.SLIPPAGE_ANOMALY_PAUSE,
     }
 )
 
@@ -111,6 +145,46 @@ def empty_rejection_counts() -> dict[RiskReason, int]:
 
 
 @dataclass(frozen=True)
+class OpenRisk:
+    """What one already-open position has at stake.
+
+    The portfolio limits need composition, not just a total: "0.5% of equity is
+    already at risk" cannot answer whether another EURUSD position breaches the
+    per-instrument limit, or whether three USD-shorts have become one oversized
+    bet. Each open position contributes one of these.
+
+    Attributes:
+        symbol: Instrument held.
+        strategy_id: Strategy that opened it, for the per-strategy limit.
+        side: Direction of the exposure, for the per-direction limit.
+        risk_amount: Money that would be lost if this position's stop is hit, in
+            account currency. Positive. Recomputed by the caller when a stop is
+            tightened or a partial is closed — a trailing stop that has moved to
+            breakeven puts nothing at risk any more, and holding the value fixed
+            at entry would keep charging the portfolio for a risk that no longer
+            exists.
+    """
+
+    symbol: str
+    strategy_id: str
+    side: Side
+    risk_amount: Decimal
+
+    def __post_init__(self) -> None:
+        """Reject a negative stake.
+
+        Raises:
+            ValueError: If ``risk_amount`` is negative. Zero is allowed: a
+                position whose stop has moved past breakeven genuinely risks
+                nothing.
+        """
+        if self.risk_amount < 0:
+            raise ValueError(
+                f"{self.symbol}: risk_amount must not be negative, got {self.risk_amount}"
+            )
+
+
+@dataclass(frozen=True)
 class AccountState:
     """The account as it stood when a signal arrived.
 
@@ -120,38 +194,74 @@ class AccountState:
     Attributes:
         currency: Account denomination. Every money figure the engine returns is
             in this currency.
-        balance: Closed-trade equity. Recorded for reporting and for stage 2;
-            **not** what size is computed from.
+        balance: Closed-trade equity. Recorded for reporting and for the weekly
+            and monthly circuit breakers; **not** what size is computed from.
         equity: Balance plus the floating result of open positions. This is the
             sizing base — see the module docstring.
         as_of: When this snapshot was taken, tz-aware. Also the instant FX rates
             are priced at.
-        open_risk_amount: Money at risk across positions already open, in account
-            currency. Stage 1 carries it without acting on it; the portfolio heat
-            cap that consumes it is stage 2.
+        open_risks: One entry per open position. The single source of truth for
+            what the portfolio has at stake: :attr:`open_risk_amount` is derived
+            from it rather than stored alongside it, because two fields holding
+            the same quantity drift the moment one of them is updated and the
+            other is not.
     """
 
     currency: str
     balance: Decimal
     equity: Decimal
     as_of: datetime
-    open_risk_amount: Decimal = Decimal(0)
+    open_risks: tuple[OpenRisk, ...] = ()
 
     def __post_init__(self) -> None:
         """Normalise the timestamp and reject impossible figures.
 
         Raises:
-            ValueError: If the currency is empty, ``as_of`` is naive, or
-                ``open_risk_amount`` is negative. A non-positive ``equity`` is
-                *not* rejected here — a blown account is a real state, and the
-                engine refuses to size against it rather than being unable to
-                describe it.
+            ValueError: If the currency is empty or ``as_of`` is naive. A
+                non-positive ``equity`` is *not* rejected here — a blown account
+                is a real state, and the engine refuses to size against it rather
+                than being unable to describe it.
         """
         object.__setattr__(self, "as_of", ensure_utc(self.as_of))
+        object.__setattr__(self, "open_risks", tuple(self.open_risks))
         if not self.currency:
             raise ValueError("account currency must be a non-empty code")
-        if self.open_risk_amount < 0:
-            raise ValueError(f"open_risk_amount must not be negative, got {self.open_risk_amount}")
+
+    @property
+    def open_risk_amount(self) -> Decimal:
+        """Total money at risk across open positions, in account currency."""
+        return sum((position.risk_amount for position in self.open_risks), Decimal(0))
+
+    def with_opened(
+        self, symbol: str, strategy_id: str, side: Side, risk: Decimal
+    ) -> "AccountState":
+        """This state, plus a position that has just been opened.
+
+        The engine has no memory of what it approved, so two signals evaluated
+        against the *same* snapshot can jointly breach a portfolio limit that
+        neither breaches alone. The engine cannot close that on its own — it
+        would need a reservation ledger with a confirm/discard protocol, and a
+        forgotten discard is phantom heat that never expires. Instead the
+        orchestrator feeds the approval back, and this makes that a one-liner it
+        cannot compute incorrectly.
+
+        Args:
+            symbol: Instrument opened.
+            strategy_id: Strategy that opened it.
+            side: Direction of the exposure.
+            risk: Money at stake, from :attr:`RiskDecision.risk_amount`.
+
+        Returns:
+            A new state including the position. Equity is unchanged: opening a
+            position books no profit or loss.
+        """
+        return replace(
+            self,
+            open_risks=(
+                *self.open_risks,
+                OpenRisk(symbol=symbol, strategy_id=strategy_id, side=side, risk_amount=risk),
+            ),
+        )
 
 
 @dataclass(frozen=True)
