@@ -15,6 +15,13 @@ runner = CliRunner()
 EXAMPLES_DIR = Path(strategy_schema_module.__file__).parent / "examples"
 EXAMPLE_PATHS = sorted(str(path) for path in EXAMPLES_DIR.glob("*.json"))
 
+#: Examples that set ``htf_filter_tf`` as a stated intent the Entry Engine
+#: cannot yet act on — a legitimate WARNING, not a defect. See
+#: ``check_htf_filter_unused`` in ``strategies/validator.py``.
+HTF_FILTER_EXAMPLES = {
+    path for path in EXAMPLE_PATHS if "htf_filter_tf" in Path(path).read_text(encoding="utf-8")
+}
+
 MINUTE_CSV_HEADER = "timestamp,open,high,low,close,volume\n"
 
 
@@ -74,10 +81,19 @@ def test_strategy_help_lists_subcommands() -> None:
 
 class TestStrategyValidate:
     def test_worked_examples_all_pass(self) -> None:
+        """Passes means exit code 0. A WARNING is not a failure to validate.
+
+        Two examples set ``htf_filter_tf``, which prints a warning line instead
+        of the bare ``OK`` — see ``HTF_FILTER_EXAMPLES``.
+        """
         result = runner.invoke(app, ["strategy", "validate", *EXAMPLE_PATHS])
         assert result.exit_code == 0, result.stdout
+        assert "[ERROR]" not in result.stdout
         for path in EXAMPLE_PATHS:
-            assert f"{path}: OK" in result.stdout
+            if path in HTF_FILTER_EXAMPLES:
+                assert f"{path}: [WARNING] htf_filter_unused" in result.stdout
+            else:
+                assert f"{path}: OK" in result.stdout
 
     def test_syntactically_broken_file_exits_nonzero(self, tmp_path: Path) -> None:
         broken = tmp_path / "broken.json"
@@ -107,6 +123,12 @@ class TestStrategyValidate:
         assert "no_such_preset" in result.stdout
 
     def test_a_real_preset_id_passes(self, tmp_path: Path) -> None:
+        """Passing means exit code 0 and no ERROR line, not a bare OK.
+
+        The base spec is ``EXAMPLE_PATHS[0]`` (``ema_pullback.json``), which
+        sets ``htf_filter_tf`` and so prints a WARNING line rather than OK —
+        the point under test here is ``exit_ref``, not that field.
+        """
         spec = json.loads(Path(EXAMPLE_PATHS[0]).read_text(encoding="utf-8"))
         spec["exit_ref"] = "conservative_2r"
         fixed = tmp_path / "good_exit_ref.json"
@@ -115,7 +137,7 @@ class TestStrategyValidate:
         result = runner.invoke(app, ["strategy", "validate", str(fixed)])
 
         assert result.exit_code == 0, result.stdout
-        assert f"{fixed}: OK" in result.stdout
+        assert "[ERROR]" not in result.stdout
 
     def test_a_broken_exit_library_is_reported_and_exits_nonzero(self, tmp_path: Path) -> None:
         broken_library = tmp_path / "library.json"

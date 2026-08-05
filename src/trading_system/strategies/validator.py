@@ -413,6 +413,44 @@ def check_timeframe_order(spec: StrategySpec) -> list[ValidationIssue]:
     return issues
 
 
+def check_htf_filter_unused(spec: StrategySpec) -> list[ValidationIssue]:
+    """Warn when ``htf_filter_tf`` is set on a spec that cannot act on it.
+
+    ``TimeframeSpec.htf_filter_tf`` exists in the schema, but nothing reads it:
+    :func:`~trading_system.entry.compiler.compile_entry` compiles one
+    :class:`~trading_system.entry.compiler.EntryEvaluator` per bar stream, and
+    every condition it evaluates — trigger, confirmation, invalidation, quality
+    modifier — resolves against that one stream's own columns. There is no
+    cross-timeframe read anywhere in the Entry Engine. A spec naming
+    ``htf_filter_tf`` therefore describes a filter that is silently never
+    applied, which is worse than the field not existing: an author who set it
+    has every reason to believe their strategy only trades with the daily trend
+    behind it, and it does not.
+
+    Args:
+        spec: Strategy to check.
+
+    Returns:
+        One ``WARNING`` if ``htf_filter_tf`` is set; otherwise empty.
+    """
+    if spec.timeframes.htf_filter_tf is None:
+        return []
+    return [
+        ValidationIssue(
+            severity=Severity.WARNING,
+            code="htf_filter_unused",
+            message=(
+                f"htf_filter_tf is set to {spec.timeframes.htf_filter_tf}, but "
+                "cross-timeframe conditions are not supported: no compiled entry reads "
+                "a bar stream other than the one it is evaluated on, so this filter is "
+                "never applied. Express the intended bias as a condition on signal_tf's "
+                "own features, or drop the field until cross-timeframe evaluation exists."
+            ),
+            path="timeframes.htf_filter_tf",
+        )
+    ]
+
+
 _BREAKOUT_OPS = frozenset({ConditionOp.CROSS_ABOVE, ConditionOp.CROSS_BELOW})
 
 
@@ -473,6 +511,7 @@ def validate_spec(
         *check_session_filters(spec),
         *check_exit_ref(spec, known_exit_ids),
         *check_timeframe_order(spec),
+        *check_htf_filter_unused(spec),
         *check_regime_trigger_contradiction(spec),
     ]
 

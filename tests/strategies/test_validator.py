@@ -14,6 +14,7 @@ from trading_system.strategies.validator import (
     check_exit_ref,
     check_feature_reference,
     check_feature_references,
+    check_htf_filter_unused,
     check_regime_trigger_contradiction,
     check_session_filters,
     check_timeframe_order,
@@ -188,6 +189,27 @@ class TestCheckTimeframeOrder:
         assert check_timeframe_order(spec) == []
 
 
+class TestCheckHtfFilterUnused:
+    def test_htf_filter_tf_set_is_flagged(self, minimal_spec_dict: dict[str, Any]) -> None:
+        minimal_spec_dict["timeframes"] = {
+            "signal_tf": "H4",
+            "htf_filter_tf": "D1",
+            "entry_tf": "H1",
+        }
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        issues = check_htf_filter_unused(spec)
+        assert [issue.code for issue in issues] == ["htf_filter_unused"]
+        assert issues[0].severity is Severity.WARNING
+        assert issues[0].path == "timeframes.htf_filter_tf"
+        assert "D1" in issues[0].message
+        assert "not supported" in issues[0].message
+
+    def test_absent_htf_filter_is_silent(self, minimal_spec_dict: dict[str, Any]) -> None:
+        minimal_spec_dict["timeframes"] = {"signal_tf": "M15", "entry_tf": "M15"}
+        spec = StrategySpec.model_validate(minimal_spec_dict)
+        assert check_htf_filter_unused(spec) == []
+
+
 class TestCheckRegimeTriggerContradiction:
     def test_warns_on_range_with_breakout_shaped_trigger(
         self, minimal_spec_dict: dict[str, Any]
@@ -224,8 +246,18 @@ class TestValidateSpec:
 
     @pytest.mark.parametrize("path", EXAMPLE_FILES, ids=lambda p: p.stem)
     def test_worked_examples_are_clean(self, path: Path) -> None:
+        """Clean means no ERROR. A WARNING can be legitimate on a shipped example.
+
+        Two of the three examples set ``htf_filter_tf`` as a stated intent (an
+        H4/D1 trend bias) that the Entry Engine cannot yet act on — see
+        :class:`TestCheckHtfFilterUnused`. That is real information about the
+        current state of the system, not a defect in the example files, so this
+        only asserts the one code a clean example may legitimately carry.
+        """
         spec = StrategySpec.model_validate_json(path.read_text(encoding="utf-8"))
-        assert validate_spec(spec) == []
+        issues = validate_spec(spec)
+        assert all(issue.severity is not Severity.ERROR for issue in issues), issues
+        assert all(issue.code == "htf_filter_unused" for issue in issues), issues
 
 
 class TestCheckUniqueIds:
