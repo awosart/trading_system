@@ -5,6 +5,7 @@ from typing import Any
 
 import polars as pl
 import pytest
+from structlog.testing import capture_logs
 
 from tests.backtest.conftest import (
     EURUSD_H1,
@@ -400,3 +401,60 @@ class TestSignalTimeframeMustMatchTheStream:
             costs=flat_costs(),
         )
         assert instance is not None
+
+
+class TestAtrWarmupIsReportedNotAutoScaled:
+    """Excess ``atr_ratio`` warmup is a warning at construction, never a silent rescale.
+
+    CLAUDE.md rules out config magic: ``atr_baseline_bars`` is one number a run
+    applies to every stream it trades, and scaling it to fit whatever data
+    happened to be passed in would turn a config choice into a moving target
+    nobody could reason about from the config alone. This reports the measured
+    fraction and leaves the decision — a smaller ``atr_baseline_bars``, a finer
+    timeframe, or accepting the warmup — to whoever reads the log.
+    """
+
+    def test_a_warmup_exceeding_the_threshold_is_reported_with_the_fraction(
+        self, registry: InstrumentRegistry
+    ) -> None:
+        frame = bars([1.1000 + 0.0001 * i for i in range(10)])
+        config = BacktestConfig(atr_period=3, atr_baseline_bars=5)
+        with capture_logs() as logs:
+            orchestrator(
+                registry=costless_registry(registry),
+                streams={EURUSD_H1: frame},
+                bindings=[],
+                config=config,
+                costs=flat_costs(),
+            )
+        warnings = [
+            entry
+            for entry in logs
+            if entry["event"] == "backtest.atr_ratio_warmup_exceeds_threshold"
+        ]
+        assert len(warnings) == 1
+        warning = warnings[0]
+        assert warning["log_level"] == "warning"
+        assert warning["stream"] == str(EURUSD_H1)
+        # warmup = atr_period + atr_baseline_bars - 1 = 3 + 5 - 1 = 7, of 10 bars.
+        assert warning["unavailable_bars"] == 7
+        assert warning["total_bars"] == 10
+        assert warning["fraction"] == pytest.approx(0.7)
+
+    def test_a_warmup_within_the_threshold_is_silent(self, registry: InstrumentRegistry) -> None:
+        frame = bars([1.1000 + 0.0001 * i for i in range(1000)])
+        config = BacktestConfig(atr_period=3, atr_baseline_bars=5)
+        with capture_logs() as logs:
+            orchestrator(
+                registry=costless_registry(registry),
+                streams={EURUSD_H1: frame},
+                bindings=[],
+                config=config,
+                costs=flat_costs(),
+            )
+        warnings = [
+            entry
+            for entry in logs
+            if entry["event"] == "backtest.atr_ratio_warmup_exceeds_threshold"
+        ]
+        assert warnings == []

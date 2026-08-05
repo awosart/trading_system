@@ -418,6 +418,7 @@ class Orchestrator:
         self._series: dict[StreamKey, BarSeries] = {}
         self._atr: dict[StreamKey, list[float | None]] = {}
         self._atr_ratio: dict[StreamKey, list[float | None]] = {}
+        self._atr_ratio_coverage: dict[StreamKey, AtrRatioCoverage] = {}
         self._registries: dict[StreamKey, FeatureRegistry] = {}
         for key, frame in streams.items():
             on_stream = [binding for binding in self._bindings if key in binding.keys]
@@ -432,6 +433,10 @@ class Orchestrator:
             self._series[key] = series
             self._atr[key] = atr
             self._atr_ratio[key] = ratio
+            self._atr_ratio_coverage[key] = AtrRatioCoverage(
+                bars=len(ratio), unavailable=sum(1 for value in ratio if value is None)
+            )
+        self._report_atr_warmup()
 
         # One compiled engine per (strategy, stream): an EntryEvaluator tracks a
         # single pending setup, so it is bound to one bar stream.
@@ -536,12 +541,7 @@ class Orchestrator:
             signal_drops=dict(self._signal_drops),
             expired_orders=self._expired_orders,
             cost_degradations={reason.value: value for reason, value in stats.fractions.items()},
-            atr_ratio_coverage={
-                key: AtrRatioCoverage(
-                    bars=len(ratios), unavailable=sum(1 for ratio in ratios if ratio is None)
-                )
-                for key, ratios in self._atr_ratio.items()
-            },
+            atr_ratio_coverage=dict(self._atr_ratio_coverage),
             fills=stats.fills,
             fx_fallback_marks=self._portfolio.fx_fallback_marks,
             open_at_end=len(self._portfolio.open_positions),
@@ -1042,6 +1042,43 @@ class Orchestrator:
                     detail=(
                         "fills were priced on the model's prior rather than a measurement; "
                         "lower atr_baseline_bars for this timeframe"
+                    ),
+                )
+
+    def _report_atr_warmup(self) -> None:
+        """Say out loud when a stream's own bar count makes ``atr_ratio`` warmup too large.
+
+        Checked at construction, against the stream itself — before a single
+        bar has been walked, and independent of whether the run goes on to
+        produce any fills at all, which is what :meth:`_report_cost_coverage`'s
+        fill-denominated check depends on and can never see for a strategy that
+        trades rarely. ``atr_baseline_bars`` is one number a run applies to
+        every stream it trades; the warmup it costs is a fixed bar count, so
+        the coarser a stream's timeframe, the larger a share of it that count
+        eats — the same number that is 1.7% of five years of H1 is 40% of five
+        years of D1.
+
+        Deliberately not auto-corrected. Scaling ``atr_baseline_bars`` to the
+        data would be exactly the config magic CLAUDE.md rules out: a config
+        error must fail loudly at load time, not get silently repaired into a
+        different, unstated configuration. This reports the measured fraction
+        and leaves the choice — a smaller ``atr_baseline_bars``, a finer
+        timeframe, or accepting the run as it is — to whoever reads the log.
+        """
+        for key, coverage in self._atr_ratio_coverage.items():
+            if coverage.fraction > self._config.atr_unavailable_report_threshold:
+                logger.warning(
+                    "backtest.atr_ratio_warmup_exceeds_threshold",
+                    stream=str(key),
+                    unavailable_bars=coverage.unavailable,
+                    total_bars=coverage.bars,
+                    fraction=round(coverage.fraction, 4),
+                    threshold=self._config.atr_unavailable_report_threshold,
+                    atr_period=self._config.atr_period,
+                    atr_baseline_bars=self._config.atr_baseline_bars,
+                    detail=(
+                        "atr_ratio is None for this share of the stream's own bars; lower "
+                        "atr_baseline_bars for this timeframe, or accept the warmup"
                     ),
                 )
 
