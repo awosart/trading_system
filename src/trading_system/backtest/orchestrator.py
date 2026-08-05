@@ -56,7 +56,12 @@ from trading_system.core.types import Bar, OrderType, Price, Side
 from trading_system.data.models import OHLCVFrame
 from trading_system.entry.compiler import EntryEngine, compile_entry
 from trading_system.entry.context import BarSeries
-from trading_system.entry.features import FeatureRegistry
+from trading_system.entry.features import (
+    FeatureRegistry,
+    iter_feature_refs,
+    required_label_categories,
+)
+from trading_system.entry.labels import LabelCategory
 from trading_system.entry.signal import EntrySignal
 from trading_system.execution.costs import CostModel, accrue_swap
 from trading_system.execution.fill_model import (
@@ -71,11 +76,24 @@ from trading_system.execution.market_state import MarketState
 from trading_system.execution.orders import ExecutionOrder, Fill
 from trading_system.exit.base import ExitDecision, ExitDropReason, ExitKind, empty_drop_counts
 from trading_system.exit.context import ExitContext
-from trading_system.exit.library import ExitPresetSpec, build_plan
+from trading_system.exit.library import (
+    ATRStopSpec,
+    AtrTrailSpec,
+    ChandelierSpec,
+    ExitPresetSpec,
+    MaTrailSpec,
+    StructureStopSpec,
+    TrailingSourceSpec,
+    TrailingStopSpec,
+    build_plan,
+)
 from trading_system.exit.plan import DeferredExit
 from trading_system.exit.position import ManagedPosition
 from trading_system.exit.pricing import decision_level
+from trading_system.features.indicators.structure import SwingPoints
+from trading_system.features.indicators.trend import EMA
 from trading_system.features.indicators.volatility import ATR
+from trading_system.features.pipeline import FeaturePipeline, FeatureSpec
 from trading_system.risk.circuit_breakers import SlippageReport
 from trading_system.risk.conversion import FxConverter
 from trading_system.risk.engine import RiskEngine
@@ -316,31 +334,52 @@ class Orchestrator:
             stop=GapFill(),
         )
 
-        self._series: dict[StreamKey, BarSeries] = {}
-        self._atr: dict[StreamKey, list[float | None]] = {}
-        self._atr_ratio: dict[StreamKey, list[float | None]] = {}
-        for key, frame in streams.items():
-            series, atr, ratio = self._prepare(key, frame)
-            self._series[key] = series
-            self._atr[key] = atr
-            self._atr_ratio[key] = ratio
-
         self._bindings = tuple(bindings)
         for binding in self._bindings:
-            missing = [key for key in binding.keys if key not in self._series]
+            missing = [key for key in binding.keys if key not in streams]
             if missing:
                 raise ValueError(
                     f"strategy {binding.spec.id} names streams not supplied: "
                     f"{', '.join(str(key) for key in missing)}"
                 )
-        # One compiled engine per (strategy, stream): an EntryEvaluator tracks a
-        # single pending setup, so it is bound to one bar stream. The registry is
-        # derived from the spec rather than passed in — it is the set of features
-        # that spec references, and nothing else may resolve.
-        self._entries: dict[tuple[str, StreamKey], EntryEngine] = {
-            (binding.spec.id, key): compile_entry(
-                binding.spec, FeatureRegistry.from_strategy(binding.spec)
+
+        # One FeatureRegistry per STREAM, not per strategy — built from the union
+        # of every binding that trades it. FeatureRegistry already dedups by the
+        # resolved indicator's own name (entry/features.py), so two strategies
+        # both asking for ema(period=50) collapse onto one FeatureSpec and the
+        # pipeline built from it computes that column once. Passing the merged,
+        # superset registry into `compile_entry` for each individual strategy is
+        # safe: a registry only has to CONTAIN a strategy's own references, and
+        # extra ones it never resolves are never read.
+        #
+        # The registry alone is not the whole story: a position's ExitPlan reads
+        # its own columns — an ATR-based stop, a swing-based trail — by name,
+        # through `exit/rules/_features.py`, never through a FeatureRef the
+        # Entry-side registry could see. The FeaturePipeline actually computed
+        # for a stream is therefore the union of the entry registry's specs AND
+        # every exit preset's own feature needs, not the registry alone.
+        self._series: dict[StreamKey, BarSeries] = {}
+        self._atr: dict[StreamKey, list[float | None]] = {}
+        self._atr_ratio: dict[StreamKey, list[float | None]] = {}
+        self._registries: dict[StreamKey, FeatureRegistry] = {}
+        for key, frame in streams.items():
+            on_stream = [binding for binding in self._bindings if key in binding.keys]
+            specs_on_stream = [binding.spec for binding in on_stream]
+            registry = _merged_registry(specs_on_stream)
+            self._registries[key] = registry
+            feature_specs = _merged_feature_specs(
+                registry.specs, [binding.exit_preset for binding in on_stream]
             )
+            categories = _merged_label_categories(specs_on_stream)
+            series, atr, ratio = self._prepare(key, frame, feature_specs, categories)
+            self._series[key] = series
+            self._atr[key] = atr
+            self._atr_ratio[key] = ratio
+
+        # One compiled engine per (strategy, stream): an EntryEvaluator tracks a
+        # single pending setup, so it is bound to one bar stream.
+        self._entries: dict[tuple[str, StreamKey], EntryEngine] = {
+            (binding.spec.id, key): compile_entry(binding.spec, self._registries[key])
             for binding in self._bindings
             for key in binding.keys
         }
@@ -636,19 +675,27 @@ class Orchestrator:
     # ------------------------------------------------------------------
 
     def _prepare(
-        self, key: StreamKey, frame: OHLCVFrame
+        self,
+        key: StreamKey,
+        frame: OHLCVFrame,
+        feature_specs: Sequence[FeatureSpec],
+        categories: Sequence[LabelCategory],
     ) -> tuple[BarSeries, list[float | None], list[float | None]]:
-        """Materialise one stream's bars and its volatility columns.
+        """Materialise one stream's bars, its features and its volatility columns.
 
-        Computed vectorised, once, before the loop, and never inside it — which
-        is what keeps a five-year three-instrument run inside its time budget.
-        This is not lookahead: P03 indicators are causal by construction, and
+        Features are computed vectorised, once per stream, from every column any
+        strategy's entry or any of its exit's rules needs on that stream — not
+        once per strategy and not once per position. Computed before the loop
+        and never inside it, alongside the ATR columns, which is what keeps a
+        five-year three-instrument run inside its time budget. This is not
+        lookahead: P03 indicators are causal by construction, and
         ``BaseIndicator.verify_parity`` proves the vectorised and incremental
         forms agree to 1e-9 over the whole registry.
         """
         if frame.symbol != key.symbol or frame.timeframe is not key.timeframe:
             raise ValueError(f"stream keyed {key} holds {frame.symbol}@{frame.timeframe.value}")
-        series = BarSeries.from_frame(frame)
+        features = FeaturePipeline(feature_specs).compute(frame) if feature_specs else None
+        series = BarSeries.from_frame(frame, features=features, categories=categories)
         atr_column = ATR(period=self._config.atr_period).compute(frame)
         baseline = atr_column.rolling_mean(
             window_size=self._config.atr_baseline_bars,
@@ -932,6 +979,172 @@ class Orchestrator:
                         "lower atr_baseline_bars for this timeframe"
                     ),
                 )
+
+
+def _merged_registry(specs: Sequence[StrategySpec]) -> FeatureRegistry:
+    """One registry covering every feature any of ``specs`` references.
+
+    The union, not a list of per-strategy registries:
+    :class:`~trading_system.entry.features.FeatureRegistry` already collapses a
+    reference onto the resolved indicator's own name — the same key ``ema_50``
+    for two strategies that both ask for
+    ``FeatureRef(indicator="ema", params={"period": 50})``, however differently
+    each spelled it. Building one registry from the combined reference stream is
+    what makes that collapse happen once, for the whole stream, rather than once
+    per strategy with the pipeline computing the same column twice.
+
+    Args:
+        specs: Every strategy trading one stream.
+
+    Returns:
+        A registry resolving every reference any of them makes.
+    """
+    refs = [ref for spec in specs for ref in iter_feature_refs(spec)]
+    return FeatureRegistry(refs)
+
+
+def _merged_feature_specs(
+    entry_specs: Sequence[FeatureSpec], presets: Sequence[ExitPresetSpec]
+) -> tuple[FeatureSpec, ...]:
+    """Every column a stream's FeaturePipeline must compute.
+
+    The entry registry's own specs are only half of it. A position's
+    :class:`~trading_system.exit.plan.ExitPlan` reads its own columns — an
+    ATR-based stop, a swing-based trail — directly by name, through
+    :mod:`trading_system.exit.rules._features`, which is never reached by
+    :class:`~trading_system.entry.features.FeatureRegistry` at all: Exit
+    deliberately keeps its own naming convention rather than importing Entry's,
+    per P07's import discipline. This is the counterpart the module's own
+    docstring names as future work — "building the right FeaturePipeline for a
+    composed ExitPlan is a P07 stage 3 concern, once library.json exists to
+    declare it" — now that it does.
+
+    Deduplication is by column name, the same invariant
+    :class:`~trading_system.entry.features.FeatureRegistry` relies on: two specs
+    that would produce the same name are, by construction, the same indicator
+    resolved the same way, so the first one found wins rather than being
+    computed twice.
+
+    Args:
+        entry_specs: A stream's merged entry registry's specs.
+        presets: Every exit preset a position opened on this stream might use.
+
+    Returns:
+        The full set of specs to build one
+        :class:`~trading_system.features.pipeline.FeaturePipeline` from.
+    """
+    merged: dict[str, FeatureSpec] = {spec.name: spec for spec in entry_specs}
+    for preset in presets:
+        for spec in _exit_feature_specs(preset):
+            merged.setdefault(spec.name, spec)
+    return tuple(merged.values())
+
+
+def _exit_feature_specs(preset: ExitPresetSpec) -> list[FeatureSpec]:
+    """Every P03 column one exit preset's rules and modifiers read directly.
+
+    Mirrors exactly the fields the built rule objects gate their own
+    ``ctx.feature`` calls on — an ``ATRStop`` always reads its ATR, a
+    ``StructureStop`` always reads its swing but only reads an ATR when its
+    ``buffer_atr_multiple`` is positive — so a column this function omits is one
+    no rule in the preset would actually have asked for either. The five rules
+    and stop modifiers that read no feature at all (``ProtectiveStop``,
+    ``FixedRR``, ``PartialClose``, ``TimeExit``, ``SignalReverseExit``,
+    ``BreakevenMove``) contribute nothing, which they do simply by not matching
+    any branch below.
+
+    Args:
+        preset: The exit spec a position's plan will be built from.
+
+    Returns:
+        One :class:`~trading_system.features.pipeline.FeatureSpec` per column
+        some rule or modifier in the preset reads, before dedup against the
+        stream's other requirements.
+    """
+    specs: list[FeatureSpec] = []
+    for modifier in preset.stop_modifiers:
+        if isinstance(modifier, ATRStopSpec):
+            specs.append(_atr_feature(modifier.period))
+        elif isinstance(modifier, StructureStopSpec):
+            # swing_level() is called unconditionally; the ATR buffer only when
+            # buffer_atr_multiple is positive — the same two calls
+            # StructureStop.on_bar makes.
+            specs.append(_swing_feature(modifier.lookback))
+            if modifier.buffer_atr_multiple > 0:
+                specs.append(_atr_feature(modifier.atr_period))
+        elif isinstance(modifier, TrailingStopSpec):
+            specs.extend(_trailing_source_features(modifier.source))
+    return specs
+
+
+def _trailing_source_features(source: TrailingSourceSpec) -> list[FeatureSpec]:
+    """Feature columns one :class:`TrailingStopSpec` source reads.
+
+    Args:
+        source: Which of the four trailing sources is configured.
+
+    Returns:
+        The columns that source's branch of
+        :meth:`~trading_system.exit.rules.trailing_stop.TrailingStop._level`
+        reads.
+    """
+    if isinstance(source, AtrTrailSpec):
+        return [_atr_feature(source.period)]
+    if isinstance(source, ChandelierSpec):
+        # The rolling high/low extreme comes from raw OHLC via ctx.price, not a
+        # feature column; only the ATR distance is one.
+        return [_atr_feature(source.period)]
+    if isinstance(source, MaTrailSpec):
+        specs = [_ma_feature(source.period, source.source)]
+        if source.buffer_atr_multiple > 0:
+            specs.append(_atr_feature(source.atr_period))
+        return specs
+    # The remaining variant is SwingTrailSpec: swing_level() is called
+    # unconditionally, the ATR buffer only when configured.
+    specs = [_swing_feature(source.lookback)]
+    if source.buffer_atr_multiple > 0:
+        specs.append(_atr_feature(source.atr_period))
+    return specs
+
+
+def _atr_feature(period: int) -> FeatureSpec:
+    """The column :func:`~trading_system.exit.rules._features.atr_key` names."""
+    return FeatureSpec(name=ATR(period=period).name, kind="atr", params={"period": period})
+
+
+def _ma_feature(period: int, source: str) -> FeatureSpec:
+    """The column :func:`~trading_system.exit.rules._features.ma_key` names."""
+    indicator = EMA(period=period, source=source)
+    return FeatureSpec(name=indicator.name, kind="ema", params={"period": period, "source": source})
+
+
+def _swing_feature(lookback: int) -> FeatureSpec:
+    """The columns :func:`~trading_system.exit.rules._features.swing_keys` names."""
+    return FeatureSpec(
+        name=SwingPoints(lookback=lookback).name, kind="swing", params={"lookback": lookback}
+    )
+
+
+def _merged_label_categories(specs: Sequence[StrategySpec]) -> tuple[LabelCategory, ...]:
+    """Every label category any of ``specs`` asks about, in enum order.
+
+    Classifying candlesticks walks every bar in Python, so a stream none of whose
+    strategies mention ``pattern_is`` should not pay for it — but a stream where
+    even one of several strategies does must build the column, since it is one
+    shared :class:`~trading_system.entry.context.BarSeries` per stream, not one
+    per strategy.
+
+    Args:
+        specs: Every strategy trading one stream.
+
+    Returns:
+        The categories to classify, deduplicated and in
+        :class:`~trading_system.entry.labels.LabelCategory` order.
+    """
+    found: set[LabelCategory] = set()
+    for spec in specs:
+        found.update(required_label_categories(spec))
+    return tuple(category for category in LabelCategory if category in found)
 
 
 def _closing_size(decision: ExitDecision, position: ManagedPosition) -> Decimal:
