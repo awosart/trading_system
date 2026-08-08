@@ -1,28 +1,63 @@
 {
   "axes": [
     {
-      "name": "ema_slow",
+      "name": "confirmation_window_bars",
+      "paths": [
+        "/entries/0/confirmation_window_bars"
+      ],
+      "values": [
+        2,
+        4,
+        5,
+        7,
+        10
+      ]
+    },
+    {
+      "name": "ema_period_20",
+      "paths": [
+        "/entries/0/confirmation/0/right/params/period"
+      ],
+      "values": [
+        10,
+        14,
+        20,
+        28,
+        40
+      ]
+    },
+    {
+      "name": "ema_period_50",
       "paths": [
         "/entries/0/trigger/conditions/0/right/params/period",
         "/entries/0/invalidation/price_level/params/period"
       ],
-      "values": [30, 40, 50, 65, 80]
+      "values": [
+        25,
+        35,
+        50,
+        70,
+        100
+      ]
     },
     {
-      "name": "ema_fast",
-      "paths": ["/entries/0/confirmation/0/right/params/period"],
-      "values": [10, 15, 20, 25]
-    },
-    {
-      "name": "atr_stop_multiple",
-      "paths": ["/risk_profile/stop_reference/multiple"],
-      "values": [1.5, 2.0, 2.5, 3.0]
-    },
-    {
-      "name": "confirmation_window_bars",
-      "paths": ["/entries/0/confirmation_window_bars"],
-      "values": [3, 5, 8]
+      "name": "multiple",
+      "paths": [
+        "/risk_profile/stop_reference/multiple"
+      ],
+      "values": [
+        1,
+        1.5,
+        2,
+        2.5,
+        3
+      ]
     }
   ],
-  "constraints": [{ "less": "ema_fast", "greater": "ema_slow" }]
+  "constraints": [
+    {
+      "less": "ema_period_20",
+      "greater": "ema_period_50"
+    }
+  ]
 }
