@@ -437,7 +437,9 @@ class ResultsLink:
         self._append(result)
         return result
 
-    def grade(self, run_id: str, verdict: str) -> ResultRecord:
+    def grade(
+        self, run_id: str, verdict: str, *, metrics: Mapping[str, float] | None = None
+    ) -> ResultRecord:
         """Attach a verdict to a run already recorded.
 
         Grading is a second measurement over the same run: it needs the nulls
@@ -447,9 +449,19 @@ class ResultsLink:
         is refused rather than replaced, the same asymmetry
         :meth:`record` applies to metrics.
 
+        Grading also carries the numbers the grade was reached from — the null
+        percentiles. Those belong here rather than in the row's original metrics
+        for exactly the reason the verdict does: they are measured by the
+        grading pass, not by the run. Keeping them out would leave a reader able
+        to see ``OVERFIT`` but not how far from its nulls the run fell, which is
+        the part that says whether the call was close.
+
         Args:
             run_id: The run to grade.
             verdict: The verdict, e.g. ``"OVERFIT"``.
+            metrics: Measurements the grading pass produced, merged into the
+                row's metrics. Must not restate a metric the run already
+                reported under a different value.
 
         Returns:
             The graded record.
@@ -457,7 +469,8 @@ class ResultsLink:
         Raises:
             KeyError: If the run was never recorded. Grading a run nobody
                 stored would create a row whose metrics nothing measured.
-            ValidationError: If a *different* verdict is already attached.
+            ValidationError: If a *different* verdict is already attached, or if
+                ``metrics`` contradicts one the run itself reported.
         """
         existing = self.get(run_id)
         if existing is None:
@@ -470,7 +483,21 @@ class ResultsLink:
                 )
             return existing
 
-        graded = existing.model_copy(update={"verdict": verdict})
+        added = dict(metrics or {})
+        clashes = {
+            name: (existing.metrics[name], value)
+            for name, value in added.items()
+            if name in existing.metrics and existing.metrics[name] != value
+        }
+        if clashes:
+            raise ValidationError(
+                f"run {run_id}: grading would overwrite metrics the run itself reported: "
+                f"{clashes}. A grade adds measurements, it does not revise them."
+            )
+
+        graded = existing.model_copy(
+            update={"verdict": verdict, "metrics": {**existing.metrics, **added}}
+        )
         rows = [(graded if item.run_id == run_id else item).to_row() for item in self.records()]
         pl.DataFrame(rows).write_parquet(self._path)
         return graded

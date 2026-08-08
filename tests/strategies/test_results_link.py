@@ -278,6 +278,56 @@ class TestGrading:
         with pytest.raises(ValidationError, match="already graded"):
             link.grade("run-1", "ROBUST")
 
+    def test_grading_carries_the_numbers_the_grade_was_reached_from(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        # A reader who sees OVERFIT and cannot see how far from its nulls the
+        # run fell cannot tell whether the call was close.
+        link.record(record_for(spec, streams, instruments))
+        graded = link.grade(
+            "run-1",
+            "OVERFIT",
+            metrics={"permutation_percentile": 5.0, "synthetic_percentile": 20.0},
+        )
+        assert graded.metric("permutation_percentile") == 5.0
+        assert graded.metric("synthetic_percentile") == 20.0
+
+    def test_graded_metrics_join_the_ones_the_run_reported(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        graded = link.grade("run-1", "OVERFIT", metrics={"permutation_percentile": 5.0})
+        assert graded.metric("sharpe") == 1.4, "the run's own metrics were lost"
+
+    def test_graded_metrics_persist(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        link.grade("run-1", "OVERFIT", metrics={"permutation_percentile": 5.0})
+        reopened = ResultsLink(link.root).get("run-1")
+        assert reopened is not None and reopened.metric("permutation_percentile") == 5.0
+
+    def test_grading_may_not_revise_a_metric_the_run_reported(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        # A grade adds measurements over the same run; it does not get to
+        # restate what the run itself measured.
+        link.record(record_for(spec, streams, instruments))
+        with pytest.raises(ValidationError, match="does not revise"):
+            link.grade("run-1", "OVERFIT", metrics={"sharpe": 9.9})
+
+    def test_restating_a_metric_unchanged_is_allowed(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        assert link.grade("run-1", "OVERFIT", metrics={"sharpe": 1.4}).metric("sharpe") == 1.4
+
+    def test_grading_without_metrics_still_works(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        assert link.grade("run-1", "OVERFIT").verdict == "OVERFIT"
+
     def test_grading_a_run_nobody_recorded_is_refused(self, link: ResultsLink) -> None:
         with pytest.raises(KeyError, match="record it before grading"):
             link.grade("never-happened", "ROBUST")

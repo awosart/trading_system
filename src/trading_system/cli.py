@@ -74,6 +74,14 @@ from trading_system.validation.report import (
     write_report,
 )
 from trading_system.validation.robustness import run_all
+from trading_system.validation.space_builder import (
+    build_candidates,
+    build_space_document,
+    prune,
+    render,
+    verify,
+    write_space,
+)
 from trading_system.validation.splitting import PurgedKFold, WalkForwardMode, WalkForwardSplitter
 from trading_system.validation.walkforward import (
     WF_MANIFEST_FILE,
@@ -484,6 +492,64 @@ def strategy_approve(
         typer.echo(str(error))
         raise typer.Exit(code=1) from error
     typer.echo(f"Approved {record.id} v{record.spec.version} on run {run_id}")
+
+
+@strategy_app.command("space")
+def strategy_space(
+    strategy_id: str = typer.Argument(..., help="Strategy id in the library."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    out: Path | None = typer.Option(None, "--out", help="Where to write the draft space JSON."),
+    axis: list[str] = typer.Option(
+        [], "--axis", help="Keep only these axes; repeatable. Omit to keep every candidate."
+    ),
+    force: bool = typer.Option(False, "--force", help="Overwrite an existing --out file."),
+) -> None:
+    """Derive a draft search space from a strategy, pointers included.
+
+    Nobody types a JSON pointer: the tool walks the spec, groups every tunable
+    position by role, and writes the pointers itself. What is left to a human is
+    deleting axes that should not vary and editing ranges — both safe, neither
+    able to produce a pointer that does not resolve.
+
+    Ranges are proposals. The rule behind each is printed next to it, because an
+    author who disagrees with a range needs to know what they are disagreeing
+    with.
+    """
+    repository = StrategyRepository(library)
+    try:
+        record = repository.get(strategy_id)
+    except KeyError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+
+    spec = record.spec
+    candidates = build_candidates(spec)
+    typer.echo(render(spec, candidates))
+
+    document = build_space_document(spec, keep=axis or None)
+    document, notes = prune(spec, document)
+    for note in notes:
+        typer.echo(f"  pruned: {note}")
+
+    try:
+        verify(spec, document)
+    except ValidationError as error:
+        typer.echo(f"generated space does not apply cleanly: {error}")
+        raise typer.Exit(code=1) from error
+    typer.echo(
+        f"\nverified: {len(document['axes'])} axes, "
+        f"{sum(len(item['paths']) for item in document['axes'])} pointers all resolve, "
+        "every value leaves a valid spec."
+    )
+
+    if out is None:
+        typer.echo(json.dumps(document, indent=2))
+        return
+    if out.exists() and not force:
+        typer.echo(f"{out} exists; pass --force to overwrite.")
+        raise typer.Exit(code=1)
+    write_space(document, out)
+    typer.echo(f"Wrote {out}")
 
 
 @strategy_app.command("schema-export")
@@ -1217,12 +1283,25 @@ def validate_verdict(
 
     if record:
         link = ResultsLink(library_root)
+        measured = {
+            "permutation_percentile": permutation.percentile,
+            "synthetic_percentile": robustness.synthetic.real_percentile,
+            "null_iterations": float(n_null),
+        }
         try:
-            graded = link.grade(wf_id, verdict.verdict.value)
+            graded = link.grade(
+                wf_id,
+                verdict.verdict.value,
+                metrics={name: value for name, value in measured.items() if value is not None},
+            )
         except (KeyError, ValidationError) as error:
             typer.echo(f"  not graded: {error}")
             raise typer.Exit(code=1) from error
-        typer.echo(f"  graded {graded.strategy_id} -> {graded.verdict}")
+        typer.echo(
+            f"  graded {graded.strategy_id} -> {graded.verdict} "
+            f"(perm {graded.metric('permutation_percentile')}, "
+            f"synth {graded.metric('synthetic_percentile')})"
+        )
 
 
 @app.command()

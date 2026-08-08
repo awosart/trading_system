@@ -1,20 +1,45 @@
 {
   "axes": [
     {
-      "name": "rvol_period",
+      "name": "multiple",
       "paths": [
-        "/entries/0/trigger/conditions/0/left/params/period",
-        "/entries/1/trigger/conditions/0/left/params/period"
+        "/risk_profile/stop_reference/multiple"
       ],
-      "values": [10, 20, 30]
+      "values": [
+        0.5,
+        1,
+        1.5,
+        2,
+        2.5
+      ]
     },
     {
-      "name": "rvol_threshold",
+      "name": "rvol_gt_1.8",
       "paths": [
         "/entries/0/trigger/conditions/0/right",
         "/entries/1/trigger/conditions/0/right"
       ],
-      "values": [1.4, 1.8, 2.2, 3.0]
+      "values": [
+        0.8,
+        1.8,
+        2.8,
+        3.8
+      ]
+    },
+    {
+      "name": "rvol_period",
+      "paths": [
+        "/entries/0/trigger/conditions/0/left/params/period",
+        "/entries/1/trigger/conditions/0/left/params/period",
+        "/risk_profile/quality_modifiers/0/condition/left/params/period"
+      ],
+      "values": [
+        10,
+        14,
+        20,
+        28,
+        40
+      ]
     },
     {
       "name": "swing_lookback",
@@ -22,12 +47,12 @@
         "/entries/0/invalidation/price_level/params/lookback",
         "/entries/1/invalidation/price_level/params/lookback"
       ],
-      "values": [3, 5, 8]
-    },
-    {
-      "name": "atr_stop_multiple",
-      "paths": ["/risk_profile/stop_reference/multiple"],
-      "values": [1.0, 1.5, 2.0, 2.5]
+      "values": [
+        2,
+        3,
+        4,
+        6
+      ]
     }
   ]
 }

@@ -1,28 +1,46 @@
 {
   "axes": [
     {
-      "name": "band_period",
-      "paths": [
-        "/entries/0/trigger/conditions/0/right/params/period",
-        "/entries/1/trigger/conditions/0/right/params/period"
-      ],
-      "values": [14, 20, 30, 40]
-    },
-    {
-      "name": "band_std",
-      "paths": [
-        "/entries/0/trigger/conditions/0/right/params/num_std",
-        "/entries/1/trigger/conditions/0/right/params/num_std"
-      ],
-      "values": [1.8, 2.0, 2.5, 3.0]
-    },
-    {
-      "name": "adx_ceiling",
+      "name": "adx_lt_20",
       "paths": [
         "/entries/0/trigger/conditions/1/right",
         "/entries/1/trigger/conditions/1/right"
       ],
-      "values": [15.0, 20.0, 25.0]
+      "values": [
+        12,
+        16,
+        20,
+        24,
+        28
+      ]
+    },
+    {
+      "name": "bbands_num_std",
+      "paths": [
+        "/entries/0/trigger/conditions/0/right/params/num_std",
+        "/entries/1/trigger/conditions/0/right/params/num_std"
+      ],
+      "values": [
+        1,
+        1.5,
+        2,
+        2.5,
+        3
+      ]
+    },
+    {
+      "name": "bbands_period",
+      "paths": [
+        "/entries/0/trigger/conditions/0/right/params/period",
+        "/entries/1/trigger/conditions/0/right/params/period"
+      ],
+      "values": [
+        10,
+        14,
+        20,
+        28,
+        40
+      ]
     },
     {
       "name": "confirmation_window_bars",
@@ -30,7 +48,12 @@
         "/entries/0/confirmation_window_bars",
         "/entries/1/confirmation_window_bars"
       ],
-      "values": [2, 3, 5]
+      "values": [
+        2,
+        3,
+        4,
+        6
+      ]
     }
   ]
 }
