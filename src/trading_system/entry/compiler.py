@@ -73,6 +73,7 @@ from trading_system.strategies.schema import (
     StrategySpec,
     operand_labels,
     operand_price_field,
+    operand_shift,
 )
 
 logger = get_logger(__name__)
@@ -114,6 +115,14 @@ _SIDES: dict[Direction, Side] = {Direction.LONG: Side.BUY, Direction.SHORT: Side
 def compile_operand(operand: Operand, registry: FeatureRegistry) -> OperandFn:
     """Resolve one leaf operand into a reader over a bar context.
 
+    The operand's own ``shift`` is *added* to the lookback the operator asks
+    for, rather than replacing it. That is what makes a shifted operand compose
+    with a two-bar operator: ``close cross_above upper@1`` compares
+    ``close(t)`` against ``upper(t-1)`` and ``close(t-1)`` against
+    ``upper(t-2)`` — the crossing of a channel that never contained either bar
+    being compared. Replacing the lookback instead would pin both sides of the
+    comparison to one bar and turn every crossing into a level test.
+
     Args:
         operand: A feature reference, a ``price:<field>`` reference, or a
             constant.
@@ -126,13 +135,15 @@ def compile_operand(operand: Operand, registry: FeatureRegistry) -> OperandFn:
         ValidationError: If the operand is a feature this registry does not
             provide, or is not a recognisable operand at all.
     """
+    shift = operand_shift(operand)
+
     if isinstance(operand, FeatureRef):
         key = registry.resolve(operand)
-        return lambda ctx, lookback: ctx.feature(key, lookback)
+        return lambda ctx, lookback: ctx.feature(key, lookback + shift)
 
     price_field = operand_price_field(operand)
     if price_field is not None:
-        return lambda ctx, lookback: ctx.price(price_field, lookback)
+        return lambda ctx, lookback: ctx.price(price_field, lookback + shift)
 
     if isinstance(operand, float | int) and not isinstance(operand, bool):
         constant = float(operand)

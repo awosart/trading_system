@@ -94,17 +94,26 @@ class ConditionOp(StrEnum):
 
 
 _PRICE_FIELDS = ("open", "high", "low", "close", "volume")
-_PRICE_REF_PATTERN = re.compile(rf"^price:({'|'.join(_PRICE_FIELDS)})$")
+_PRICE_REF_PATTERN = re.compile(rf"^price:({'|'.join(_PRICE_FIELDS)})(?:@(\d+))?$")
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 _SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 _TIME_OF_DAY_PATTERN = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 
 
 def _validate_price_ref(value: str) -> str:
-    """Reject any string that isn't a ``price:<field>`` reference."""
+    """Reject any string that isn't a ``price:<field>`` or ``price:<field>@<shift>``."""
     if _PRICE_REF_PATTERN.match(value):
         return value
-    raise ValueError(f"{value!r} must match 'price:<{'|'.join(_PRICE_FIELDS)}>'")
+    if value.startswith("price:") and "@-" in value:
+        raise ValueError(
+            f"{value!r} shifts forward in time; a shift is a lookback in bars and "
+            "must be zero or positive. A negative shift would read a bar that has "
+            "not closed yet."
+        )
+    raise ValueError(
+        f"{value!r} must match 'price:<{'|'.join(_PRICE_FIELDS)}>' "
+        "optionally followed by '@<bars back>', e.g. 'price:close@1'"
+    )
 
 
 def _validate_time_of_day(value: str) -> str:
@@ -133,6 +142,23 @@ class FeatureRef(BaseModel):
             Required for multi-output indicators; must be omitted for
             single-output ones, which publish under their own name with no
             channel to choose between.
+        shift: How many bars back to read the value, added to whatever lookback
+            the operator itself asks for. Zero — the default — is the current
+            bar, so no existing spec changes meaning.
+
+            This exists because a whole class of rule is otherwise
+            inexpressible rather than merely awkward, and inexpressible
+            *silently*. A Donchian channel contains the current bar, so
+            ``upper >= high >= close`` always and ``close cross_above upper``
+            can never fire: the strategy compiles, runs, and takes zero trades,
+            which reads as a bad idea rather than as a sentence the schema
+            could not say. The rule that was meant — "price exceeded the range
+            of the previous ``N`` bars" — is ``shift=1`` on the channel. The
+            same applies to any band, envelope or extreme derived from a window
+            that includes the bar being tested.
+
+            Never negative: a negative shift reads a bar that has not closed,
+            which is the one thing no operand may do.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -140,6 +166,17 @@ class FeatureRef(BaseModel):
     indicator: str = Field(min_length=1)
     params: dict[str, Any] = Field(default_factory=dict)
     channel: str | None = Field(default=None, min_length=1)
+    shift: int = 0
+
+    @model_validator(mode="after")
+    def _shift_does_not_look_ahead(self) -> "FeatureRef":
+        """Reject a negative shift by name rather than by bound."""
+        if self.shift < 0:
+            raise ValueError(
+                f"shift must be zero or positive, got {self.shift}: a shift is a lookback "
+                "in bars, and a negative one would read a bar that has not closed yet"
+            )
+        return self
 
 
 class LabelSet(BaseModel):
@@ -219,12 +256,34 @@ def operand_price_field(operand: Operand | RangeBound) -> str | None:
         operand: A leaf condition's ``left`` or ``right`` value.
 
     Returns:
-        The field after ``price:`` (e.g. ``"close"``), or ``None`` for a
-        feature reference, constant, or range bound.
+        The field after ``price:`` (e.g. ``"close"``), with any ``@<shift>``
+        suffix stripped, or ``None`` for a feature reference, constant, or
+        range bound.
     """
     if isinstance(operand, str) and operand.startswith("price:"):
-        return operand.removeprefix("price:")
+        return operand.removeprefix("price:").split("@", 1)[0]
     return None
+
+
+def operand_shift(operand: Operand | RangeBound) -> int:
+    """How many bars back ``operand`` reads, zero when it says nothing.
+
+    One place computes this for both operand forms, so a caller cannot honour
+    :attr:`FeatureRef.shift` and quietly ignore ``price:close@1``.
+
+    Args:
+        operand: A leaf condition's ``left`` or ``right`` value.
+
+    Returns:
+        The shift in bars. Constants, label sets and range bounds have no
+        position in time and report zero.
+    """
+    if isinstance(operand, FeatureRef):
+        return operand.shift
+    if isinstance(operand, str) and operand.startswith("price:"):
+        _, _, suffix = operand.partition("@")
+        return int(suffix) if suffix else 0
+    return 0
 
 
 class LeafCondition(BaseModel):

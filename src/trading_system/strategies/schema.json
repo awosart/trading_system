@@ -345,7 +345,7 @@
     },
     "FeatureRef": {
       "additionalProperties": false,
-      "description": "A structural pointer to one channel of one registered indicator.\n\nReplaces an earlier ``\"feature:<name>\"`` string convention, which could not\ndistinguish a legitimate unusual parameter (``rsi`` with ``period=500``)\nfrom a typo, and had no way to say *which* channel of a multi-output\nindicator like MACD or Bollinger Bands was meant \u2014 both are things\n:mod:`trading_system.strategies.validator` must be able to check against\nthe real indicator registry, not guess at from a string.\n\nAttributes:\n    indicator: Registry key, e.g. ``\"rsi\"`` \u2014 see\n        :data:`~trading_system.features.registry.INDICATOR_TYPES`.\n    params: Constructor arguments for the indicator, e.g. ``{\"period\": 14}``.\n        Empty means every parameter takes its default.\n    channel: Which output channel to read, e.g. ``\"signal\"`` for MACD.\n        Required for multi-output indicators; must be omitted for\n        single-output ones, which publish under their own name with no\n        channel to choose between.",
+      "description": "A structural pointer to one channel of one registered indicator.\n\nReplaces an earlier ``\"feature:<name>\"`` string convention, which could not\ndistinguish a legitimate unusual parameter (``rsi`` with ``period=500``)\nfrom a typo, and had no way to say *which* channel of a multi-output\nindicator like MACD or Bollinger Bands was meant \u2014 both are things\n:mod:`trading_system.strategies.validator` must be able to check against\nthe real indicator registry, not guess at from a string.\n\nAttributes:\n    indicator: Registry key, e.g. ``\"rsi\"`` \u2014 see\n        :data:`~trading_system.features.registry.INDICATOR_TYPES`.\n    params: Constructor arguments for the indicator, e.g. ``{\"period\": 14}``.\n        Empty means every parameter takes its default.\n    channel: Which output channel to read, e.g. ``\"signal\"`` for MACD.\n        Required for multi-output indicators; must be omitted for\n        single-output ones, which publish under their own name with no\n        channel to choose between.\n    shift: How many bars back to read the value, added to whatever lookback\n        the operator itself asks for. Zero \u2014 the default \u2014 is the current\n        bar, so no existing spec changes meaning.\n\n        This exists because a whole class of rule is otherwise\n        inexpressible rather than merely awkward, and inexpressible\n        *silently*. A Donchian channel contains the current bar, so\n        ``upper >= high >= close`` always and ``close cross_above upper``\n        can never fire: the strategy compiles, runs, and takes zero trades,\n        which reads as a bad idea rather than as a sentence the schema\n        could not say. The rule that was meant \u2014 \"price exceeded the range\n        of the previous ``N`` bars\" \u2014 is ``shift=1`` on the channel. The\n        same applies to any band, envelope or extreme derived from a window\n        that includes the bar being tested.\n\n        Never negative: a negative shift reads a bar that has not closed,\n        which is the one thing no operand may do.",
       "properties": {
         "indicator": {
           "minLength": 1,
@@ -369,6 +369,11 @@
           ],
           "default": null,
           "title": "Channel"
+        },
+        "shift": {
+          "default": 0,
+          "title": "Shift",
+          "type": "integer"
         }
       },
       "required": [
