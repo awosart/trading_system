@@ -49,15 +49,6 @@ class StrategyType(StrEnum):
     POSITION = "POSITION"
 
 
-class Status(StrEnum):
-    """Lifecycle stage of a strategy definition."""
-
-    DRAFT = "DRAFT"
-    TESTING = "TESTING"
-    APPROVED = "APPROVED"
-    RETIRED = "RETIRED"
-
-
 class Regime(StrEnum):
     """Market regime a strategy is permitted to trade in."""
 
@@ -754,14 +745,20 @@ class StrategySpec(BaseModel):
     ``exit_ref`` rather than embedding an exit, and its output downstream is a
     :class:`~trading_system.core.types.Signal`, not an order.
 
+    Every field here answers *what is traded and under what conditions*, and
+    that is the whole membership rule. Bookkeeping — the human-readable name,
+    the author, where the idea came from, the lifecycle stage, tags and notes —
+    lives in :class:`~trading_system.strategies.repository.StrategyMeta`,
+    because this model is digested into a run id
+    (:class:`~trading_system.backtest.reproducibility.RunManifest`) and a field
+    that moves that digest without changing what is traded makes renaming an
+    author invalidate a verdict. ``version`` stays because it moves *with* what
+    is traded, where ``status`` moves against it.
+
     Attributes:
         id: Unique, stable slug (lower-kebab-case).
-        name: Human-readable name.
         version: Semantic version of this spec, ``"X.Y.Z"``.
-        author: Who defined the strategy.
-        source: Where the idea came from (URL, book, paper); optional.
         type: Holding-period class.
-        status: Lifecycle stage.
         timeframes: Timeframes the entry reasons across.
         instruments: Which instruments this strategy may trade.
         market_regimes: Regimes this strategy is permitted to trade in. Empty
@@ -776,19 +773,13 @@ class StrategySpec(BaseModel):
             Exit DB — never embedded, so entries and exits combine N×M.
         filters: Permission gates; each can only forbid, never encourage.
         risk_profile: Inputs to the Risk Engine's sizing and gating.
-        metadata: Free-form tags and notes. Never read by any control-flow
-            decision; a strategy field belongs above this dict, not inside it.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: str
-    name: str = Field(min_length=1)
     version: str
-    author: str = Field(min_length=1)
-    source: str | None = None
     type: StrategyType
-    status: Status = Status.DRAFT
     timeframes: TimeframeSpec
     instruments: InstrumentScope
     market_regimes: list[Regime] = Field(default_factory=list)
@@ -796,7 +787,6 @@ class StrategySpec(BaseModel):
     exit_ref: str = Field(min_length=1)
     filters: list[FilterSpec] = Field(default_factory=list)
     risk_profile: RiskProfileSpec
-    metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _id_is_a_slug(self) -> "StrategySpec":

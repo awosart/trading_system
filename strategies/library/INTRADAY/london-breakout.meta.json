@@ -1,0 +1,21 @@
+{
+  "id": "london-breakout",
+  "name": "London Breakout",
+  "author": "trading_system",
+  "source": "https://www.babypips.com/forexpedia/london-breakout",
+  "tags": [
+    "breakout",
+    "session",
+    "london"
+  ],
+  "notes": "Trades the break of the Asian range at the London open; session and news filters do the real gatekeeping. The two legs are separate entries because a shared any_of trigger left the side of a fired signal underivable — max_concurrent_positions of 1 still counts across both.",
+  "versions": [
+    {
+      "version": "2.0.0",
+      "spec_digest": "fb211d54efb0724eb0c0fbe23b02c64d",
+      "at": "2026-08-08T08:16:48.749463Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

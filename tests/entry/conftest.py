@@ -234,9 +234,7 @@ def strategy_spec(
         ]
     return StrategySpec(
         id=strategy_id,
-        name="Test Entry",
         version="1.0.0",
-        author="tests",
         type=StrategyType.INTRADAY,
         timeframes=TimeframeSpec(signal_tf=TIMEFRAME, entry_tf=TIMEFRAME),
         instruments=InstrumentScope(allowed_classes=[InstrumentClass.FX]),

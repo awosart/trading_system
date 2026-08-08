@@ -98,6 +98,38 @@ class TestStrategyValidate:
             else:
                 assert f"{path}: OK" in result.stdout
 
+    def test_library_bookkeeping_files_are_skipped_and_the_count_is_printed(
+        self, tmp_path: Path
+    ) -> None:
+        # "strategies/library/*/*.json" is the natural glob to type and it
+        # matches {id}.meta.json too. Validating those as specs would report
+        # dozens of meaningless schema errors; skipping them silently would
+        # hide that files the user named were not checked.
+        from trading_system.strategies.repository import META_SUFFIX, StrategyRepository
+        from trading_system.strategies.schema import StrategySpec
+
+        repository = StrategyRepository(tmp_path)
+        spec = StrategySpec.model_validate_json(Path(EXAMPLE_PATHS[0]).read_text(encoding="utf-8"))
+        record = repository.add(spec, name="x", author="ts")
+        meta = record.path.with_name(f"{record.path.stem}{META_SUFFIX}")
+
+        result = runner.invoke(app, ["strategy", "validate", str(record.path), str(meta)])
+
+        assert result.exit_code == 0, result.stdout
+        assert "[ERROR]" not in result.stdout
+        assert "Skipped 1 bookkeeping file" in result.stdout
+
+    def test_a_run_of_only_bookkeeping_files_validates_nothing_and_says_so(
+        self, tmp_path: Path
+    ) -> None:
+        from trading_system.strategies.repository import META_SUFFIX
+
+        meta = tmp_path / f"whatever{META_SUFFIX}"
+        meta.write_text("{}", encoding="utf-8")
+        result = runner.invoke(app, ["strategy", "validate", str(meta)])
+        assert result.exit_code == 0
+        assert "No strategy specs to validate" in result.stdout
+
     def test_syntactically_broken_file_exits_nonzero(self, tmp_path: Path) -> None:
         broken = tmp_path / "broken.json"
         broken.write_text('{"id": "Not A Slug"}', encoding="utf-8")

@@ -218,11 +218,8 @@ def strategy(
     return StrategySpec.model_validate(
         {
             "id": strategy_id,
-            "name": "Price Only",
             "version": "1.0.0",
-            "author": "tests",
             "type": "INTRADAY",
-            "status": "DRAFT",
             "timeframes": {"signal_tf": signal_tf.value, "entry_tf": signal_tf.value},
             "instruments": {
                 "allowed_classes": ["FX"],

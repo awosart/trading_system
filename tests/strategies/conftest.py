@@ -48,9 +48,7 @@ def minimal_spec_dict() -> dict[str, Any]:
     """
     return {
         "id": "test-strategy",
-        "name": "Test Strategy",
         "version": "1.0.0",
-        "author": "tester",
         "type": "SWING",
         "timeframes": {"signal_tf": "H4", "entry_tf": "H1"},
         "instruments": {"allowed_classes": ["FX"]},

@@ -1,0 +1,21 @@
+{
+  "id": "ema-pullback-h1",
+  "name": "EMA Pullback (H1 signal)",
+  "author": "trading_system",
+  "source": "https://www.investopedia.com/terms/p/pullback.asp",
+  "tags": [
+    "trend",
+    "pullback",
+    "ema"
+  ],
+  "notes": "H1-signal variant of ema_pullback, used for the P15 stage 2 optimisation run so that the fold geometry matches the stage 1.5 null calibration (EURUSD H1). Identical to the H4 spec in every other field; only signal_tf/entry_tf differ, which changes what confirmation_window_bars, expire_after_bars and cooldown_bars_after_loss count in.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "a5b4a1f0776b96cff51fb65810f68b14",
+      "at": "2026-08-08T08:16:49.397288Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

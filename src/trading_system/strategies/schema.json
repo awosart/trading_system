@@ -947,17 +947,6 @@
       "title": "SpreadMaxFilter",
       "type": "object"
     },
-    "Status": {
-      "description": "Lifecycle stage of a strategy definition.",
-      "enum": [
-        "DRAFT",
-        "TESTING",
-        "APPROVED",
-        "RETIRED"
-      ],
-      "title": "Status",
-      "type": "string"
-    },
     "StopOrder": {
       "additionalProperties": false,
       "description": "Enter at an offset beyond the trigger price, on confirmation of momentum.\n\nAttributes:\n    offset: Distance from the trigger price, in price units.",
@@ -1131,44 +1120,18 @@
     }
   },
   "additionalProperties": false,
-  "description": "The unified description of one trading strategy.\n\nThis is the contract Entry Engine, Exit Engine, the strategy database and\nvalidation all depend on. A spec never manages money: it names an\n``exit_ref`` rather than embedding an exit, and its output downstream is a\n:class:`~trading_system.core.types.Signal`, not an order.\n\nAttributes:\n    id: Unique, stable slug (lower-kebab-case).\n    name: Human-readable name.\n    version: Semantic version of this spec, ``\"X.Y.Z\"``.\n    author: Who defined the strategy.\n    source: Where the idea came from (URL, book, paper); optional.\n    type: Holding-period class.\n    status: Lifecycle stage.\n    timeframes: Timeframes the entry reasons across.\n    instruments: Which instruments this strategy may trade.\n    market_regimes: Regimes this strategy is permitted to trade in. Empty\n        means unrestricted.\n    entries: One or two entries, at most one per direction. Two is how a\n        symmetric idea \u2014 fading both edges of a range \u2014 is expressed: the\n        legs share this spec's risk profile, exit, filters and id, so\n        ``max_concurrent_positions`` counts across both, which two separate\n        specs could not do. Each leg keeps its own trigger, confirmation,\n        invalidation and order, which is exactly what differs between them.\n    exit_ref: Id of the exit strategy this pairs with, looked up in the\n        Exit DB \u2014 never embedded, so entries and exits combine N\u00d7M.\n    filters: Permission gates; each can only forbid, never encourage.\n    risk_profile: Inputs to the Risk Engine's sizing and gating.\n    metadata: Free-form tags and notes. Never read by any control-flow\n        decision; a strategy field belongs above this dict, not inside it.",
+  "description": "The unified description of one trading strategy.\n\nThis is the contract Entry Engine, Exit Engine, the strategy database and\nvalidation all depend on. A spec never manages money: it names an\n``exit_ref`` rather than embedding an exit, and its output downstream is a\n:class:`~trading_system.core.types.Signal`, not an order.\n\nEvery field here answers *what is traded and under what conditions*, and\nthat is the whole membership rule. Bookkeeping \u2014 the human-readable name,\nthe author, where the idea came from, the lifecycle stage, tags and notes \u2014\nlives in :class:`~trading_system.strategies.repository.StrategyMeta`,\nbecause this model is digested into a run id\n(:class:`~trading_system.backtest.reproducibility.RunManifest`) and a field\nthat moves that digest without changing what is traded makes renaming an\nauthor invalidate a verdict. ``version`` stays because it moves *with* what\nis traded, where ``status`` moves against it.\n\nAttributes:\n    id: Unique, stable slug (lower-kebab-case).\n    version: Semantic version of this spec, ``\"X.Y.Z\"``.\n    type: Holding-period class.\n    timeframes: Timeframes the entry reasons across.\n    instruments: Which instruments this strategy may trade.\n    market_regimes: Regimes this strategy is permitted to trade in. Empty\n        means unrestricted.\n    entries: One or two entries, at most one per direction. Two is how a\n        symmetric idea \u2014 fading both edges of a range \u2014 is expressed: the\n        legs share this spec's risk profile, exit, filters and id, so\n        ``max_concurrent_positions`` counts across both, which two separate\n        specs could not do. Each leg keeps its own trigger, confirmation,\n        invalidation and order, which is exactly what differs between them.\n    exit_ref: Id of the exit strategy this pairs with, looked up in the\n        Exit DB \u2014 never embedded, so entries and exits combine N\u00d7M.\n    filters: Permission gates; each can only forbid, never encourage.\n    risk_profile: Inputs to the Risk Engine's sizing and gating.",
   "properties": {
     "id": {
       "title": "Id",
-      "type": "string"
-    },
-    "name": {
-      "minLength": 1,
-      "title": "Name",
       "type": "string"
     },
     "version": {
       "title": "Version",
       "type": "string"
     },
-    "author": {
-      "minLength": 1,
-      "title": "Author",
-      "type": "string"
-    },
-    "source": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Source"
-    },
     "type": {
       "$ref": "#/$defs/StrategyType"
-    },
-    "status": {
-      "$ref": "#/$defs/Status",
-      "default": "DRAFT"
     },
     "timeframes": {
       "$ref": "#/$defs/TimeframeSpec"
@@ -1244,18 +1207,11 @@
     },
     "risk_profile": {
       "$ref": "#/$defs/RiskProfileSpec"
-    },
-    "metadata": {
-      "additionalProperties": true,
-      "title": "Metadata",
-      "type": "object"
     }
   },
   "required": [
     "id",
-    "name",
     "version",
-    "author",
     "type",
     "timeframes",
     "instruments",

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import typer
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ValidationError as PydanticValidationError
 
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
@@ -32,7 +33,19 @@ from trading_system.data.store import ParquetStore
 from trading_system.execution.config import CostConfig
 from trading_system.exit.library import DEFAULT_LIBRARY_PATH, ExitLibrarySpec, known_exit_ids
 from trading_system.risk.sizing.methods import FixedFractional
-from trading_system.strategies.schema import SCHEMA_JSON_PATH, StrategySpec, strategy_json_schema
+from trading_system.strategies.repository import META_SUFFIX, Status, StrategyRepository
+from trading_system.strategies.results_link import (
+    RUN_KIND_WALKFORWARD,
+    ResultsLink,
+    approve_from_result,
+)
+from trading_system.strategies.schema import (
+    SCHEMA_JSON_PATH,
+    Regime,
+    StrategySpec,
+    StrategyType,
+    strategy_json_schema,
+)
 from trading_system.strategies.validator import Severity, validate_paths
 from trading_system.validation.calibration import (
     POSITION_COUNT_DIVERGENCE_THRESHOLD,
@@ -60,6 +73,10 @@ from trading_system.validation.walkforward import (
     OptimizingSelector,
     WalkForwardRunner,
 )
+
+#: Where the strategy library lives when ``--library`` is not given. A repo-root
+#: relative default, because the library is version-controlled alongside the code.
+DEFAULT_STRATEGY_LIBRARY = Path("strategies")
 
 app = typer.Typer(help="Modular trading system.")
 data_app = typer.Typer(help="Market data management.")
@@ -233,6 +250,11 @@ def strategy_validate(
 
     ``exit_ref`` is checked against the preset ids declared in
     ``--exit-library``, the bundled ``exit/library.json`` by default.
+
+    Library bookkeeping files are skipped, and the count is printed rather than
+    swallowed: ``strategies/library/*/*.json`` is the natural glob to type and
+    it matches ``{id}.meta.json`` too, which is not a spec and would report
+    dozens of schema errors that mean nothing.
     """
     try:
         ids = known_exit_ids(exit_library)
@@ -240,7 +262,15 @@ def strategy_validate(
         typer.echo(f"exit library {exit_library}: {error}")
         raise typer.Exit(code=1) from error
 
-    results = validate_paths(paths, known_exit_ids=ids)
+    specs = [path for path in paths if not path.name.endswith(META_SUFFIX)]
+    skipped = len(paths) - len(specs)
+    if skipped:
+        typer.echo(f"Skipped {skipped} bookkeeping file(s) (*{META_SUFFIX}).")
+    if not specs:
+        typer.echo("No strategy specs to validate.")
+        return
+
+    results = validate_paths(specs, known_exit_ids=ids)
     has_errors = False
     for path, issues in results.items():
         if not issues:
@@ -252,6 +282,199 @@ def strategy_validate(
                 has_errors = True
     if has_errors:
         raise typer.Exit(code=1)
+
+
+@strategy_app.command("add")
+def strategy_add(
+    path: Path = typer.Argument(..., help="Strategy spec JSON file to import."),
+    name: str = typer.Option(..., "--name", help="Human-readable name."),
+    author: str = typer.Option(..., "--author", help="Who owns the entry."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    source: str | None = typer.Option(None, "--source", help="Where the idea came from."),
+    tag: list[str] = typer.Option([], "--tag", help="Label to file it under; repeatable."),
+    notes: str | None = typer.Option(None, "--notes", help="Prose about the entry."),
+) -> None:
+    """Import a strategy spec into the library.
+
+    The spec is copied, not moved: the file it came from keeps whatever role it
+    had. A new entry always lands at ``DRAFT`` — every other stage needs
+    evidence this command has not been given.
+    """
+    repository = StrategyRepository(library)
+    try:
+        spec = StrategySpec.model_validate_json(path.read_text(encoding="utf-8"))
+        record = repository.add(
+            spec, name=name, author=author, source=source, tags=tuple(tag), notes=notes
+        )
+    except (ValidationError, PydanticValidationError) as error:
+        typer.echo(f"{path}: {error}")
+        raise typer.Exit(code=1) from error
+    typer.echo(f"Added {record.id} v{record.spec.version} [{record.status.value}] -> {record.path}")
+
+
+@strategy_app.command("list")
+def strategy_list(
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    results: Path | None = typer.Option(
+        None, "--results", help="Result log, for --min-sharpe. Defaults to the library root."
+    ),
+    spec_type: StrategyType | None = typer.Option(None, "--type", help="Holding-period class."),
+    status: Status | None = typer.Option(None, "--status", help="Lifecycle stage."),
+    regime: Regime | None = typer.Option(None, "--regime", help="Permitted market regime."),
+    instrument: str | None = typer.Option(None, "--instrument", help="Symbol it may trade."),
+    tag: str | None = typer.Option(None, "--tag", help="Label."),
+    author: str | None = typer.Option(None, "--author", help="Owner."),
+    min_sharpe: float | None = typer.Option(
+        None, "--min-sharpe", help="Keep strategies with a recorded run at or above this Sharpe."
+    ),
+    metric: str = typer.Option("sharpe", "--metric", help="Metric --min-sharpe applies to."),
+    walkforward_only: bool = typer.Option(
+        False, "--oos", help="Judge --min-sharpe on walk-forward runs only."
+    ),
+) -> None:
+    """List library entries matching every filter given.
+
+    ``--min-sharpe`` is answered from the result log rather than the library:
+    the strategy files hold no measurements, and a filter that silently needed
+    a result store would answer differently depending on what had been run.
+    """
+    repository = StrategyRepository(library)
+    records = repository.list(
+        type=spec_type,
+        status=status,
+        regime=regime,
+        instrument=instrument,
+        tag=tag,
+        author=author,
+    )
+    if min_sharpe is not None:
+        link = ResultsLink(results if results is not None else library)
+        kind = RUN_KIND_WALKFORWARD if walkforward_only else None
+        qualified = {
+            item.strategy_id for item in link.find(metric=metric, minimum=min_sharpe, run_kind=kind)
+        }
+        records = [record for record in records if record.id in qualified]
+
+    if not records:
+        typer.echo("No strategies match.")
+        return
+    for record in records:
+        flags = "" if record.meta_present else "  (no meta file)"
+        tags = ",".join(record.meta.tags) or "-"
+        typer.echo(
+            f"{record.id:<24} v{record.spec.version:<8} {record.spec.type.value:<9} "
+            f"{record.status.value:<9} tags={tags:<28} {record.meta.name}{flags}"
+        )
+
+
+@strategy_app.command("show")
+def strategy_show(
+    strategy_id: str = typer.Argument(..., help="Strategy id."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    results: Path | None = typer.Option(None, "--results", help="Result log. Defaults to library."),
+    version: str | None = typer.Option(None, "--version", help="Read an archived version."),
+) -> None:
+    """Show one entry: spec identity, bookkeeping, lifecycle log and its runs."""
+    repository = StrategyRepository(library)
+    try:
+        record = repository.get(strategy_id, version)
+    except KeyError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+
+    typer.echo(f"{record.id}  v{record.spec.version}  {record.spec.type.value}")
+    typer.echo(f"  name       {record.meta.name}")
+    typer.echo(f"  author     {record.meta.author}")
+    if record.meta.source:
+        typer.echo(f"  source     {record.meta.source}")
+    typer.echo(f"  status     {record.status.value}")
+    typer.echo(f"  spec       {record.digest}")
+    typer.echo(f"  exit_ref   {record.spec.exit_ref}")
+    typer.echo(f"  tags       {','.join(record.meta.tags) or '-'}")
+    if not record.meta_present:
+        typer.echo("  WARNING    no meta file; bookkeeping shown is a default, not a record")
+    if record.meta.notes:
+        typer.echo(f"  notes      {record.meta.notes}")
+
+    typer.echo("  versions:")
+    for entry in record.meta.versions:
+        note = f"  {entry.note}" if entry.note else ""
+        typer.echo(f"    {entry.version:<8} {entry.at:%Y-%m-%d} {entry.spec_digest[:12]}{note}")
+
+    typer.echo("  lifecycle:")
+    if not record.meta.lifecycle:
+        typer.echo("    (none recorded — reads as DRAFT)")
+    for event in record.meta.lifecycle:
+        detail = event.reason or ""
+        if event.run_id:
+            detail = f"run={event.run_id} selector={event.selector_key} verdict={event.verdict}"
+        typer.echo(f"    {event.status.value:<9} {event.at:%Y-%m-%d} {detail}")
+
+    link = ResultsLink(results if results is not None else library)
+    runs = link.for_strategy(strategy_id)
+    typer.echo(f"  runs ({len(runs)}):")
+    for run in runs:
+        stale = "" if run.spec_digest == record.digest else "  [stale: spec changed since]"
+        verdict = run.verdict or "-"
+        typer.echo(
+            f"    {run.run_id[:16]:<18} {run.run_kind:<12} {verdict:<12} "
+            f"{run.period_start:%Y-%m-%d}..{run.period_end:%Y-%m-%d} "
+            f"{','.join(run.symbols)}{stale}"
+        )
+
+
+@strategy_app.command("diff")
+def strategy_diff(
+    strategy_id: str = typer.Argument(..., help="Strategy id."),
+    left: str = typer.Argument(..., help="Version on the left."),
+    right: str = typer.Argument(..., help="Version on the right."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+) -> None:
+    """Show what changed between two versions of a spec."""
+    repository = StrategyRepository(library)
+    try:
+        typer.echo(repository.diff(strategy_id, left, right))
+    except KeyError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+
+
+@strategy_app.command("retire")
+def strategy_retire(
+    strategy_id: str = typer.Argument(..., help="Strategy id."),
+    reason: str = typer.Option(..., "--reason", help="Why it is being retired."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+) -> None:
+    """Retire a strategy, recording why."""
+    repository = StrategyRepository(library)
+    try:
+        record = repository.retire(strategy_id, reason)
+    except (KeyError, ValidationError) as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+    typer.echo(f"Retired {record.id}: {reason}")
+
+
+@strategy_app.command("approve")
+def strategy_approve(
+    run_id: str = typer.Argument(..., help="The run whose verdict justifies approval."),
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    results: Path | None = typer.Option(None, "--results", help="Result log. Defaults to library."),
+) -> None:
+    """Approve the strategy a ROBUST run evaluated.
+
+    Approval names a run rather than a strategy on purpose: the verdict, the
+    selector and the strategy are all read from the recorded run, so nothing
+    about the approval is supplied by whoever wants it.
+    """
+    repository = StrategyRepository(library)
+    link = ResultsLink(results if results is not None else library)
+    try:
+        record = approve_from_result(repository, link, run_id)
+    except (KeyError, ValidationError) as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+    typer.echo(f"Approved {record.id} v{record.spec.version} on run {run_id}")
 
 
 @strategy_app.command("schema-export")

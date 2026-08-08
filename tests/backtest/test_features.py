@@ -74,11 +74,8 @@ def _ema_strategy(strategy_id: str, *, extra_ref_period: int | None = None) -> S
     return StrategySpec.model_validate(
         {
             "id": strategy_id,
-            "name": strategy_id,
             "version": "1.0.0",
-            "author": "tests",
             "type": "INTRADAY",
-            "status": "DRAFT",
             "timeframes": {"signal_tf": "H1", "entry_tf": "H1"},
             "instruments": {
                 "allowed_classes": ["FX"],

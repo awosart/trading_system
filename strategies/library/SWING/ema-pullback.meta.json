@@ -1,0 +1,21 @@
+{
+  "id": "ema-pullback",
+  "name": "EMA Pullback",
+  "author": "trading_system",
+  "source": "https://www.investopedia.com/terms/p/pullback.asp",
+  "tags": [
+    "trend",
+    "pullback",
+    "ema"
+  ],
+  "notes": "Classic trend-continuation entry: buy a pullback to the 50 EMA while price sits above it on the daily filter.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "2051bf4d94d33476bf0ea555c15a7a33",
+      "at": "2026-08-08T08:16:48.411291Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

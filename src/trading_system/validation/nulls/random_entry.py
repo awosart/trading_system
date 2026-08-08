@@ -378,9 +378,7 @@ def _null_strategy_spec(
     return StrategySpec.model_validate(
         {
             "id": strategy_id,
-            "name": "Random Entry Null",
             "version": "1.0.0",
-            "author": "validation.nulls",
             "type": "INTRADAY",
             "timeframes": {"signal_tf": signal_tf.value, "entry_tf": signal_tf.value},
             "instruments": {"allowed_classes": [instrument_class], "allowed_symbols": [symbol]},
