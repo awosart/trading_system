@@ -548,7 +548,7 @@ class WalkForwardRunner:
         wf_dir = self.store_root / "walkforward" / wf_id
         manifest_path = wf_dir / WF_MANIFEST_FILE
         if manifest_path.exists():
-            return _read_result(manifest_path, wf_id, self.store_root)
+            return read_result(manifest_path, wf_id, self.store_root)
 
         is_specs = [self._is_inputs(fold) for fold in folds]
         is_runs = self._run_batch(is_specs)
@@ -695,8 +695,21 @@ def _stored_run_payload(run: StoredRun) -> dict[str, Any]:
     }
 
 
-def _read_result(path: Path, wf_id: str, store_root: Path) -> WalkForwardResult:
-    """Rebuild a :class:`WalkForwardResult` from a previously written manifest."""
+def read_result(path: Path, wf_id: str, store_root: Path) -> WalkForwardResult:
+    """Rebuild a :class:`WalkForwardResult` from a previously written manifest.
+
+    Public because grading happens after the fact: the command that computes a
+    verdict is not the one that ran the folds, and re-running them to grade
+    them would defeat the idempotence :meth:`WalkForwardRunner.run` exists for.
+
+    Args:
+        path: The walk-forward's ``manifest.json``.
+        wf_id: The id that manifest belongs to.
+        store_root: Where the individual fold runs are stored.
+
+    Returns:
+        The result, with every fold's stored run attached.
+    """
     payload = json.loads(path.read_text())
 
     def window(raw: Mapping[str, str]) -> FoldWindow:

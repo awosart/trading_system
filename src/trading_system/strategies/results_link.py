@@ -238,12 +238,20 @@ class ResultRecord(BaseModel):
         )
 
     def content_digest(self) -> str:
-        """Digest of everything this row asserts except when it was written.
+        """Digest of what the *run* produced — not the grade, not the write time.
+
+        The verdict is excluded deliberately, and it is the one exclusion.
+        Metrics are what a run id promises: same inputs, same numbers, so two
+        records sharing an id and differing here means the promise broke. A
+        verdict is a *later* measurement over the same run — it needs the nulls
+        and the perturbations, which the command that produced the run does not
+        compute. Folding it in would make "recorded, then graded" collide with
+        "recorded differently", which are opposite situations. Attaching a
+        grade is therefore :meth:`ResultsLink.grade`, which refuses to change
+        one already set.
 
         Returns:
-            A hex digest. Two records sharing a ``run_id`` must share this, or
-            one of them is wrong — which is the check
-            :meth:`ResultsLink.record` performs.
+            A hex digest over the run's identity and its metrics.
         """
         return digest(
             {
@@ -258,7 +266,6 @@ class ResultRecord(BaseModel):
                 "coverage": [item.model_dump(mode="json") for item in self.coverage],
                 "source_digest": self.source_digest,
                 "metrics": dict(sorted(self.metrics.items())),
-                "verdict": self.verdict,
             }
         )
 
@@ -427,12 +434,57 @@ class ResultsLink:
                 )
             return existing
 
-        row = result.to_row()
-        frame = pl.DataFrame([row])
+        self._append(result)
+        return result
+
+    def grade(self, run_id: str, verdict: str) -> ResultRecord:
+        """Attach a verdict to a run already recorded.
+
+        Grading is a second measurement over the same run: it needs the nulls
+        and the perturbations, which the command producing the run does not
+        compute, so it cannot be part of the row when the row is written. What
+        it must not become is a way to revise a grade — a verdict already set
+        is refused rather than replaced, the same asymmetry
+        :meth:`record` applies to metrics.
+
+        Args:
+            run_id: The run to grade.
+            verdict: The verdict, e.g. ``"OVERFIT"``.
+
+        Returns:
+            The graded record.
+
+        Raises:
+            KeyError: If the run was never recorded. Grading a run nobody
+                stored would create a row whose metrics nothing measured.
+            ValidationError: If a *different* verdict is already attached.
+        """
+        existing = self.get(run_id)
+        if existing is None:
+            raise KeyError(f"no result recorded for run {run_id!r}; record it before grading")
+        if existing.verdict is not None:
+            if existing.verdict != verdict:
+                raise ValidationError(
+                    f"run {run_id} is already graded {existing.verdict}, offered {verdict}. "
+                    "A verdict is attached once; re-grading means re-running."
+                )
+            return existing
+
+        graded = existing.model_copy(update={"verdict": verdict})
+        rows = [(graded if item.run_id == run_id else item).to_row() for item in self.records()]
+        pl.DataFrame(rows).write_parquet(self._path)
+        return graded
+
+    def _append(self, result: ResultRecord) -> None:
+        """Write one row onto the end of the log.
+
+        Args:
+            result: The record to store.
+        """
+        frame = pl.DataFrame([result.to_row()])
         if self._path.exists():
             frame = pl.concat([pl.read_parquet(self._path), frame], how="vertical_relaxed")
         frame.write_parquet(self._path)
-        return result
 
     def for_strategy(
         self, strategy_id: str, *, spec_digest: str | None = None

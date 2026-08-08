@@ -211,12 +211,83 @@ class TestIdempotence:
         stored = link.get("run-1")
         assert stored is not None and stored.metric("sharpe") == 1.4
 
+    def test_the_verdict_is_not_part_of_what_a_run_id_promises(
+        self, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        # "Recorded, then graded" and "recorded differently" are opposite
+        # situations. Folding the verdict into content_digest would make the
+        # first indistinguishable from the second.
+        ungraded = record_for(spec, streams, instruments)
+        graded = record_for(spec, streams, instruments, verdict="OVERFIT")
+        assert ungraded.content_digest() == graded.content_digest()
+
     def test_a_record_round_trips_through_storage(
         self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
     ) -> None:
         original = record_for(spec, streams, instruments)
         link.record(original)
         assert link.get("run-1") == original
+
+
+class TestGrading:
+    def test_a_verdict_attaches_to_a_run_recorded_ungraded(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        assert link.get("run-1") is not None
+        graded = link.grade("run-1", "OVERFIT")
+        assert graded.verdict == "OVERFIT"
+
+    def test_grading_persists(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        link.grade("run-1", "OVERFIT")
+        reopened = ResultsLink(link.root)
+        stored = reopened.get("run-1")
+        assert stored is not None and stored.verdict == "OVERFIT"
+
+    def test_grading_does_not_add_a_row(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        link.grade("run-1", "OVERFIT")
+        assert len(link.records()) == 1
+
+    def test_grading_leaves_the_metrics_untouched(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        original = link.record(record_for(spec, streams, instruments))
+        graded = link.grade("run-1", "OVERFIT")
+        assert graded.content_digest() == original.content_digest()
+
+    def test_regrading_with_the_same_verdict_is_a_no_op(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments))
+        link.grade("run-1", "OVERFIT")
+        assert link.grade("run-1", "OVERFIT").verdict == "OVERFIT"
+
+    def test_a_verdict_is_attached_once_and_never_revised(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        # Re-grading means re-running: the nulls and perturbations that produced
+        # the first grade were measured over these exact metrics.
+        link.record(record_for(spec, streams, instruments))
+        link.grade("run-1", "OVERFIT")
+        with pytest.raises(ValidationError, match="already graded"):
+            link.grade("run-1", "ROBUST")
+
+    def test_grading_a_run_nobody_recorded_is_refused(self, link: ResultsLink) -> None:
+        with pytest.raises(KeyError, match="record it before grading"):
+            link.grade("never-happened", "ROBUST")
+
+    def test_a_run_recorded_already_graded_still_refuses_a_different_grade(
+        self, link: ResultsLink, spec: StrategySpec, streams: Any, instruments: InstrumentRegistry
+    ) -> None:
+        link.record(record_for(spec, streams, instruments, verdict="ROBUST"))
+        with pytest.raises(ValidationError, match="already graded"):
+            link.grade("run-1", "OVERFIT")
 
 
 class TestDatasetIdentityAndCoverage:

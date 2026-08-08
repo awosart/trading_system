@@ -38,6 +38,7 @@ from trading_system.strategies.results_link import (
     RUN_KIND_WALKFORWARD,
     ResultsLink,
     approve_from_result,
+    build_record,
 )
 from trading_system.strategies.schema import (
     SCHEMA_JSON_PATH,
@@ -57,7 +58,7 @@ from trading_system.validation.nulls.random_entry import (
     build_entry_trace_profile,
     real_signals,
 )
-from trading_system.validation.objective import SortinoTimesSqrtTrades
+from trading_system.validation.objective import ExpectancyR, SortinoTimesSqrtTrades
 from trading_system.validation.optimization import (
     GridSearch,
     OptunaSearch,
@@ -66,12 +67,20 @@ from trading_system.validation.optimization import (
     SearchSpace,
     read_fold_selection,
 )
-from trading_system.validation.report import build_report, write_report
+from trading_system.validation.report import (
+    WalkForwardReport,
+    build_report,
+    build_verdict,
+    write_report,
+)
+from trading_system.validation.robustness import run_all
 from trading_system.validation.splitting import PurgedKFold, WalkForwardMode, WalkForwardSplitter
 from trading_system.validation.walkforward import (
+    WF_MANIFEST_FILE,
     IdentitySelector,
     OptimizingSelector,
     WalkForwardRunner,
+    read_result,
 )
 
 #: Where the strategy library lives when ``--library`` is not given. A repo-root
@@ -590,6 +599,12 @@ def validate_walkforward(
     out: Path | None = typer.Option(
         None, "--out", help="Report path. Defaults next to the walk-forward's own manifest."
     ),
+    record: bool = typer.Option(
+        False, "--record", help="Bind this run's metrics to the strategy in the results log."
+    ),
+    library_root: Path = typer.Option(
+        DEFAULT_STRATEGY_LIBRARY, "--library", help="Strategy library and results log root."
+    ),
 ) -> None:
     """Walk history in folds: IS run, OOS run, and a report of every window's boundary.
 
@@ -654,6 +669,15 @@ def validate_walkforward(
         typer.echo(
             f"  {flagged}/{report.n_folds} fold(s) below "
             f"min_trades_per_fold={cli_config.min_trades_per_fold}"
+        )
+    if record:
+        _record_walkforward(
+            spec=spec,
+            base=base,
+            report=report,
+            wf_id=result.wf_id,
+            selector_key=IdentitySelector(base).key(),
+            library=library_root,
         )
 
 
@@ -731,6 +755,12 @@ def validate_optimize(
     ),
     out: Path | None = typer.Option(
         None, "--out", help="Report path. Defaults next to the walk-forward's own manifest."
+    ),
+    record: bool = typer.Option(
+        False, "--record", help="Bind this run's metrics to the strategy in the results log."
+    ),
+    library_root: Path = typer.Option(
+        DEFAULT_STRATEGY_LIBRARY, "--library", help="Strategy library and results log root."
     ),
 ) -> None:
     """Tune parameters on each fold's in-sample window, then score the choice out-of-sample.
@@ -850,6 +880,73 @@ def validate_optimize(
             f"{selection.get('n_scored')} shift {plateau.get('selection_shift')} "
             f"| OOS expectancy_r {fold_report.oos_expectancy_r}"
         )
+
+    if record:
+        _record_walkforward(
+            spec=spec,
+            base=base,
+            report=report,
+            wf_id=result.wf_id,
+            selector_key=selector.key(),
+            library=library_root,
+        )
+
+
+def _record_walkforward(
+    *,
+    spec: StrategySpec,
+    base: RunInputs,
+    report: WalkForwardReport,
+    wf_id: str,
+    selector_key: str,
+    library: Path,
+) -> None:
+    """Bind a walk-forward's stitched metrics to its strategy in the results log.
+
+    Records the run **ungraded**: a verdict needs the nulls and the
+    perturbations, which neither ``walkforward`` nor ``optimize`` runs. ``ts
+    validate verdict`` computes it and attaches it with
+    :meth:`~trading_system.strategies.results_link.ResultsLink.grade`.
+
+    Args:
+        spec: The strategy that ran — the template, since each fold ran its own
+            materialised parameters.
+        base: The run inputs, for the manifest and the coverage.
+        report: The walk-forward's report, for the stitched metrics.
+        wf_id: The walk-forward's id, which is this row's run id.
+        selector_key: What chose each fold's parameters. Required, because an
+            optimising run is evidence about the pair (spec, selector).
+        library: Repository root holding the results log.
+    """
+    metrics = {
+        "expectancy_r": report.stitched_expectancy_r,
+        "sharpe": report.stitched_sharpe,
+        "sortino": report.stitched_sortino,
+        "trades": float(report.stitched_trade_count),
+        "folds": float(report.n_folds),
+    }
+    link = ResultsLink(library)
+    try:
+        stored = link.record(
+            build_record(
+                spec=spec,
+                manifest=base.manifest(),
+                streams=base.streams,
+                run_id=wf_id,
+                run_kind=RUN_KIND_WALKFORWARD,
+                selector_key=selector_key,
+                metrics={name: value for name, value in metrics.items() if value is not None},
+            )
+        )
+    except ValidationError as error:
+        typer.echo(f"  not recorded: {error}")
+        raise typer.Exit(code=1) from error
+    typer.echo(
+        f"  recorded {stored.strategy_id} v{stored.version} spec={stored.spec_digest[:12]} "
+        f"dataset={stored.dataset_hash[:12]} selector={stored.selector_key} -> {link.path}"
+    )
+    if stored.verdict is None:
+        typer.echo("  ungraded: run 'ts validate verdict' to attach one")
 
 
 class NullCliConfig(BaseModel):
@@ -1008,6 +1105,124 @@ def validate_null(
         flag = " (exceeds threshold)" if divergence > POSITION_COUNT_DIVERGENCE_THRESHOLD else ""
         typer.echo(f"  position count divergence: {divergence:.2%}{flag}")
     typer.echo(f"  written to {result.directory}")
+
+
+@validate_app.command("verdict")
+def validate_verdict(
+    ctx: typer.Context,
+    wf_id: str = typer.Option(..., "--wf-id", help="Walk-forward to grade."),
+    config: Path = typer.Option(..., "--config", help="The same run config the walk-forward used."),
+    strategy: Path = typer.Option(..., "--strategy", help="The same strategy spec it used."),
+    n_null: int = typer.Option(20, "--n", help="Iterations per null."),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
+    ),
+    record: bool = typer.Option(
+        False, "--record", help="Attach the verdict to this run in the results log."
+    ),
+    library_root: Path = typer.Option(
+        DEFAULT_STRATEGY_LIBRARY, "--library", help="Strategy library and results log root."
+    ),
+) -> None:
+    """Grade a walk-forward: run both nulls, perturb the data, and decide.
+
+    Separate from ``walkforward`` and ``optimize`` because a verdict is a
+    second, far more expensive measurement over the same run — the nulls and
+    the perturbations are dozens of extra backtests. Those commands record the
+    metrics; this one attaches the grade.
+
+    Both nulls are calibrated on a **flat** run's ``expectancy_r``, not on the
+    walk-forward's, so the two are compared on one number over one span. See
+    CLAUDE.md "Решения P15 этапы 3–5".
+    """
+    settings: Settings = ctx.obj
+    cli_config = WalkForwardCliConfig.model_validate_json(config.read_text())
+    spec = StrategySpec.model_validate_json(strategy.read_text())
+
+    library = ExitLibrarySpec.model_validate_json(exit_library.read_text())
+    preset = next((item for item in library.presets if item.id == spec.exit_ref), None)
+    if preset is None:
+        typer.echo(f"exit_ref {spec.exit_ref!r} not found in {exit_library}")
+        raise typer.Exit(code=1)
+
+    frame = ParquetStore(settings.data_dir).get(cli_config.symbol, cli_config.timeframe)
+    # start/end are None exactly when the frame is empty; naming both keeps the
+    # perturbation span below a (datetime, datetime) rather than an assertion.
+    if frame.is_empty or frame.start is None or frame.end is None:
+        typer.echo(f"No data stored for {cli_config.symbol} {cli_config.timeframe}.")
+        raise typer.Exit(code=1)
+    span = (frame.start, frame.end)
+
+    key = StreamKey(cli_config.symbol, cli_config.timeframe)
+    base = RunInputs(
+        config=BacktestConfig(
+            account_currency=cli_config.account_currency,
+            starting_balance=cli_config.starting_balance,
+            atr_period=cli_config.atr_period,
+            atr_baseline_bars=cli_config.atr_baseline_bars,
+        ),
+        streams={key: frame},
+        bindings=(StrategyBinding(spec=spec, exit_preset=preset, keys=(key,)),),
+        instruments=load_instruments(settings.instruments_path),
+        costs=CostConfig(run_seed=cli_config.run_seed),
+        sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+    )
+
+    manifest_path = settings.runs_dir / "walkforward" / wf_id / WF_MANIFEST_FILE
+    if not manifest_path.exists():
+        typer.echo(f"no walk-forward {wf_id} under {settings.runs_dir}")
+        raise typer.Exit(code=1)
+    result = read_result(manifest_path, wf_id, settings.runs_dir)
+    report = build_report(result, min_trades_per_fold=cli_config.min_trades_per_fold)
+
+    objective = ExpectancyR()
+    flat = base.run()
+    typer.echo(f"flat run: {len(flat.trades)} trades, expectancy_r {objective.score(flat):.4f}")
+
+    permutation = run_calibration(
+        NullKind.PERMUTATION,
+        base,
+        objective=objective,
+        real_result=flat,
+        n=n_null,
+        calibration_id=f"verdict-perm-{wf_id[:12]}",
+        store_root=settings.runs_dir,
+        finest=cli_config.timeframe,
+        day_origin=base.config.day_origin,
+    )
+    typer.echo(f"permutation null: percentile {permutation.percentile}")
+
+    robustness = run_all(
+        base,
+        trades=flat.trades,
+        coverage=span,
+        synthetic_iterations=n_null,
+        seed=cli_config.run_seed,
+    )
+    typer.echo(f"synthetic null: percentile {robustness.synthetic.real_percentile}")
+
+    verdict = build_verdict(
+        report,
+        robustness=robustness,
+        permutation_percentile=permutation.percentile,
+    )
+    verdict_path = manifest_path.parent / "verdict.json"
+    verdict_path.write_text(json.dumps(verdict.to_dict(), indent=2) + "\n", encoding="utf-8")
+
+    typer.echo(f"\n{wf_id}: {verdict.verdict.value} (may_approve={verdict.may_approve})")
+    for group in (verdict.sufficiency, verdict.overfit_checks, verdict.fragility_checks):
+        for item in group:
+            typer.echo(f"  {'PASS' if item.passed else 'FAIL'}  {item.name}: {item.detail}")
+    typer.echo(f"  written to {verdict_path}")
+
+    if record:
+        link = ResultsLink(library_root)
+        try:
+            graded = link.grade(wf_id, verdict.verdict.value)
+        except (KeyError, ValidationError) as error:
+            typer.echo(f"  not graded: {error}")
+            raise typer.Exit(code=1) from error
+        typer.echo(f"  graded {graded.strategy_id} -> {graded.verdict}")
 
 
 @app.command()

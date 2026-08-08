@@ -118,6 +118,42 @@ class SortinoTimesSqrtTrades:
         return sortino.value * math.sqrt(len(result.trades))
 
 
+@dataclass(frozen=True)
+class ExpectancyR:
+    """Mean realised R per trade — the objective both nulls are calibrated on.
+
+    Not the default, and not a rival to :class:`SortinoTimesSqrtTrades`: the
+    two answer different questions. The optimiser wants a score that discounts
+    a thin sample, because it is choosing between parameter sets on unequal
+    trade counts. A null comparison wants the plainest possible statement of
+    edge per unit of risk, because the whole question is whether the real tape
+    beats a structureless one on the *same* metric — and a trade-count factor
+    would let a null that simply traded more outrank the real run.
+
+    It is also the number CLAUDE.md records the P15 nulls against, so a verdict
+    computed today is comparable with the one recorded then.
+    """
+
+    def score(self, result: BacktestResult) -> float:
+        """Mean of ``trade.realized_r``.
+
+        Args:
+            result: What the run produced.
+
+        Returns:
+            The mean realised R.
+
+        Raises:
+            ValueError: If the run closed no trades. Raised rather than
+                returning zero: "no trades" and "trades that averaged nothing"
+                are different facts, and the caller running many iterations
+                decides which to discard.
+        """
+        if not result.trades:
+            raise ValueError("cannot score a run with zero trades")
+        return statistics.fmean(trade.realized_r for trade in result.trades)
+
+
 # ---------------------------------------------------------------------------
 # Neighbourhood stability over a finished trial table
 # ---------------------------------------------------------------------------
