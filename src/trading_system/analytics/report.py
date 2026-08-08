@@ -56,6 +56,7 @@ from trading_system.analytics.attribution import (
     quality_vs_r,
 )
 from trading_system.analytics.metrics import (
+    calmar_ratio,
     daily_curve,
     drawdown_stats,
     monthly_returns,
@@ -65,10 +66,17 @@ from trading_system.analytics.metrics import (
     trade_stats,
     ulcer_index,
 )
+from trading_system.analytics.statistical import (
+    DeflatedSharpeResult,
+    ProbabilisticSharpeResult,
+    deflated_sharpe_ratio,
+    probabilistic_sharpe_ratio,
+)
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.portfolio import EquityPoint, TradeRecord
 from trading_system.backtest.reproducibility import read_run
 from trading_system.data.models import OHLCVFrame
+from trading_system.validation.optimization import SearchSpace
 from trading_system.validation.report import (
     FoldReport,
     StrategyVerdict,
@@ -163,6 +171,92 @@ class FoldSegment:
 
 
 @dataclass(frozen=True)
+class SearchSummary:
+    """What the parameter search did across the whole walk-forward, not just one fold.
+
+    The per-fold ``Search scored / trials`` column already answers "did this
+    fold's search have a sample". This answers a different question: what
+    objective was optimised, how large was the space, and did the search see
+    all of it. ``n_trials`` here is the number the Deflated Sharpe Ratio in
+    this report is deflated by — stated once, in one place, rather than
+    silently assumed identical to whatever the fold table shows.
+
+    Attributes:
+        method: ``"grid"``, ``"random"`` or ``"optuna"``.
+        objective: What a trial was scored by.
+        trial_budget: Trials each fold was allowed.
+        feasible_size: Points in the search space after constraints — the
+            whole space a grid search over this space could visit.
+        truncated: Whether ``trial_budget`` was below ``feasible_size``,
+            meaning even a grid search did not cover every point. Always
+            ``False`` for a grid search, which this project's CLI refuses to
+            start under-budgeted; meaningful for random/optuna search.
+        total_trials: Trials evaluated, summed across every fold. Each fold's
+            in-sample window is a different sample, so these are not
+            duplicates of one another — this is the real count of independent
+            evaluations behind the walk-forward's selections.
+        total_scored: Of those, how many produced a score at all.
+        n_folds_searched: Folds a search actually ran on.
+    """
+
+    method: str
+    objective: str
+    trial_budget: int
+    feasible_size: int
+    truncated: bool
+    total_trials: int
+    total_scored: int
+    n_folds_searched: int
+
+
+@dataclass(frozen=True)
+class CostSensitivityPoint:
+    """One cost multiplier's worth of a full re-run, not a resample.
+
+    Attributes:
+        multiplier: Applied to the instrument's declared spread and to every
+            slippage/gap magnitude in the cost config.
+        trades: Trades the run closed at this cost level — costs change which
+            trades exist (an order that stops moving may miss a TTL fill), not
+            only what they earn.
+        expectancy_r: Mean realised R, or ``None`` with no trades.
+        profit_factor: Gross profit over gross loss, or ``None`` with no
+            trades or no losses to divide by.
+        base_spread_points: The instrument's typical spread at this multiplier,
+            in points — so the table shows the absolute cost alongside the
+            relative one.
+    """
+
+    multiplier: float
+    trades: int
+    expectancy_r: float | None
+    profit_factor: float | None
+    base_spread_points: float
+
+
+@dataclass(frozen=True)
+class CostSensitivityReport:
+    """A strategy's expectancy and profit factor as declared costs are scaled up.
+
+    **Answers a different question than Monte Carlo cost perturbation does.**
+    :func:`~trading_system.validation.monte_carlo.run_cost_sensitivity` draws
+    random multipliers from a band and reports a distribution — it asks "how
+    sensitive is this run to cost *uncertainty*". This asks "does the edge
+    survive a *specific*, named cost level" — ×1.5 spread, ×2 spread — which is
+    the question that decides whether a strategy lives only on today's
+    execution quality.
+
+    Attributes:
+        points: One entry per multiplier, ascending.
+        note: Caveats about how the multiplier was applied — see
+            :func:`cost_sensitivity_from_disk` on why this is not optional.
+    """
+
+    points: tuple[CostSensitivityPoint, ...]
+    note: str
+
+
+@dataclass(frozen=True)
 class ReportSource:
     """Everything a page is rendered from, with its own provenance attached.
 
@@ -183,6 +277,10 @@ class ReportSource:
         segments: Fold seams with their parameters, walk-forward only.
         is_oos_pairs: ``(is_expectancy_r, oos_expectancy_r)`` per fold, with
             ``None`` where a side had no trades. Never divided.
+        search: What the search did across the whole walk-forward, or
+            ``None`` for a flat run or one that selected nothing.
+        cost_sensitivity: Expectancy and profit factor at named cost
+            multipliers, or ``None`` when it was not computed for this source.
     """
 
     kind: SourceKind
@@ -195,6 +293,8 @@ class ReportSource:
     folds: tuple[FoldReport, ...] = ()
     segments: tuple[FoldSegment, ...] = ()
     is_oos_pairs: tuple[tuple[float | None, float | None], ...] = ()
+    search: SearchSummary | None = None
+    cost_sensitivity: CostSensitivityReport | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +308,7 @@ def source_from_run(
     streams: Mapping[StreamKey, OHLCVFrame] | None = None,
     label: str | None = None,
     verdict: StrategyVerdict | None = None,
+    cost_sensitivity: CostSensitivityReport | None = None,
 ) -> ReportSource:
     """Load one stored backtest as a report source.
 
@@ -218,6 +319,8 @@ def source_from_run(
             absent.
         label: What to call it. Defaults to the run id.
         verdict: A grade, if one was rendered for this run.
+        cost_sensitivity: Expectancy/profit-factor at named cost multipliers,
+            if computed — see :func:`cost_sensitivity_from_disk`.
 
     Returns:
         The source, with money on the axis: a flat run's curve is an account
@@ -232,6 +335,7 @@ def source_from_run(
         streams=streams or {},
         money_is_real=True,
         verdict=verdict,
+        cost_sensitivity=cost_sensitivity,
     )
 
 
@@ -244,6 +348,8 @@ def source_from_walkforward(
     label: str | None = None,
     verdict: StrategyVerdict | None = None,
     selections: Mapping[int, FoldSelection] | None = None,
+    search: SearchSummary | None = None,
+    cost_sensitivity: CostSensitivityReport | None = None,
 ) -> ReportSource:
     """Load a finished walk-forward as a report source.
 
@@ -262,6 +368,10 @@ def source_from_walkforward(
             from ``optimization.json`` by :func:`fold_selections_from_disk`.
             Absent means the seams are drawn without labels, which is the
             honest rendering of a walk-forward that selected nothing.
+        search: What the search did across the whole walk-forward — read by
+            :func:`search_summary_from_disk`.
+        cost_sensitivity: Expectancy/profit-factor at named cost multipliers,
+            if computed — see :func:`cost_sensitivity_from_disk`.
 
     Returns:
         The source.
@@ -304,6 +414,8 @@ def source_from_walkforward(
         folds=report.folds,
         segments=segments,
         is_oos_pairs=tuple((fold.is_expectancy_r, fold.oos_expectancy_r) for fold in report.folds),
+        search=search,
+        cost_sensitivity=cost_sensitivity,
     )
 
 
@@ -338,9 +450,138 @@ def fold_selections_from_disk(wf_directory: Path) -> dict[int, FoldSelection]:
     }
 
 
+def search_summary_from_disk(wf_directory: Path) -> SearchSummary | None:
+    """The whole-walk-forward search summary, from ``optimization.json``.
+
+    Args:
+        wf_directory: ``runs/walkforward/{wf_id}``.
+
+    Returns:
+        The summary, or ``None`` when the walk-forward selected nothing (an
+        ``IdentitySelector`` run writes no ``optimization.json``).
+    """
+    path = wf_directory / "optimization.json"
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text())
+    space = SearchSpace.model_validate(payload["space"])
+    folds = payload.get("folds", [])
+    total_trials = sum(int(fold.get("n_trials", 0)) for fold in folds)
+    total_scored = sum(int(fold.get("n_scored", 0)) for fold in folds)
+    trial_budget = int(payload["trial_budget"])
+    feasible_size = space.feasible_size()
+    return SearchSummary(
+        method=str(payload["method"]),
+        objective=str(payload["objective"]),
+        trial_budget=trial_budget,
+        feasible_size=feasible_size,
+        truncated=trial_budget < feasible_size,
+        total_trials=total_trials,
+        total_scored=total_scored,
+        n_folds_searched=len(folds),
+    )
+
+
+def cost_sensitivity_from_disk(path: Path) -> CostSensitivityReport:
+    """Load a cost-sensitivity table written by an offline sweep.
+
+    **Why this is a loader over a JSON file rather than a function this module
+    calls directly.** Computing a point costs a full backtest — this module
+    otherwise only reads already-materialised results, never executes one
+    (the same boundary that keeps Exit from importing Entry: a renderer that
+    can also run backtests is a renderer that can no longer be trusted to be
+    cheap). The sweep is a separate offline step; this only reads its output.
+
+    Args:
+        path: The JSON file the sweep wrote.
+
+    Returns:
+        The report.
+    """
+    payload = json.loads(path.read_text())
+    points = tuple(
+        CostSensitivityPoint(
+            multiplier=float(row["multiplier"]),
+            trades=int(row["trades"]),
+            expectancy_r=row.get("expectancy_r"),
+            profit_factor=row.get("profit_factor"),
+            base_spread_points=float(row["base_spread_points"]),
+        )
+        for row in payload["points"]
+    )
+    return CostSensitivityReport(points=points, note=str(payload["note"]))
+
+
 # ---------------------------------------------------------------------------
 # Metrics, and which of them the sample cannot support
 # ---------------------------------------------------------------------------
+
+
+#: Two-to-three sentence explanations for the metrics named in the P14 stage 3
+#: brief, keyed by ``(group, field name)`` exactly as :func:`metric_rows`
+#: produces them. Deliberately not exhaustive: a metric with no entry here
+#: renders without a "?" icon rather than with a guessed explanation, and
+#: guessing what a number means is worse than saying nothing about it.
+METRIC_TOOLTIPS: dict[tuple[str, str], str] = {
+    ("sharpe", "value"): (
+        "Mean return over its own standard deviation, annualised. Treats a good "
+        "week and a bad week as equally risky as long as they're the same size — "
+        "it does not know the difference between volatility on the way up and on "
+        "the way down. Above 1 is usually called workable, above 2 is rare "
+        "outside overfitting."
+    ),
+    ("sortino", "value"): (
+        "Sharpe's cousin, but only downside moves count as risk — a big winning "
+        "day does not get penalised. Reads higher than Sharpe on a strategy with "
+        "an asymmetric return shape, which is most trend and breakout systems. "
+        "Compare the two: a large gap says the strategy's upside is unusually "
+        "lumpy."
+    ),
+    ("calmar", "value"): (
+        "CAGR divided by the worst drawdown seen in the trailing window (3 years "
+        "by convention). Answers a very concrete question: how much did you make "
+        "for the worst pain you had to sit through. Above 1 means the annual "
+        "return exceeded the worst drawdown; that is a low bar, not a good one."
+    ),
+    ("ulcer", "value"): (
+        "Root-mean-square of the drawdown-from-peak percentage, one term per "
+        "day. Unlike max drawdown, it penalises a long, shallow underwater "
+        "stretch almost as much as a short, deep one — it is measuring how much "
+        "time was spent hurting, not just how badly. Lower is better; there is "
+        "no universal good value, only comparisons between strategies on the "
+        "same data."
+    ),
+    ("psr", "value"): (
+        "Probability the true Sharpe ratio is actually positive, given how "
+        "noisy this sample is — not the Sharpe itself, a confidence about it. "
+        "0.95 is the conventional bar. A strategy can have a flattering Sharpe "
+        "and a low PSR at the same time; that combination means the sample is "
+        "too short or too skewed to trust the Sharpe."
+    ),
+    ("dsr", "value"): (
+        "Probabilistic Sharpe Ratio, but benchmarked against the best of "
+        "n_trials independent attempts rather than against zero — see n_trials "
+        "on this same row. An ordinary Sharpe computed after 125 parameter "
+        "combinations were tried per fold is comparing the winner of a lottery "
+        "to a strategy that only ever bought one ticket; DSR corrects for how "
+        "many tickets were actually bought. It is always lower than PSR unless "
+        "n_trials is 1, and the gap between them is the size of the correction."
+    ),
+    ("trades", "profit_factor"): (
+        "Gross profit divided by gross loss, both taken as positive numbers. "
+        "1.0 is exactly break-even before you count what it cost to be wrong "
+        "more often than right, or right more often than wrong — it says "
+        "nothing about win rate on its own. Infinite means no losing trade in "
+        "the sample, which is a small-sample artefact, not an achievement."
+    ),
+    ("trades", "expectancy_r"): (
+        "Mean realised R per trade — the number that answers 'if I take this "
+        "trade a thousand times, what do I make on average, in units of what I "
+        "risked'. Positive is necessary but not sufficient: it says nothing "
+        "about how the wins and losses are distributed, which is what the R "
+        "histogram and MAE/MFE are for."
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -354,6 +595,8 @@ class MetricRow:
         sample: The sample size it was computed over, or ``None`` for a field
             that is not derived from one.
         unreliable: Whether that sample is below :data:`RELIABLE_TRADES`.
+        tooltip: A short explanation, or ``None`` when :data:`METRIC_TOOLTIPS`
+            has none for this ``(group, name)``.
     """
 
     group: str
@@ -361,6 +604,7 @@ class MetricRow:
     value: str
     sample: int | None
     unreliable: bool
+    tooltip: str | None = None
 
 
 def _format(value: object) -> str:
@@ -414,6 +658,7 @@ def metric_rows(group: str, stats: object) -> list[MetricRow]:
                 value=_format(value),
                 sample=sample,
                 unreliable=sample is not None and sample < RELIABLE_TRADES,
+                tooltip=METRIC_TOOLTIPS.get((group, entry.name)),
             )
         )
     return rows
@@ -447,6 +692,21 @@ def all_metric_rows(curve: Sequence[EquityPoint], trades: Sequence[TradeRecord])
                 rows += metric_rows(label, compute(daily))
             except ValueError:
                 continue
+        try:
+            calmar = calmar_ratio(daily)
+        except ValueError:
+            pass
+        else:
+            rows.append(
+                MetricRow(
+                    group="calmar",
+                    name="value",
+                    value=_format(calmar),
+                    sample=None,
+                    unreliable=False,
+                    tooltip=METRIC_TOOLTIPS.get(("calmar", "value")),
+                )
+            )
     if trades:
         for label, over_trades in (("trades", trade_stats), ("r_distribution", r_distribution)):
             try:
@@ -454,6 +714,196 @@ def all_metric_rows(curve: Sequence[EquityPoint], trades: Sequence[TradeRecord])
             except ValueError:
                 continue
     return rows
+
+
+# ---------------------------------------------------------------------------
+# The Sharpe family: ordinary, probability-adjusted, deflated for multiple testing
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SharpeFamily:
+    """Ordinary Sharpe next to its two more careful cousins, so the gap between them is visible.
+
+    Each of the three can be individually undefined, and each carries its own
+    reason rather than a shared "n/a" — the reasons are different (too few
+    daily returns against no search having been recorded) and a reader
+    deciding what to do next needs to know which one applies.
+
+    Attributes:
+        sharpe: Ordinary annualised Sharpe, or ``None``.
+        sharpe_reason: Why ``sharpe`` is ``None``, when it is.
+        psr: Probabilistic Sharpe, or ``None``.
+        psr_reason: Why ``psr`` is ``None``, when it is.
+        dsr: Deflated Sharpe, or ``None``.
+        dsr_reason: Why ``dsr`` is ``None``, when it is — in particular,
+            "no parameter search was recorded for this source" when
+            ``n_trials`` was never supplied, which is the ordinary case for a
+            flat run and for a walk-forward that selected nothing.
+        n_trials: What ``dsr`` deflated against, echoed here so the number
+            sits next to the ratio it explains rather than only in the search
+            summary section.
+    """
+
+    sharpe: float | None
+    sharpe_reason: str | None
+    psr: ProbabilisticSharpeResult | None
+    psr_reason: str | None
+    dsr: DeflatedSharpeResult | None
+    dsr_reason: str | None
+    n_trials: int | None
+
+
+def sharpe_family(curve: Sequence[EquityPoint], n_trials: int | None) -> SharpeFamily | None:
+    """Ordinary Sharpe, PSR and DSR from one curve, each computed independently.
+
+    Args:
+        curve: The equity curve.
+        n_trials: Total parameter combinations the reported result was
+            selected from — :attr:`SearchSummary.total_trials` for a
+            walk-forward that searched, ``None`` for one that did not and for
+            every flat run. ``None`` does not mean "assume 1"; it means "this
+            question does not apply here", and the family says so rather than
+            silently reporting PSR(0) relabelled as DSR.
+
+    Returns:
+        The family, or ``None`` when there is no curve at all.
+    """
+    if not curve:
+        return None
+    daily = daily_curve(curve)
+
+    sharpe: float | None = None
+    sharpe_reason: str | None = None
+    try:
+        sharpe = sharpe_daily(daily).value
+    except ValueError as error:
+        sharpe_reason = str(error)
+
+    psr: ProbabilisticSharpeResult | None = None
+    psr_reason: str | None = None
+    try:
+        psr = probabilistic_sharpe_ratio(daily)
+    except ValueError as error:
+        psr_reason = str(error)
+
+    dsr: DeflatedSharpeResult | None = None
+    dsr_reason: str | None = None
+    if n_trials is None:
+        dsr_reason = (
+            "no parameter search was recorded for this result — DSR only applies "
+            "once there is a number of trials to deflate against; see PSR above "
+            "for the same question without a multiple-testing correction"
+        )
+    else:
+        try:
+            dsr = deflated_sharpe_ratio(daily, n_trials=n_trials)
+        except ValueError as error:
+            dsr_reason = str(error)
+
+    return SharpeFamily(
+        sharpe=sharpe,
+        sharpe_reason=sharpe_reason,
+        psr=psr,
+        psr_reason=psr_reason,
+        dsr=dsr,
+        dsr_reason=dsr_reason,
+        n_trials=n_trials,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Money, in units a reader does not have to convert in their head
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MoneySummary:
+    """Starting capital to ending capital, in currency and in per cent, up top.
+
+    **Real for a flat run, hypothetical for a walk-forward, and the field that
+    says which is which is :attr:`hypothetical`.** A flat run's curve is an
+    account that existed — these numbers are what it did. A walk-forward's
+    stitched curve is a splice of eight OOS runs' *returns*, compounded onto a
+    nominal starting balance nobody's sizing ever actually used (each fold's
+    own OOS run sized from its own reset balance, not from this running
+    total). The dollar figures here are that nominal balance carried through
+    the same return sequence the multiples chart already plots — not a new
+    computation, a relabelling of one — and they are shown because the
+    request for "simple money at a glance" is legitimate even for a
+    procedure, provided the reader is told, prominently, which kind of number
+    they are looking at.
+
+    Attributes:
+        starting_equity: First point's equity.
+        ending_equity: Last point's equity.
+        pnl_money: ``ending_equity - starting_equity``.
+        pnl_pct: The same, as a fraction of ``starting_equity``.
+        max_drawdown_money: Deepest peak-to-trough drop, negative.
+        max_drawdown_pct: The same, as a fraction of the peak it fell from.
+        trade_count: Trades closed.
+        period_start: First instant on the curve.
+        period_end: Last instant on the curve.
+        hypothetical: Whether the money figures are a real account
+            (``False``) or a nominal-capital relabelling of a stitched return
+            series (``True``).
+    """
+
+    starting_equity: Decimal
+    ending_equity: Decimal
+    pnl_money: Decimal
+    pnl_pct: float
+    max_drawdown_money: Decimal
+    max_drawdown_pct: float
+    trade_count: int
+    period_start: datetime
+    period_end: datetime
+    hypothetical: bool
+
+
+def money_summary(
+    curve: Sequence[EquityPoint], trades: Sequence[TradeRecord], *, hypothetical: bool
+) -> MoneySummary | None:
+    """The top-of-page money block.
+
+    Args:
+        curve: The equity curve — an account for a flat run, a stitched
+            return series for a walk-forward.
+        trades: Closed trades, for the count.
+        hypothetical: Whether ``curve`` is a real account. Echoed onto
+            :attr:`MoneySummary.hypothetical` for the template to caption
+            correctly; this function computes the same arithmetic either way,
+            because the numbers are honest in both cases — only their
+            meaning differs.
+
+    Returns:
+        The summary, or ``None`` when the curve is empty.
+    """
+    if not curve:
+        return None
+    starting = curve[0].equity
+    ending = curve[-1].equity
+    max_dd_money = Decimal(0)
+    max_dd_pct = 0.0
+    try:
+        drawdown = drawdown_stats(daily_curve(curve))
+    except ValueError:
+        pass
+    else:
+        max_dd_money = drawdown.max_drawdown_money
+        max_dd_pct = drawdown.max_drawdown_pct
+    return MoneySummary(
+        starting_equity=starting,
+        ending_equity=ending,
+        pnl_money=ending - starting,
+        pnl_pct=float((ending - starting) / starting) if starting != 0 else 0.0,
+        max_drawdown_money=max_dd_money,
+        max_drawdown_pct=max_dd_pct,
+        trade_count=len(trades),
+        period_start=curve[0].ts,
+        period_end=curve[-1].ts,
+        hypothetical=hypothetical,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -592,6 +1042,83 @@ def monthly_heatmap_figure(curve: Sequence[EquityPoint]) -> go.Figure:
             )
         )
     figure.update_layout(title="Monthly return, per cent")
+    return _styled(figure)
+
+
+def underwater_figure(curve: Sequence[EquityPoint]) -> go.Figure:
+    """Percent below the running peak, every day, under the equity curve.
+
+    A single max-drawdown number cannot distinguish one deep episode from
+    five shallow ones that never individually reached it — and that
+    distinction is exactly what decides whether a prop desk's daily-loss
+    circuit breaker would have tripped once or five times. This draws every
+    day's distance from its own running peak, not only the worst one.
+    """
+    figure = go.Figure()
+    if curve:
+        daily = daily_curve(curve)
+        peak = daily.equity[0]
+        pct: list[float] = []
+        for equity in daily.equity:
+            peak = max(peak, equity)
+            pct.append(float(equity / peak - 1) * 100.0 if peak != 0 else 0.0)
+        figure.add_trace(
+            go.Scatter(
+                x=list(daily.days),
+                y=pct,
+                fill="tozeroy",
+                fillcolor="rgba(179, 64, 47, 0.28)",
+                line={"color": _NEGATIVE, "width": 1.2},
+                name="drawdown",
+            )
+        )
+    figure.update_layout(
+        title="Underwater curve: % below the running peak, every day",
+        yaxis_title="% from peak",
+        xaxis_title="",
+    )
+    return _styled(figure)
+
+
+def duration_histogram_figure(trades: Sequence[TradeRecord]) -> go.Figure:
+    """Histogram of time held, in hours."""
+    figure = go.Figure()
+    if trades:
+        hours = [(trade.closed_at - trade.opened_at).total_seconds() / 3600.0 for trade in trades]
+        figure.add_trace(go.Histogram(x=hours, nbinsx=40, marker={"color": _NEUTRAL}, name="hours"))
+    figure.update_layout(
+        title="Time held, per trade", xaxis_title="hours", yaxis_title="trades", bargap=0.05
+    )
+    return _styled(figure)
+
+
+def duration_vs_r_figure(trades: Sequence[TradeRecord]) -> go.Figure:
+    """Time held against realised R — does the strategy sit longer in losers than winners."""
+    figure = go.Figure()
+    if trades:
+        hours = [(trade.closed_at - trade.opened_at).total_seconds() / 3600.0 for trade in trades]
+        rs = [trade.realized_r for trade in trades]
+        figure.add_trace(
+            go.Scatter(
+                x=hours,
+                y=rs,
+                mode="markers",
+                marker={
+                    "size": 6,
+                    "color": rs,
+                    "colorscale": [[0.0, _NEGATIVE], [0.5, "#e8e8e4"], [1.0, _POSITIVE]],
+                    "cmid": 0.0,
+                    "line": {"width": 0.5, "color": "#ffffff"},
+                },
+                name="trades",
+            )
+        )
+        figure.add_hline(y=0.0, line={"color": _SEAM, "width": 1, "dash": "dot"})
+    figure.update_layout(
+        title="Time held against realised R",
+        xaxis_title="hours held",
+        yaxis_title="R",
+    )
     return _styled(figure)
 
 
@@ -848,12 +1375,18 @@ def build(source: ReportSource) -> RenderedReport:
     quality = quality_vs_r(source.trades)
     slices = attribute_all(source.trades)
     rows = all_metric_rows(source.curve, source.trades)
+    money = money_summary(source.curve, source.trades, hypothetical=not source.money_is_real)
+    n_trials = source.search.total_trials if source.search else None
+    family = sharpe_family(source.curve, n_trials)
 
     figures: dict[str, Markup] = {
         "equity": _figure_html(equity_figure(source)),
+        "underwater": _figure_html(underwater_figure(source.curve)),
         "r_distribution": _figure_html(r_distribution_figure(source.trades)),
         "monthly": _figure_html(monthly_heatmap_figure(source.curve)),
         "excursions": _figure_html(excursion_figure(stats)),
+        "duration_hist": _figure_html(duration_histogram_figure(source.trades)),
+        "duration_vs_r": _figure_html(duration_vs_r_figure(source.trades)),
     }
     if source.kind is SourceKind.WALKFORWARD:
         figures["per_fold"] = _figure_html(per_fold_figure(source))
@@ -873,8 +1406,14 @@ def build(source: ReportSource) -> RenderedReport:
         reliable_trades=RELIABLE_TRADES,
         thin_sample=len(source.trades) < RELIABLE_TRADES,
         comparison=None,
+        money=money,
+        sharpe_family=family,
+        search=source.search,
+        cost_sensitivity=source.cost_sensitivity,
     )
-    return RenderedReport(html=html, metrics=metrics_payload(source, rows, quality, stats))
+    return RenderedReport(
+        html=html, metrics=metrics_payload(source, rows, quality, stats, money, family)
+    )
 
 
 def build_comparison(sources: Sequence[ReportSource]) -> RenderedReport:
@@ -911,7 +1450,7 @@ def build_comparison(sources: Sequence[ReportSource]) -> RenderedReport:
     return RenderedReport(
         html=html,
         metrics={
-            source.label: metrics_payload(source, per_source[source.label], None, None)
+            source.label: metrics_payload(source, per_source[source.label], None, None, None, None)
             for source in sources
         },
     )
@@ -956,6 +1495,8 @@ def metrics_payload(
     rows: Sequence[MetricRow],
     quality: QualityAnalysis | None,
     stats: ExcursionStats | None,
+    money: MoneySummary | None = None,
+    family: SharpeFamily | None = None,
 ) -> dict[str, Any]:
     """The page's numbers as JSON-able data."""
     payload: dict[str, Any] = {
@@ -974,6 +1515,33 @@ def metrics_payload(
             for row in rows
         ],
     }
+    if money is not None:
+        payload["money"] = {
+            "starting_equity": money.starting_equity,
+            "ending_equity": money.ending_equity,
+            "pnl_money": money.pnl_money,
+            "pnl_pct": money.pnl_pct,
+            "max_drawdown_money": money.max_drawdown_money,
+            "max_drawdown_pct": money.max_drawdown_pct,
+            "trade_count": money.trade_count,
+            "hypothetical": money.hypothetical,
+        }
+    if family is not None:
+        payload["sharpe_family"] = {
+            "sharpe": family.sharpe,
+            "psr": family.psr.value if family.psr else None,
+            "dsr": family.dsr.value if family.dsr else None,
+            "dsr_reason": family.dsr_reason,
+            "n_trials": family.n_trials,
+        }
+    if source.search is not None:
+        payload["search"] = {
+            "method": source.search.method,
+            "objective": source.search.objective,
+            "total_trials": source.search.total_trials,
+            "total_scored": source.search.total_scored,
+            "truncated": source.search.truncated,
+        }
     if quality is not None:
         payload["quality"] = {
             "mode": str(quality.mode),
@@ -1036,20 +1604,30 @@ def write(rendered: RenderedReport, path: Path) -> Path:
 
 
 __all__ = [
+    "METRIC_TOOLTIPS",
+    "CostSensitivityPoint",
+    "CostSensitivityReport",
     "FoldSegment",
     "FoldSelection",
     "MetricRow",
+    "MoneySummary",
     "PooledAndPerFold",
     "RenderedReport",
     "ReportSource",
+    "SearchSummary",
+    "SharpeFamily",
     "SourceKind",
     "all_metric_rows",
     "build",
     "build_comparison",
+    "cost_sensitivity_from_disk",
     "export_metrics",
-    "metric_rows",
-    "pooled_and_per_fold",
     "fold_selections_from_disk",
+    "metric_rows",
+    "money_summary",
+    "pooled_and_per_fold",
+    "search_summary_from_disk",
+    "sharpe_family",
     "source_from_run",
     "source_from_walkforward",
     "write",

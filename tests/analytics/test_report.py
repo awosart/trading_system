@@ -12,18 +12,23 @@ from decimal import Decimal
 
 import pytest
 
-from trading_system.analytics.metrics import trade_stats
+from trading_system.analytics.metrics import daily_curve, sharpe_daily, trade_stats
 from trading_system.analytics.report import (
     RELIABLE_TRADES,
+    CostSensitivityPoint,
+    CostSensitivityReport,
     FoldSegment,
     FoldSelection,
     ReportSource,
+    SearchSummary,
     SourceKind,
     all_metric_rows,
     build,
     build_comparison,
     export_metrics,
     metric_rows,
+    money_summary,
+    sharpe_family,
     write,
 )
 from trading_system.backtest.portfolio import EquityPoint, TradeRecord
@@ -369,3 +374,253 @@ class TestComparison:
         rendered = build_comparison([rich, empty])
         assert "—" in rendered.html
         assert "no-trades" in rendered.metrics
+
+
+class TestMoneySummary:
+    """The pure function, independent of the page it feeds."""
+
+    def test_a_flat_run_reports_real_money_with_no_hedge(self) -> None:
+        summary = money_summary(curve(60), trades(20), hypothetical=False)
+        assert summary is not None
+        assert summary.hypothetical is False
+        assert summary.starting_equity == Decimal("100000.0")
+        assert summary.trade_count == 20
+
+    def test_pnl_and_drawdown_are_computed_the_same_way_regardless_of_hypothetical(self) -> None:
+        real = money_summary(curve(60), [], hypothetical=False)
+        stitched = money_summary(curve(60), [], hypothetical=True)
+        assert real is not None and stitched is not None
+        assert real.pnl_money == stitched.pnl_money
+        assert real.pnl_pct == stitched.pnl_pct
+        assert real.hypothetical is False
+        assert stitched.hypothetical is True
+
+    def test_an_empty_curve_returns_none_rather_than_a_zeroed_summary(self) -> None:
+        assert money_summary([], [], hypothetical=False) is None
+
+    def test_a_monotonic_curve_reports_zero_drawdown_rather_than_raising(self) -> None:
+        # drawdown_stats raises on a curve that never dipped below its peak —
+        # curve() is exactly that shape. The summary must absorb this, not
+        # propagate it: this is a page that has to render regardless.
+        summary = money_summary(curve(40), [], hypothetical=False)
+        assert summary is not None
+        assert summary.max_drawdown_money == Decimal(0)
+        assert summary.max_drawdown_pct == 0.0
+
+    def test_pnl_percent_matches_the_money_figure(self) -> None:
+        summary = money_summary(curve(60, start=100_000.0, step=100.0), [], hypothetical=False)
+        assert summary is not None
+        expected_pct = float(summary.pnl_money / summary.starting_equity)
+        assert summary.pnl_pct == pytest.approx(expected_pct)
+
+
+class TestTheMoneyBlockCaptionsItselfCorrectly:
+    """The top-of-page block must not let a stitched curve read as a real account."""
+
+    def test_a_flat_run_gets_no_hypothetical_warning(self) -> None:
+        html = build(run_source(60)).html
+        assert "Hypothetical account" not in html
+        assert "Starting capital" in html
+
+    def test_a_walk_forward_curve_is_captioned_hypothetical(self) -> None:
+        source = replace(
+            ReportSource(
+                kind=SourceKind.WALKFORWARD,
+                label="wf-money",
+                curve=curve(60),
+                trades=trades(30),
+                streams={},
+                money_is_real=False,
+            ),
+        )
+        html = build(source).html
+        assert "Hypothetical account, not a simulated one" in html
+        assert "Nominal starting" in html
+        assert (
+            "no run ever actually held this balance continuously" in html.lower()
+            or "no run ever actually held this balance" in html
+        )
+
+    def test_the_block_is_present_for_both_kinds_not_only_the_flat_run(self) -> None:
+        # Point 1's resolution: omitting money for WF would lose the "simple
+        # money at a glance" value that was explicitly asked for.
+        source = ReportSource(
+            kind=SourceKind.WALKFORWARD,
+            label="wf-money-2",
+            curve=curve(60),
+            trades=trades(30),
+            streams={},
+            money_is_real=False,
+        )
+        html = build(source).html
+        assert "money-grid" in html
+        assert "Max drawdown" in html
+
+
+class TestSharpeFamily:
+    """PSR and DSR, each independently definable or not."""
+
+    def test_dsr_is_absent_with_a_reason_when_no_search_was_recorded(self) -> None:
+        family = sharpe_family(curve(60), None)
+        assert family is not None
+        assert family.dsr is None
+        assert family.dsr_reason is not None
+        assert "no parameter search" in family.dsr_reason
+
+    def test_dsr_is_computed_when_n_trials_is_given(self) -> None:
+        family = sharpe_family(curve(60), 1000)
+        assert family is not None
+        assert family.dsr is not None
+        assert family.dsr.n_trials == 1000
+        assert family.dsr_reason is None
+
+    def test_dsr_with_more_trials_is_never_higher_than_with_fewer(self) -> None:
+        few = sharpe_family(curve(60), 2)
+        many = sharpe_family(curve(60), 1000)
+        assert few is not None and many is not None
+        assert few.dsr is not None and many.dsr is not None
+        assert many.dsr.value <= few.dsr.value
+
+    def test_psr_and_dsr_agree_when_n_trials_is_one(self) -> None:
+        # DSR's own docstring: n_trials <= 1 makes expected_max_sr zero, and
+        # DSR "reduces exactly to PSR(0)".
+        family = sharpe_family(curve(60), 1)
+        assert family is not None
+        assert family.psr is not None and family.dsr is not None
+        assert family.psr.value == pytest.approx(family.dsr.value)
+
+    def test_an_empty_curve_returns_none(self) -> None:
+        assert sharpe_family([], 100) is None
+
+    def test_too_few_daily_points_leaves_sharpe_and_dsr_with_reasons_not_crashes(self) -> None:
+        family = sharpe_family(curve(1), 100)
+        assert family is not None
+        assert family.sharpe is None and family.sharpe_reason is not None
+        assert family.dsr is None and family.dsr_reason is not None
+
+
+class TestSharpeFamilyOnThePage:
+    def test_the_section_renders_with_all_three_figures(self) -> None:
+        html = build(run_source(120)).html
+        assert "The Sharpe family" in html
+        assert "DSR" in html
+        assert "no parameter search was recorded" in html
+
+    def test_dsr_appears_with_n_trials_when_a_search_is_attached(self) -> None:
+        source = replace(
+            run_source(120),
+            search=SearchSummary(
+                method="grid",
+                objective="sortino_sqrt_n",
+                trial_budget=125,
+                feasible_size=125,
+                truncated=False,
+                total_trials=1000,
+                total_scored=850,
+                n_folds_searched=8,
+            ),
+        )
+        html = build(source).html
+        assert "1000" in html
+        assert "no parameter search was recorded" not in html
+
+
+class TestUnderwaterAndDurationSections:
+    def test_underwater_curve_renders(self) -> None:
+        html = build(run_source(60)).html
+        assert "Underwater curve" in html
+
+    def test_time_in_trade_section_renders_both_charts(self) -> None:
+        html = build(run_source(60)).html
+        assert "<h2>Time in trade</h2>" in html
+        assert (
+            html.count('class="plotly-graph-div') >= 5
+        )  # equity, underwater, r, monthly, excursions... + 2 duration
+
+
+class TestSearchSummaryOnThePage:
+    def source_with_search(self, *, truncated: bool) -> ReportSource:
+        base = ReportSource(
+            kind=SourceKind.WALKFORWARD,
+            label="wf-search",
+            curve=curve(60),
+            trades=trades(30),
+            streams={},
+            money_is_real=False,
+        )
+        return replace(
+            base,
+            search=SearchSummary(
+                method="grid",
+                objective="sortino_sqrt_n",
+                trial_budget=125,
+                feasible_size=125 if not truncated else 400,
+                truncated=truncated,
+                total_trials=1000,
+                total_scored=850,
+                n_folds_searched=8,
+            ),
+        )
+
+    def test_a_full_coverage_search_says_so(self) -> None:
+        html = build(self.source_with_search(truncated=False)).html
+        assert "covers the whole space" in html
+
+    def test_a_truncated_search_is_flagged(self) -> None:
+        html = build(self.source_with_search(truncated=True)).html
+        assert "truncated" in html
+
+    def test_a_flat_run_has_no_search_section(self) -> None:
+        html = build(run_source(60)).html
+        assert "Search, across the whole walk-forward" not in html
+
+
+class TestTooltips:
+    def test_a_known_metric_carries_a_tooltip(self) -> None:
+        rows = metric_rows("sharpe", sharpe_daily(daily_curve(curve(60))))
+        (row,) = [r for r in rows if r.name == "value"]
+        assert row.tooltip is not None
+        assert "annualised" in row.tooltip
+
+    def test_an_unlisted_metric_carries_no_tooltip(self) -> None:
+        rows = metric_rows("trades", trade_stats(trades(30)))
+        (row,) = [r for r in rows if r.name == "max_consecutive_wins"]
+        assert row.tooltip is None
+
+    def test_the_bubble_markup_appears_only_for_rows_with_a_tooltip(self) -> None:
+        html = build(run_source(120)).html
+        assert 'class="tip"' in html
+        assert 'class="bubble"' in html
+
+
+class TestCostSensitivityOnThePage:
+    def report(self) -> CostSensitivityReport:
+        return CostSensitivityReport(
+            points=(
+                CostSensitivityPoint(1.0, 100, 0.05, 1.2, 0.8),
+                CostSensitivityPoint(1.5, 96, 0.01, 1.05, 1.2),
+                CostSensitivityPoint(2.0, 90, -0.03, 0.92, 1.6),
+                CostSensitivityPoint(3.0, 80, -0.12, 0.71, 2.4),
+            ),
+            note="Spread scaled on the instrument directly; slippage and gap via perturb_costs.",
+        )
+
+    def test_the_table_renders_every_multiplier(self) -> None:
+        source = replace(run_source(60), cost_sensitivity=self.report())
+        html = build(source).html
+        assert "×1" in html
+        assert "×1.5" in html
+        assert "×2" in html
+        assert "×3" in html
+
+    def test_a_source_without_it_has_no_section(self) -> None:
+        html = build(run_source(60)).html
+        assert "<h2>Cost sensitivity</h2>" not in html
+
+    def test_no_trades_at_a_multiplier_is_a_dash_not_a_crash(self) -> None:
+        report = CostSensitivityReport(
+            points=(CostSensitivityPoint(3.0, 0, None, None, 2.4),), note="n/a"
+        )
+        source = replace(run_source(60), cost_sensitivity=report)
+        html = build(source).html
+        assert "—" in html

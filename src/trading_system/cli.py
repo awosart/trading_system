@@ -18,8 +18,10 @@ from pydantic import ValidationError as PydanticValidationError
 from trading_system.analytics.report import (
     build,
     build_comparison,
+    cost_sensitivity_from_disk,
     export_metrics,
     fold_selections_from_disk,
+    search_summary_from_disk,
     source_from_run,
     source_from_walkforward,
     write,
@@ -1379,6 +1381,11 @@ def report_walkforward(
     symbol: str | None = typer.Option(None, "--symbol", help="Symbol whose bars to load."),
     timeframe: Timeframe | None = typer.Option(None, "--timeframe", help="Its timeframe."),
     metrics_out: Path | None = typer.Option(None, "--metrics", help="Also export metrics JSON."),
+    cost_sensitivity_path: Path | None = typer.Option(
+        None,
+        "--cost-sensitivity",
+        help="JSON written by an offline cost-sensitivity sweep, to embed as a table.",
+    ),
 ) -> None:
     """Render a finished walk-forward: stitched out-of-sample curve, folds, verdict.
 
@@ -1400,6 +1407,10 @@ def report_walkforward(
         label=wf_id,
         verdict=_stored_verdict(directory),
         selections=fold_selections_from_disk(directory),
+        search=search_summary_from_disk(directory),
+        cost_sensitivity=cost_sensitivity_from_disk(cost_sensitivity_path)
+        if cost_sensitivity_path is not None
+        else None,
     )
     rendered = build(source)
     destination = out or directory / "report.html"

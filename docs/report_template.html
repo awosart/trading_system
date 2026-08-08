@@ -55,6 +55,28 @@
   .pass { color: var(--pos); font-weight: 600; }
   .fail { color: var(--neg); font-weight: 600; }
   footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+
+  .money-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 14px 0 6px; }
+  .money-tile { background: var(--panel); border-radius: 4px; padding: 12px 14px; }
+  .money-tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+  .money-tile .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .money-tile .sub-value { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* CSS-only tooltip: no JS, hover/focus reveals an absolutely positioned bubble. */
+  .tip { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--muted);
+         color: #fff; font-size: 10px; line-height: 14px; text-align: center; cursor: help; position: relative;
+         margin-left: 4px; vertical-align: middle; }
+  .tip .bubble {
+    display: none; position: absolute; z-index: 30; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: 260px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 400; line-height: 1.5;
+    text-align: left; padding: 10px 12px; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    white-space: normal;
+  }
+  .tip .bubble::after {
+    content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+    border: 5px solid transparent; border-top-color: var(--ink);
+  }
+  .tip:hover .bubble, .tip:focus .bubble { display: block; }
 </style>
 </head>
 <body>
@@ -119,6 +141,43 @@
   </div>
 </header>
 
+{% if money %}
+{% if money.hypothetical %}
+<div class="note warn">
+  <strong>Hypothetical account, not a simulated one.</strong> If $100,000 had compounded through exactly this walk-forward's own out-of-sample return sequence, this is what it would show. No run ever actually held this balance continuously — every fold's own out-of-sample run sized its positions from its own reset starting balance, not from this running total, and parameters changed at every seam. Percentages below are the honest numbers; the dollar figures are that percentage applied to a nominal $100,000.
+</div>
+{% endif %}
+<div class="money-grid">
+  <div class="money-tile">
+    <div class="label">{{ "Nominal starting" if money.hypothetical else "Starting capital" }}</div>
+    <div class="value">${{ "{:,.0f}".format(money.starting_equity) }}</div>
+  </div>
+  <div class="money-tile">
+    <div class="label">{{ "Hypothetical ending" if money.hypothetical else "Ending capital" }}</div>
+    <div class="value">${{ "{:,.0f}".format(money.ending_equity) }}</div>
+  </div>
+  <div class="money-tile">
+    <div class="label">P&amp;L</div>
+    <div class="value {{ 'pos' if money.pnl_money > 0 else 'neg' }}">{{ "+" if money.pnl_money > 0 else "" }}${{ "{:,.0f}".format(money.pnl_money) }}</div>
+    <div class="sub-value {{ 'pos' if money.pnl_pct > 0 else 'neg' }}">{{ "%+.1f"|format(money.pnl_pct * 100) }}%</div>
+  </div>
+  <div class="money-tile">
+    <div class="label">Max drawdown</div>
+    <div class="value neg">-${{ "{:,.0f}".format(-money.max_drawdown_money) }}</div>
+    <div class="sub-value neg">{{ "%.1f"|format(money.max_drawdown_pct * 100) }}%</div>
+  </div>
+  <div class="money-tile">
+    <div class="label">Trades</div>
+    <div class="value">{{ money.trade_count }}</div>
+  </div>
+  <div class="money-tile">
+    <div class="label">Period</div>
+    <div class="value" style="font-size:15px">{{ money.period_start.date() }}</div>
+    <div class="sub-value">→ {{ money.period_end.date() }}</div>
+  </div>
+</div>
+{% endif %}
+
 {% if verdict %}
 <h2>Verdict</h2>
 <p><span class="verdict v-{{ verdict.verdict.value }}">{{ verdict.verdict.value }}</span>
@@ -147,12 +206,34 @@
 </div>
 {% endif %}
 <div class="chart">{{ figures.equity }}</div>
+<div class="note">A single max-drawdown number cannot tell one deep episode from five shallow ones — the underwater curve below can. That distinction is what decides whether a daily-loss circuit breaker would have tripped once or five times.</div>
+<div class="chart">{{ figures.underwater }}</div>
 
 {% if kind == "walkforward" %}
 <div class="grid">
   <div class="chart">{{ figures.per_fold }}</div>
   <div class="chart">{{ figures.is_oos }}</div>
 </div>
+
+{% if search %}
+<h3>Search, across the whole walk-forward</h3>
+<div class="note">Not the per-fold sample above — this is the search's own footprint: what it optimised for, how large the space was, and whether every point in it was actually visited.</div>
+<table>
+  <thead><tr><th>Method</th><th>Objective</th><th>Trials attempted</th><th>Trials scored</th><th>Budget vs. space</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>{{ search.method }}</td>
+      <td>{{ search.objective }}</td>
+      <td class="num">{{ search.total_trials }} (over {{ search.n_folds_searched }} folds)</td>
+      <td class="num">{{ search.total_scored }}</td>
+      <td class="{{ 'fail' if search.truncated else 'pass' }}">
+        {{ search.trial_budget }} / {{ search.feasible_size }}
+        {{ "(truncated — did not cover the space)" if search.truncated else "(covers the whole space)" }}
+      </td>
+    </tr>
+  </tbody>
+</table>
+{% endif %}
 
 <h2>Folds</h2>
 <div class="note">
@@ -217,7 +298,9 @@
   {% for row in metric_rows %}
     <tr>
       <td>{{ row.group }}</td>
-      <td>{{ row.name }}</td>
+      <td>{{ row.name }}
+        {% if row.tooltip %}<span class="tip" tabindex="0">?<span class="bubble">{{ row.tooltip }}</span></span>{% endif %}
+      </td>
       <td class="num {% if row.unreliable %}thin{% endif %}">{{ row.value }}</td>
       <td class="num sub">{{ row.sample if row.sample is not none else "" }}</td>
     </tr>
@@ -226,8 +309,47 @@
 </table>
 </div>
 
+{% if sharpe_family %}
+<h3>The Sharpe family</h3>
+<div class="note">Ordinary Sharpe next to its two more careful cousins, so the gap between them is visible. Each can be undefined for its own reason — see the note on any dash.</div>
+<table>
+  <thead>
+    <tr>
+      <th>Ordinary Sharpe<span class="tip" tabindex="0">?<span class="bubble">Mean return over its own standard deviation, annualised. Does not distinguish good volatility from bad. Above 1 is workable, above 2 is rare outside overfitting.</span></span></th>
+      <th>PSR<span class="tip" tabindex="0">?<span class="bubble">Probability the true Sharpe ratio is actually positive, given how noisy this sample is. 0.95 is the conventional bar.</span></span></th>
+      <th>DSR<span class="tip" tabindex="0">?<span class="bubble">PSR, but benchmarked against the best of n_trials attempts rather than against zero. Corrects for the fact that a Sharpe computed after 125 parameter combinations were tried is comparing the winner of a lottery to a strategy that only bought one ticket.</span></span></th>
+      <th>n_trials used for DSR</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="num">{{ "%.3f"|format(sharpe_family.sharpe) if sharpe_family.sharpe is not none else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(sharpe_family.psr.value) if sharpe_family.psr is not none else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(sharpe_family.dsr.value) if sharpe_family.dsr is not none else "—" }}</td>
+      <td class="num">{{ sharpe_family.n_trials if sharpe_family.n_trials is not none else "—" }}</td>
+    </tr>
+  </tbody>
+</table>
+{% if sharpe_family.dsr_reason %}
+<div class="note">DSR not shown: {{ sharpe_family.dsr_reason }}</div>
+{% endif %}
+{% if sharpe_family.psr_reason %}
+<div class="note">PSR not shown: {{ sharpe_family.psr_reason }}</div>
+{% endif %}
+{% if sharpe_family.sharpe_reason %}
+<div class="note">Ordinary Sharpe not shown: {{ sharpe_family.sharpe_reason }}</div>
+{% endif %}
+{% endif %}
+
 <h2>Distribution of R</h2>
 <div class="chart">{{ figures.r_distribution }}</div>
+
+<h2>Time in trade</h2>
+<div class="note">Not whether the strategy wins, but whether it sits longer in what turns into a loss than in what turns into a win — a pattern a single expectancy number cannot show.</div>
+<div class="grid">
+  <div class="chart">{{ figures.duration_hist }}</div>
+  <div class="chart">{{ figures.duration_vs_r }}</div>
+</div>
 
 <h2>Monthly</h2>
 <div class="chart">{{ figures.monthly }}</div>
@@ -333,6 +455,25 @@
 {% endfor %}
 </div>
 
+{% endif %}
+
+{% if cost_sensitivity %}
+<h2>Cost sensitivity</h2>
+<div class="note">{{ cost_sensitivity.note }}</div>
+<table>
+  <thead><tr><th>Multiplier</th><th>Spread (points)</th><th>Trades</th><th>Expectancy R</th><th>Profit factor</th></tr></thead>
+  <tbody>
+  {% for point in cost_sensitivity.points %}
+    <tr>
+      <td>×{{ "%g"|format(point.multiplier) }}</td>
+      <td class="num">{{ "%.2f"|format(point.base_spread_points) }}</td>
+      <td class="num">{{ point.trades }}</td>
+      <td class="num {{ 'pos' if (point.expectancy_r or 0) > 0 else 'neg' }}">{{ "%.4f"|format(point.expectancy_r) if point.expectancy_r is not none else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(point.profit_factor) if point.profit_factor is not none else "—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
 {% endif %}
 
 <footer>

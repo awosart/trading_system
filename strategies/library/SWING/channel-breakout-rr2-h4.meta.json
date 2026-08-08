@@ -1,0 +1,22 @@
+{
+  "id": "channel-breakout-rr2-h4",
+  "name": "Channel Breakout H4, fixed 2R",
+  "author": "trading_system",
+  "source": "exit ablation of channel-breakout-h4",
+  "tags": [
+    "trend",
+    "breakout",
+    "swing-structure",
+    "exit-ablation"
+  ],
+  "notes": "Identical entry to channel-breakout-h4; only exit_ref differs (conservative_2r instead of breakeven_runner). Tests whether the open-ended trail gives back what the market offers: the parent run captured 7.6% of total MFE with mean MFE 1.29R.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "e751a491f8eb53c56da58c1724a6852a",
+      "at": "2026-08-08T17:49:16.087958Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}
