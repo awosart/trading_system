@@ -5,10 +5,10 @@ volatility ratio the cost model prices with is measured, where the trading day i
 cut, and how long an entry order that names no lifetime of its own rests.
 """
 
-from datetime import time
+from datetime import datetime, time
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from trading_system.data.resample import DayOrigin
 from trading_system.exit.base import IntrabarPolicy
@@ -65,6 +65,25 @@ class BacktestConfig(BaseModel):
             fallback for building a plan with no run behind it at all (an
             :class:`~trading_system.exit.library.ExitLibrary`, a standalone
             test).
+        evaluation_start: Earliest bar-close instant at which entry signals may
+            be recognised at all. ``None`` (the default) evaluates from the
+            first bar, exactly as before this field existed. Set by
+            :mod:`trading_system.validation.walkforward` so a fold's warmup
+            prefix (``data_start .. trade_start``) publishes bars — feature
+            pipelines and the ATR baseline still see them — without the
+            strategy ever being asked to open a position on one. Enforced
+            where entry recognition itself happens
+            (:meth:`~trading_system.backtest.orchestrator.Orchestrator.on_recognise`),
+            not by dropping a signal after the fact: a signal that is never
+            evaluated cannot leave a trace in any drop counter to be confused
+            with a strategy that looked and declined.
+        evaluation_end: Instant at or after which entry signals stop being
+            recognised. ``None`` (the default) evaluates through the last bar.
+            Positions already open keep being managed by their own exit rules
+            past this instant — this field only stops *new* ones — which is
+            what lets a walk-forward fold's out-of-sample run drain positions
+            still open at its own ``trade_end`` on real subsequent bars
+            instead of inventing a forced-liquidation fill.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -83,6 +102,9 @@ class BacktestConfig(BaseModel):
 
     intrabar_policy: IntrabarPolicy = IntrabarPolicy.PESSIMISTIC
 
+    evaluation_start: datetime | None = None
+    evaluation_end: datetime | None = None
+
     @property
     def day_origin(self) -> DayOrigin:
         """Where the trading day starts, as the data layer expresses it."""
@@ -92,3 +114,33 @@ class BacktestConfig(BaseModel):
     def atr_warmup_bars(self) -> int:
         """Bars before ``atr_ratio`` becomes available on a stream."""
         return self.atr_period + self.atr_baseline_bars - 1
+
+    @model_validator(mode="after")
+    def _check_evaluation_window(self) -> "BacktestConfig":
+        """Reject a naive or inverted evaluation window.
+
+        Returns:
+            The validated config.
+
+        Raises:
+            ValueError: If either bound is tz-naive, or both are given with
+                the start at or after the end — an empty window silently
+                evaluates nothing, which must be visible at load time rather
+                than discovered as a walk-forward fold with zero trades.
+        """
+        for name, value in (
+            ("evaluation_start", self.evaluation_start),
+            ("evaluation_end", self.evaluation_end),
+        ):
+            if value is not None and value.tzinfo is None:
+                raise ValueError(f"{name} must be tz-aware")
+        if (
+            self.evaluation_start is not None
+            and self.evaluation_end is not None
+            and self.evaluation_start >= self.evaluation_end
+        ):
+            raise ValueError(
+                f"evaluation_start {self.evaluation_start} must be before "
+                f"evaluation_end {self.evaluation_end}"
+            )
+        return self

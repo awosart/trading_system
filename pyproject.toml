@@ -34,6 +34,13 @@ ui = [
 analytics = [
     "scipy>=1.11",
 ]
+# optuna lives here for the same reason scipy does: TPE is used by the parameter
+# search and by nothing else. GridSearch and RandomSearch must stay importable
+# without it, so that an ordinary backtest never pays for a dependency only one
+# of three search methods uses.
+optimization = [
+    "optuna>=3.6",
+]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",

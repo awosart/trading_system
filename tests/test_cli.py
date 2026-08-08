@@ -48,10 +48,7 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("TS_DATA_DIR", str(tmp_path / "store"))
 
 
-@pytest.mark.parametrize(
-    ("command", "expected"),
-    [("backtest", "Backtest"), ("validate", "Validate"), ("ui", "UI")],
-)
+@pytest.mark.parametrize(("command", "expected"), [("backtest", "Backtest"), ("ui", "UI")])
 def test_placeholder_commands_run(command: str, expected: str) -> None:
     result = runner.invoke(app, [command])
     assert result.exit_code == 0
@@ -77,6 +74,12 @@ def test_strategy_help_lists_subcommands() -> None:
     assert result.exit_code == 0
     for command in ("validate", "schema-export"):
         assert command in result.stdout
+
+
+def test_validate_help_lists_subcommands() -> None:
+    result = runner.invoke(app, ["validate", "--help"])
+    assert result.exit_code == 0
+    assert "walkforward" in result.stdout
 
 
 class TestStrategyValidate:

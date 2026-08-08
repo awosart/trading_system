@@ -32,6 +32,12 @@ class Settings(BaseSettings):
             A setting rather than a constant because tick sizes, lot bounds and
             swap rates are broker-specific: two brokers' EURUSD are two files,
             and hardcoding one of them would silently size against the wrong one.
+        runs_dir: Root directory backtest and walk-forward runs are stored
+            under, by
+            :func:`~trading_system.backtest.reproducibility.write_run` and
+            :class:`~trading_system.validation.walkforward.WalkForwardRunner`
+            alike. A setting rather than a literal ``"runs"`` in the CLI —
+            the same reasoning as ``data_dir``.
     """
 
     model_config = SettingsConfigDict(
@@ -46,3 +52,4 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     log_file: Path | None = None
     instruments_path: Path = Path("configs/instruments.yaml")
+    runs_dir: Path = Path("runs")

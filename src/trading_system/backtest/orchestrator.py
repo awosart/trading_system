@@ -349,9 +349,16 @@ class _BarPricer:
     def price(
         self, decision: ExitDecision, *, position: ManagedPosition, ctx: ExitContext
     ) -> Price | None:
-        """Resolve one touched level to an executable price, or decline it."""
+        """Resolve one touched level to an executable price, or decline it.
+
+        ``order_id`` is named on ``ctx.bar_close_ts``, not ``ctx.index`` —
+        the same fold-invariance reason :meth:`Orchestrator._order_id` gives:
+        a bar's position within a sliced stream is not portable across two
+        differently-sliced runs of the same history, and the calendar
+        instant already uniquely names the bar.
+        """
         self.sequence += 1
-        order_id = f"{self.held.position_id}:x{ctx.index}:{self.sequence}"
+        order_id = f"{self.held.position_id}:x{ctx.bar_close_ts.isoformat()}:{self.sequence}"
         resting = self.orchestrator.resting_fill.fill(
             decision_level(decision),
             bar=self.bar,
@@ -689,7 +696,21 @@ class Orchestrator:
         self._pending_orders = surviving
 
     def on_recognise(self, event: BarEvent) -> None:
-        """Recognise entry signals on this bar's close. Nothing is sized or spent."""
+        """Recognise entry signals on this bar's close. Nothing is sized or spent.
+
+        Outside ``[config.evaluation_start, config.evaluation_end)`` no entry
+        engine is even asked: this is a walk-forward fold's warmup prefix or
+        drain tail, and a signal that is never evaluated leaves no trace in
+        any drop counter — the distinction P15 draws against dropping a
+        recognised signal after the fact.
+        """
+        start = self._config.evaluation_start
+        end = self._config.evaluation_end
+        if (start is not None and event.close_ts < start) or (
+            end is not None and event.close_ts >= end
+        ):
+            self._recognised[event.key] = []
+            return
         ctx = self._store.context(event.key, event.index)
         found: list[tuple[StrategyBinding, EntrySignal]] = []
         for binding in self._bindings:
@@ -917,6 +938,20 @@ class Orchestrator:
         layer up. The no-lookahead harness caught this; the id is now
         independent by construction.
 
+        Named on ``event.close_ts``, not ``event.index``. P15's walk-forward
+        surfaced the reason the harness could not: a bar's *position* in a
+        stream is a property of where that run's own slice happens to start,
+        so the same calendar bar carries a different ``index`` in an
+        in-sample run than in the out-of-sample run built from a
+        differently-bounded slice of the same history. An id built from
+        ``index`` would draw a different slippage jitter for what is, in
+        every way that matters to the strategy, the identical bar — the
+        exact "measuring the generator instead of the strategy" artefact
+        CLAUDE.md's P15 stage 1 decisions rule out. ``close_ts`` already
+        uniquely names the bar within a stream (:class:`DataHandler`
+        requires strictly increasing bar opens), so nothing about
+        uniqueness is lost by naming it instead of counting to it.
+
         Unique by the same argument the compiler makes: an
         :class:`~trading_system.entry.compiler.EntryEvaluator` tracks one pending
         setup per leg, so one strategy on one stream can produce at most one
@@ -935,7 +970,7 @@ class Orchestrator:
         Raises:
             ValueError: If the same identifier has already been issued.
         """
-        order_id = f"{binding.spec.id}@{event.key}#{event.index}{side.value[0]}"
+        order_id = f"{binding.spec.id}@{event.key}@{event.close_ts.isoformat()}{side.value[0]}"
         if order_id in self._issued_ids:
             raise ValueError(
                 f"order id {order_id} was issued twice; one strategy on one stream may "
@@ -1045,7 +1080,12 @@ class Orchestrator:
         self._portfolio.restate_risk(held)
 
     def _fill_deferred(self, held: OpenPosition, deferred: DeferredExit, event: BarEvent) -> None:
-        """Fill one ``BAR_CLOSE`` decision at this bar's open."""
+        """Fill one ``BAR_CLOSE`` decision at this bar's open.
+
+        ``order_id`` is named on ``event.close_ts``, not ``event.index`` — see
+        :meth:`Orchestrator._order_id` on why a bar's local position in a
+        stream is not what identifies it across two differently-sliced runs.
+        """
         instrument = self._instruments.get(held.symbol)
         if instrument is None:  # pragma: no cover - a position implies an instrument
             return
@@ -1059,7 +1099,7 @@ class Orchestrator:
             self.count_exit_drop(ExitDropReason.PARTIAL_QUANTIZED_TO_ZERO)
             return
         order = ExecutionOrder(
-            order_id=f"{held.position_id}:d{event.index}",
+            order_id=f"{held.position_id}:d{event.close_ts.isoformat()}",
             symbol=held.symbol,
             side=held.position.exit_side,
             order_type=OrderType.MARKET,
