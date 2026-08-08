@@ -1,0 +1,149 @@
+{
+  "id": "volume-thrust-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.8
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "willr",
+              "params": {
+                "period": 1
+              }
+            },
+            "right": -33.3
+          }
+        ]
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 3
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.8
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": {
+              "indicator": "willr",
+              "params": {
+                "period": 1
+              }
+            },
+            "right": -66.7
+          }
+        ]
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 3
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "time_boxed",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "rvol",
+            "params": {
+              "period": 20
+            }
+          },
+          "right": 3.0
+        },
+        "delta": 0.15,
+        "reason": "A thrust on three times normal participation is a stronger claim than one on twice"
+      }
+    ],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 2
+  }
+}

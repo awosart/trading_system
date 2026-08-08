@@ -1,0 +1,33 @@
+{
+  "axes": [
+    {
+      "name": "rvol_period",
+      "paths": [
+        "/entries/0/trigger/conditions/0/left/params/period",
+        "/entries/1/trigger/conditions/0/left/params/period"
+      ],
+      "values": [10, 20, 30]
+    },
+    {
+      "name": "rvol_threshold",
+      "paths": [
+        "/entries/0/trigger/conditions/0/right",
+        "/entries/1/trigger/conditions/0/right"
+      ],
+      "values": [1.4, 1.8, 2.2, 3.0]
+    },
+    {
+      "name": "swing_lookback",
+      "paths": [
+        "/entries/0/invalidation/price_level/params/lookback",
+        "/entries/1/invalidation/price_level/params/lookback"
+      ],
+      "values": [3, 5, 8]
+    },
+    {
+      "name": "atr_stop_multiple",
+      "paths": ["/risk_profile/stop_reference/multiple"],
+      "values": [1.0, 1.5, 2.0, 2.5]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "axes": [
+    {
+      "name": "swing_lookback",
+      "paths": [
+        "/entries/0/trigger/conditions/0/right/params/lookback",
+        "/entries/0/invalidation/price_level/params/lookback",
+        "/entries/1/trigger/conditions/0/right/params/lookback",
+        "/entries/1/invalidation/price_level/params/lookback"
+      ],
+      "values": [3, 5, 8, 13]
+    },
+    {
+      "name": "trend_ema",
+      "paths": [
+        "/entries/0/trigger/conditions/1/right/params/period",
+        "/entries/1/trigger/conditions/1/right/params/period"
+      ],
+      "values": [50, 100, 150, 200]
+    },
+    {
+      "name": "atr_stop_multiple",
+      "paths": ["/risk_profile/stop_reference/multiple"],
+      "values": [1.5, 2.0, 2.5, 3.0]
+    }
+  ]
+}

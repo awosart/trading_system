@@ -1,0 +1,20 @@
+{
+  "id": "volume-thrust-h4",
+  "name": "Volume Thrust (H4)",
+  "author": "trading_system",
+  "tags": [
+    "momentum",
+    "volume",
+    "thrust"
+  ],
+  "notes": "Momentum: relative volume above threshold with the close in the top or bottom third of the bar's own range, expressed as willr(period=1) since the schema has no arithmetic on price fields.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "8423f22beb864ce65457389f151905d9",
+      "at": "2026-08-08T09:09:11.014292Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

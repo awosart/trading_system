@@ -1,0 +1,182 @@
+{
+  "id": "bollinger-fade-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [
+    "RANGE"
+  ],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:low",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "lower"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": {
+              "indicator": "adx",
+              "params": {
+                "period": 14
+              },
+              "channel": "adx"
+            },
+            "right": 20.0
+          }
+        ]
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "pattern_is",
+          "right": {
+            "labels": [
+              "HAMMER",
+              "BULLISH_ENGULFING",
+              "MORNING_STAR"
+            ]
+          }
+        }
+      ],
+      "confirmation_window_bars": 3,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 2
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:high",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "upper"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": {
+              "indicator": "adx",
+              "params": {
+                "period": 14
+              },
+              "channel": "adx"
+            },
+            "right": 20.0
+          }
+        ]
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "pattern_is",
+          "right": {
+            "labels": [
+              "SHOOTING_STAR",
+              "BEARISH_ENGULFING",
+              "EVENING_STAR"
+            ]
+          }
+        }
+      ],
+      "confirmation_window_bars": 3,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 2
+      }
+    }
+  ],
+  "exit_ref": "conservative_2r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "leaf",
+          "op": "lt",
+          "left": {
+            "indicator": "adx",
+            "params": {
+              "period": 14
+            },
+            "channel": "adx"
+          },
+          "right": 15.0
+        },
+        "delta": 0.15,
+        "reason": "The flatter the market, the better a fade of its own extreme should hold"
+      }
+    ],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 20,
+      "buffer_atr_multiple": 0.4
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

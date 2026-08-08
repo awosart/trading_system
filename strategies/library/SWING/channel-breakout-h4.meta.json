@@ -1,0 +1,20 @@
+{
+  "id": "channel-breakout-h4",
+  "name": "Channel Breakout (H4)",
+  "author": "trading_system",
+  "tags": [
+    "trend",
+    "breakout",
+    "swing-structure"
+  ],
+  "notes": "Trend-following: buys a break of the last confirmed swing high while price is above a slow EMA, sells the mirror. Uses swing rather than donchian because a Donchian channel contains the current bar, so close > upper cannot fire, and the schema has no way to reference the previous bar's channel value.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "b96356eaafbd5066198d04ccf01a944c",
+      "at": "2026-08-08T09:11:39.780190Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

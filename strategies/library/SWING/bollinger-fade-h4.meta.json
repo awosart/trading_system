@@ -1,0 +1,20 @@
+{
+  "id": "bollinger-fade-h4",
+  "name": "Bollinger Fade (H4)",
+  "author": "trading_system",
+  "tags": [
+    "mean-reversion",
+    "range",
+    "bollinger"
+  ],
+  "notes": "Mean reversion: fades a pierce of the outer band, but only while ADX says there is no trend to fight, and only after a reversal candle confirms.",
+  "versions": [
+    {
+      "version": "1.0.0",
+      "spec_digest": "a15ae11aa6b1e99482d518385946d04f",
+      "at": "2026-08-08T09:09:10.680373Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}

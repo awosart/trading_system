@@ -1,0 +1,149 @@
+{
+  "id": "channel-breakout-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "swing",
+              "params": {
+                "lookback": 5
+              },
+              "channel": "swing_high"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 100
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "swing",
+              "params": {
+                "lookback": 5
+              },
+              "channel": "swing_low"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 100
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "breakeven_runner",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.55,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "adx",
+            "params": {
+              "period": 14
+            },
+            "channel": "adx"
+          },
+          "right": 25.0
+        },
+        "delta": 0.15,
+        "reason": "A break inside an already-directional market is worth more than one inside chop"
+      }
+    ],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 2.5
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 3
+  }
+}
