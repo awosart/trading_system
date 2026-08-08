@@ -4,8 +4,8 @@
 appears without that sample's size on the same object. A promise like that
 decays the moment someone adds a field under deadline pressure without
 noticing it was ever made — so it is proved here by reflecting over every
-dataclass ``metrics`` and ``statistical`` define, rather than trusted to
-whoever writes the next metric.
+dataclass ``metrics``, ``statistical`` and ``attribution`` define, rather than
+trusted to whoever writes the next metric.
 """
 
 import dataclasses
@@ -14,10 +14,11 @@ from types import ModuleType
 
 import pytest
 
+import trading_system.analytics.attribution as attribution
 import trading_system.analytics.metrics as metrics
 import trading_system.analytics.statistical as statistical
 
-MODULES = (metrics, statistical)
+MODULES = (metrics, statistical, attribution)
 VALID_KINDS = {"raw", "n", "value", "fact"}
 
 
@@ -76,7 +77,7 @@ CASE_IDS = [f"{cls.__name__}.{f.name}" for cls, f in CASES]
 
 
 class TestEveryFieldOfEveryStatsDataclassIsClassified:
-    """Nothing in ``metrics``/``statistical`` may skip the metadata contract."""
+    """Nothing in ``metrics``/``statistical``/``attribution`` may skip the metadata contract."""
 
     def test_the_scan_actually_found_the_project_s_dataclasses(self) -> None:
         # A sanity floor, not the real count: proves the reflection walked

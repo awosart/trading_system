@@ -1075,6 +1075,7 @@ class Orchestrator:
             entry_bar_index=event.index,
             entry_fx_rate=pending.decision.fx_rate,
             risk_amount=pending.decision.risk_amount,
+            entry_quality=pending.signal.quality,
         )
         self._portfolio.open(held)
         self._portfolio.restate_risk(held)

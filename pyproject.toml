@@ -41,6 +41,15 @@ analytics = [
 optimization = [
     "optuna>=3.6",
 ]
+# jinja2 and plotly live here for the same reason scipy does: the HTML report is
+# the last thing a run touches, and a backtest that never renders one should not
+# carry a template engine. Checked before adding: plotly's dependency closure is
+# `narwhals` and `packaging` only — it does NOT pull pandas, which would have
+# ruled it out under the P02 decision the way it rules out streamlit.
+report = [
+    "jinja2>=3.1",
+    "plotly>=6.0",
+]
 
 # The dev toolchain is a dependency GROUP (PEP 735), not an extra, because an
 # extra is package metadata — something a consumer of this package could install
@@ -49,10 +58,11 @@ optimization = [
 [dependency-groups]
 dev = [
     # Self-reference, so the versions stay declared once, up in the extras. mypy
-    # --strict has to see optuna and scipy to typecheck OptunaSearch and the
-    # analytics layer; a developer environment without them is one that cannot
-    # run `make all`. `ui` stays out — streamlit pulls pandas (P02).
-    "trading-system[analytics,optimization]",
+    # --strict has to see optuna, scipy, jinja2 and plotly to typecheck OptunaSearch,
+    # the analytics layer and the report renderer; a developer environment without
+    # them is one that cannot run `make all`. `ui` stays out — streamlit pulls
+    # pandas (P02); plotly, checked above, does not.
+    "trading-system[analytics,optimization,report]",
     # uv manages this environment from inside it. Declared rather than left to the
     # pip bootstrap in `make install`, so that `uv sync` — which prunes whatever the
     # resolution does not name — is never in a position to remove the tool running it.
@@ -127,6 +137,13 @@ strict = true
 python_version = "3.12"
 files = ["src", "tests"]
 warn_unreachable = true
+
+# plotly ships no py.typed marker and has no stubs on typeshed. The alternative
+# to this override is `type: ignore` on three import lines, which would also
+# silence a real typing error in those modules if one ever appeared there.
+[[tool.mypy.overrides]]
+module = ["plotly.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

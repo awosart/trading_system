@@ -588,6 +588,45 @@ class StrategyVerdict:
             "thresholds": asdict(self.thresholds),
         }
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "StrategyVerdict":
+        """Rebuild a verdict from what :meth:`to_dict` wrote.
+
+        Grading and reading a grade are separated in time: the command that
+        renders a report is not the one that computed the verdict, and
+        recomputing it to display it would cost dozens of backtests. The same
+        reason :func:`~trading_system.validation.walkforward.read_result` is
+        public.
+
+        ``may_approve`` is deliberately **not** read back — it is a property of
+        the grade, so a file claiming ``ROBUST`` with ``may_approve: false``
+        (or the reverse) cannot survive this round trip and produce a verdict
+        that contradicts itself.
+
+        Args:
+            payload: The mapping :meth:`to_dict` produced.
+
+        Returns:
+            The verdict.
+        """
+
+        def checks(key: str) -> tuple[VerdictCheck, ...]:
+            return tuple(
+                VerdictCheck(
+                    name=str(item["name"]), passed=bool(item["passed"]), detail=str(item["detail"])
+                )
+                for item in payload.get(key, ())
+            )
+
+        return cls(
+            verdict=Verdict(payload["verdict"]),
+            thresholds=VerdictThresholds(**payload["thresholds"]),
+            sufficiency=checks("sufficiency"),
+            overfit_checks=checks("overfit_checks"),
+            fragility_checks=checks("fragility_checks"),
+            reasons=tuple(str(reason) for reason in payload.get("reasons", ())),
+        )
+
 
 def build_verdict(
     report: WalkForwardReport,

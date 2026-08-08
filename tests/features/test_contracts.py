@@ -51,9 +51,54 @@ def test_vector_matches_streaming_on_arbitrary_data(frame: OHLCVFrame) -> None:
     parametrised over them. Generating a frame is far more expensive than
     evaluating an indicator on it, so sharing each drawn frame across the whole
     registry buys thirty times the coverage for the same budget.
+
+    **"Agreement lands near machine epsilon" is false for an expression that
+    cancels, and you will meet this before you meet the exception.** The promise
+    holds while every intermediate stays the size of its inputs: two paths over
+    one formula in IEEE doubles then differ in the last bit or two. It stops
+    holding the moment the formula subtracts two nearly equal numbers. That
+    subtraction discards the leading digits they share, and everything computed
+    from the remainder carries a relative error multiplied by however many
+    digits went — so a single differently-rounded intermediate, one ULP, comes
+    out of the far end amplified.
+
+    This was not reasoned about in advance; it was found. ``cci_20`` failed here
+    at 1.169e-07 on a value of 666.67, and the diagnosis was that the two paths'
+    window means differed by exactly one ULP — the exact answer, computed in
+    rational arithmetic on the same inputs, sat between them with each path
+    wrong by 5.84e-08 in opposite directions.
+
+    **If you are adding an indicator that subtracts close values — a deviation
+    from a mean, a difference of two long averages, anything divided by a
+    spread — and it fails here, this is the first thing to check, not the last.**
+    Diagnose it: compute the exact answer in :mod:`fractions`, and perturb the
+    suspect intermediate by one ULP to see whether that reproduces the gap. If
+    it does, the fix is a declared, justified
+    :attr:`~trading_system.features.base.BaseIndicator.parity_rtol` on that
+    indicator — see :class:`~trading_system.features.indicators.momentum.CCI`
+    for the shape of the argument. If it does not, you have a real formula
+    divergence and relaxing the tolerance would bury it.
     """
     for indicator in INDICATORS:
         indicator.verify_parity(frame)
+
+
+def test_relaxed_parity_is_declared_per_indicator_and_stays_rare() -> None:
+    """Relative slack must be an argued exception, never something inherited.
+
+    The default is zero, so an indicator gets slack only by overriding
+    ``parity_rtol`` and saying why. This test pins the set of indicators that
+    do: adding one is a deliberate act that fails here until the list is
+    updated, which is the moment to check that a cancellation argument was
+    actually made rather than a failing test silenced.
+    """
+    relaxed = {
+        indicator.name: indicator.parity_rtol
+        for indicator in INDICATORS
+        if indicator.parity_rtol != 0.0
+    }
+    assert relaxed == {"cci_20": 1e-7}
+    assert all(0.0 < value < 1e-5 for value in relaxed.values())
 
 
 @pytest.mark.parametrize("indicator", INDICATORS, ids=IDS)

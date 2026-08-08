@@ -262,15 +262,41 @@ class BaseIndicator[ValueT: IndicatorValue](ABC):
             for channel in self.outputs
         )
 
+    @property
+    def parity_rtol(self) -> float:
+        """Relative slack this indicator's own arithmetic requires in :meth:`verify_parity`.
+
+        **Zero, and it stays zero unless an indicator can say why it cannot be.**
+        The parity contract's promise — both paths run the same formula in IEEE
+        doubles, so genuine agreement lands near machine epsilon — holds for
+        every expression whose intermediate values stay the same size as its
+        inputs. It does **not** hold for an expression with a cancellation
+        stage: a subtraction of two nearly equal numbers throws away the leading
+        digits they share, and everything computed from the remainder inherits a
+        relative error scaled up by however many digits went. Two paths that
+        round one intermediate differently — by a single bit — then disagree in
+        the output by that bit times the amplification.
+
+        An indicator that overrides this owes the reader the amplification and
+        where it comes from, not merely a number. Overriding it to silence a
+        failure whose cause has not been traced to cancellation is how a real
+        formula divergence gets buried; the default of zero is what makes such
+        an override a visible, argued exception rather than an inherited one.
+        """
+        return 0.0
+
     def verify_parity(self, frame: OHLCVFrame, *, atol: float = DEFAULT_ATOL) -> None:
         """Assert the vectorised and incremental paths agree on ``frame``.
 
         Args:
             frame: Bars to evaluate both paths over.
-            atol: Absolute tolerance. Both paths use IEEE doubles over the same
-                formulas, so genuine agreement lands near machine epsilon;
-                anything approaching this bound is a formula difference, not
-                rounding.
+            atol: Absolute tolerance. For an indicator whose arithmetic never
+                cancels, this is the whole test: both paths run the same
+                formula in IEEE doubles, so genuine agreement lands near
+                machine epsilon and anything approaching this bound is a
+                formula difference rather than rounding. An indicator that
+                cancels by construction relaxes the comparison through
+                :attr:`parity_rtol`, which it must declare and justify itself.
 
         Raises:
             ValidationError: On the first bar and channel where the two paths
@@ -279,6 +305,7 @@ class BaseIndicator[ValueT: IndicatorValue](ABC):
         """
         vector = self.compute_frame(frame)
         stream = run_streaming(self, frame)
+        rtol = self.parity_rtol
         for channel in self.outputs:
             expected = vector[channel].to_list()
             actual = stream[channel].to_list()
@@ -290,10 +317,13 @@ class BaseIndicator[ValueT: IndicatorValue](ABC):
                         f"{self.name}.{channel}[{index}]: vector={left!r} stream={right!r}; "
                         "one path reports a value the other calls unavailable"
                     )
-                if not math.isclose(left, right, rel_tol=0.0, abs_tol=atol):
+                if not math.isclose(left, right, rel_tol=rtol, abs_tol=atol):
+                    bound = (
+                        f"atol={atol:.1e}" if rtol == 0.0 else f"atol={atol:.1e}, rtol={rtol:.1e}"
+                    )
                     raise ValidationError(
                         f"{self.name}.{channel}[{index}]: vector={left!r} stream={right!r}, "
-                        f"|diff|={abs(left - right):.3e} exceeds atol={atol:.1e}"
+                        f"|diff|={abs(left - right):.3e} exceeds {bound}"
                     )
 
 

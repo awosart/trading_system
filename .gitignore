@@ -27,3 +27,7 @@ build/
 # Stored runs. Anchored for the same reason /data/ is: a bare "runs/" would also
 # match any package directory of that name.
 /runs/
+
+# Generated HTML reports: a few megabytes of plotly per page, rebuilt from
+# runs/ on demand by `ts report`. Anchored for the same reason /runs/ is.
+/reports/

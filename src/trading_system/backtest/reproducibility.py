@@ -519,7 +519,8 @@ def _trade_row(trade: TradeRecord) -> dict[str, Any]:
     Money is written as its exact decimal string, never as a float: a run store
     that round-trips ``Decimal`` through binary floating point stops being able
     to prove that two runs agree exactly, which is the only thing it is for.
-    ``entry_price`` and ``realized_r`` are prices and ratios, and stay floats.
+    ``entry_price``, ``quality`` and ``realized_r`` are prices, scores and
+    ratios, and stay floats.
     """
     return {
         "position_id": trade.position_id,
@@ -530,6 +531,8 @@ def _trade_row(trade: TradeRecord) -> dict[str, Any]:
         "opened_at": trade.opened_at,
         "closed_at": trade.closed_at,
         "entry_price": float(trade.entry_price),
+        "quality": trade.quality,
+        "initial_risk_distance": trade.initial_risk_distance,
         "gross": str(trade.gross),
         "commission": str(trade.commission),
         "swap": str(trade.swap),
@@ -621,21 +624,23 @@ def read_run(directory: Path) -> StoredRun:
         was stored.
 
     Raises:
-        ReproducibilityError: If the rebuilt result does not hash to the stored
-            digest — the artefacts disagree with each other and neither can be
-            trusted over the other.
+        ReproducibilityError: If a stored table's columns are not the ones this
+            version writes — the run predates a change to the result schema and
+            has to be produced again; or if the rebuilt result does not hash to
+            the stored digest — the artefacts disagree with each other and
+            neither can be trusted over the other. The two are reported
+            separately on purpose: the first is a version mismatch with an
+            obvious remedy, the second is corruption with none.
     """
     manifest = RunManifest.from_dict(json.loads((directory / MANIFEST_FILE).read_text()))
     counters = json.loads((directory / RESULT_FILE).read_text())
+    curve_table = pl.read_parquet(directory / CURVE_FILE)
+    trades_table = pl.read_parquet(directory / TRADES_FILE)
+    _check_table_schema(curve_table, CURVE_SCHEMA, directory / CURVE_FILE)
+    _check_table_schema(trades_table, TRADE_SCHEMA, directory / TRADES_FILE)
     result = BacktestResult(
-        curve=[
-            _curve_point(row)
-            for row in pl.read_parquet(directory / CURVE_FILE).iter_rows(named=True)
-        ],
-        trades=[
-            _trade_record(row)
-            for row in pl.read_parquet(directory / TRADES_FILE).iter_rows(named=True)
-        ],
+        curve=[_curve_point(row) for row in curve_table.iter_rows(named=True)],
+        trades=[_trade_record(row) for row in trades_table.iter_rows(named=True)],
         instants=int(counters["instants"]),
         rejections=dict(counters["rejections"]),
         degradations=dict(counters["degradations"]),
@@ -675,47 +680,93 @@ def _stream_key(name: str) -> StreamKey:
     return StreamKey(symbol, Timeframe(timeframe))
 
 
+#: Columns of ``curve.parquet``. One definition, read by the writer and by the
+#: schema check on the way back in — two copies could disagree about what a
+#: stored run is supposed to look like.
+CURVE_SCHEMA: Mapping[str, pl.DataType] = {
+    "ts": pl.Datetime("us", "UTC"),
+    "day": pl.Date(),
+    "balance": pl.String(),
+    "equity": pl.String(),
+    "realized": pl.String(),
+    "unrealized": pl.String(),
+    "commission_paid": pl.String(),
+    "swap_paid": pl.String(),
+    "open_positions": pl.Int64(),
+}
+
+#: Columns of ``trades.parquet``. See :data:`CURVE_SCHEMA`.
+TRADE_SCHEMA: Mapping[str, pl.DataType] = {
+    "position_id": pl.String(),
+    "symbol": pl.String(),
+    "strategy_id": pl.String(),
+    "side": pl.String(),
+    "size": pl.String(),
+    "opened_at": pl.Datetime("us", "UTC"),
+    "closed_at": pl.Datetime("us", "UTC"),
+    "entry_price": pl.Float64(),
+    "quality": pl.Float64(),
+    "initial_risk_distance": pl.Float64(),
+    "gross": pl.String(),
+    "commission": pl.String(),
+    "swap": pl.String(),
+    "net": pl.String(),
+    "realized_r": pl.Float64(),
+    "legs": pl.Int64(),
+}
+
+
+def _check_table_schema(
+    frame: pl.DataFrame, expected: Mapping[str, pl.DataType], path: Path
+) -> None:
+    """Refuse a stored table whose columns are not the ones this version writes.
+
+    Without this, a run stored before a field was added to
+    :class:`~trading_system.backtest.portfolio.TradeRecord` fails on the way
+    back in with ``KeyError: 'quality'`` from deep inside a row rebuild — a
+    message that describes the symptom and names neither the cause nor the
+    remedy. A reader opening ``runs/`` months later gets told that the schema
+    moved and that the run has to be produced again, which is the only thing
+    they can actually do about it: the missing column is not recoverable from
+    what was written.
+
+    Args:
+        frame: The table as read.
+        expected: The columns this version writes.
+        path: The file, for the message.
+
+    Raises:
+        ReproducibilityError: If the column names differ in either direction.
+    """
+    found = list(frame.columns)
+    if found == list(expected):
+        return
+    missing = [name for name in expected if name not in found]
+    unknown = [name for name in found if name not in expected]
+    detail = []
+    if missing:
+        detail.append(f"missing {missing}")
+    if unknown:
+        detail.append(f"unexpected {unknown}")
+    if not detail:
+        detail.append(f"columns are in a different order: {found}")
+    raise ReproducibilityError(
+        f"{path}: the result schema has changed since this run was stored "
+        f"({'; '.join(detail)}). The run predates the current version of the "
+        f"result tables and cannot be read back — re-run it to store it again."
+    )
+
+
 def _curve_frame(result: BacktestResult) -> pl.DataFrame:
     """The equity curve as a table, with an explicit schema for an empty run."""
     rows = [_curve_row(point) for point in result.curve]
-    return pl.DataFrame(
-        rows,
-        schema={
-            "ts": pl.Datetime("us", "UTC"),
-            "day": pl.Date,
-            "balance": pl.String,
-            "equity": pl.String,
-            "realized": pl.String,
-            "unrealized": pl.String,
-            "commission_paid": pl.String,
-            "swap_paid": pl.String,
-            "open_positions": pl.Int64,
-        },
-    )
+    return pl.DataFrame(rows, schema=dict(CURVE_SCHEMA))
 
 
 def _trades_frame(result: BacktestResult) -> pl.DataFrame:
     """The trade list as a table, with an explicit schema for a run with none."""
     rows = [_trade_row(trade) for trade in result.trades]
-    return pl.DataFrame(
-        rows,
-        schema={
-            "position_id": pl.String,
-            "symbol": pl.String,
-            "strategy_id": pl.String,
-            "side": pl.String,
-            "size": pl.String,
-            "opened_at": pl.Datetime("us", "UTC"),
-            "closed_at": pl.Datetime("us", "UTC"),
-            "entry_price": pl.Float64,
-            "gross": pl.String,
-            "commission": pl.String,
-            "swap": pl.String,
-            "net": pl.String,
-            "realized_r": pl.Float64,
-            "legs": pl.Int64,
-        },
-    )
+    return pl.DataFrame(rows, schema=dict(TRADE_SCHEMA))
 
 
 def _curve_point(row: Mapping[str, Any]) -> EquityPoint:
@@ -744,6 +795,8 @@ def _trade_record(row: Mapping[str, Any]) -> TradeRecord:
         opened_at=row["opened_at"],
         closed_at=row["closed_at"],
         entry_price=Price(row["entry_price"]),
+        quality=float(row["quality"]),
+        initial_risk_distance=float(row["initial_risk_distance"]),
         gross=Decimal(row["gross"]),
         commission=Decimal(row["commission"]),
         swap=Decimal(row["swap"]),

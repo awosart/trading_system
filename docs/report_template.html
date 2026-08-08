@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if comparison %}Comparison{% else %}{{ source.label }}{% endif %} — trading_system report</title>
+<script>{{ plotly_js }}</script>
+<style>
+  :root {
+    --ink: #1c2128;
+    --muted: #5b6672;
+    --line: #e3e6ea;
+    --bg: #ffffff;
+    --panel: #f7f8f9;
+    --pos: #1b7f5e;
+    --neg: #b3402f;
+    --warn: #8a6d1f;
+    --warn-bg: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 28px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 14px; margin: 22px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .note {
+    background: var(--panel); border-left: 3px solid var(--muted);
+    padding: 10px 14px; margin: 12px 0; font-size: 13px; color: var(--muted);
+  }
+  .note strong { color: var(--ink); }
+  .warn { background: var(--warn-bg); border-left-color: var(--warn); color: var(--warn); }
+  .warn strong { color: var(--warn); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 4px; }
+  th, td { text-align: right; padding: 5px 9px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  tbody tr:hover { background: var(--panel); }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .thin { color: var(--warn); }
+  .thin::after { content: " ▲"; font-size: 9px; vertical-align: super; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
+  .scroll { overflow-x: auto; }
+  .chart { margin: 6px 0 4px; }
+  .verdict { display: inline-block; padding: 4px 12px; border-radius: 3px; font-weight: 600; letter-spacing: 0.04em; }
+  .v-ROBUST { background: #e3f3ec; color: var(--pos); }
+  .v-OVERFIT, .v-FRAGILE { background: #fbe9e5; color: var(--neg); }
+  .v-INSUFFICIENT { background: var(--warn-bg); color: var(--warn); }
+  .pass { color: var(--pos); font-weight: 600; }
+  .fail { color: var(--neg); font-weight: 600; }
+  footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+{# ------------------------------------------------------------------ #}
+{% if comparison %}
+<header>
+  <h1>Comparison of {{ comparison.sources | length }} runs</h1>
+  <div class="sub">Curves are normalised to their own starting points: these are different accounts over different periods, so only their shapes compare.</div>
+</header>
+
+<div class="chart">{{ figures.comparison }}</div>
+
+<h2>Verdicts</h2>
+<table>
+  <thead><tr><th>Run</th><th>Verdict</th><th>May approve</th><th>Why not</th></tr></thead>
+  <tbody>
+  {% for label, v in comparison.verdicts %}
+    <tr>
+      <td>{{ label }}</td>
+      <td>{% if v %}<span class="verdict v-{{ v.verdict.value }}">{{ v.verdict.value }}</span>{% else %}—{% endif %}</td>
+      <td>{% if v %}{{ "yes" if v.may_approve else "no" }}{% else %}—{% endif %}</td>
+      <td style="text-align:left">{% if v %}{{ v.reasons | join("; ") }}{% else %}not graded{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Metrics side by side</h2>
+<div class="note">▲ marks a statistic computed over fewer than {{ reliable_trades }} observations.</div>
+<div class="scroll">
+<table>
+  <thead>
+    <tr><th>Group</th><th>Metric</th>
+    {% for s in comparison.sources %}<th>{{ s.label }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row in comparison.rows %}
+    <tr>
+      <td>{{ row.group }}</td><td>{{ row.name }}</td>
+      {% for cell in row.cells %}
+      <td class="num {% if cell.unreliable %}thin{% endif %}">{{ cell.value }}</td>
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{# ------------------------------------------------------------------ #}
+{% else %}
+<header>
+  <h1>{{ source.label }}</h1>
+  <div class="sub">
+    {% if kind == "walkforward" %}
+      Walk-forward over {{ source.folds | length }} folds. <strong>This is a procedure, not one strategy's account</strong> — parameters are re-selected at every seam, and the curve below is a splice of each fold's out-of-sample returns, each fold starting from the same synthetic capital.
+    {% else %}
+      Single backtest: one parameter set, one account.
+    {% endif %}
+    {{ source.trades | length }} closed trades.
+  </div>
+</header>
+
+{% if verdict %}
+<h2>Verdict</h2>
+<p><span class="verdict v-{{ verdict.verdict.value }}">{{ verdict.verdict.value }}</span>
+&nbsp;<span class="sub">approval {{ "permitted" if verdict.may_approve else "not permitted" }}</span></p>
+<table>
+  <thead><tr><th>Gate</th><th>Criterion</th><th>Result</th><th>Measurement</th></tr></thead>
+  <tbody>
+  {% for name, checks in [("sufficiency", verdict.sufficiency), ("overfit", verdict.overfit_checks), ("fragility", verdict.fragility_checks)] %}
+    {% for check in checks %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ check.name }}</td>
+      <td class="{{ 'pass' if check.passed else 'fail' }}">{{ "PASS" if check.passed else "FAIL" }}</td>
+      <td style="text-align:left">{{ check.detail }}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Equity</h2>
+{% if kind == "walkforward" %}
+<div class="note">
+  <strong>Axis is a multiple of the starting point, not money.</strong> The stitched series has no financing, no commission and no open position behind it — its synthetic starting capital does not represent an account any run held. Dotted lines are fold seams, labelled with the parameters that segment traded on.
+</div>
+{% endif %}
+<div class="chart">{{ figures.equity }}</div>
+
+{% if kind == "walkforward" %}
+<div class="grid">
+  <div class="chart">{{ figures.per_fold }}</div>
+  <div class="chart">{{ figures.is_oos }}</div>
+</div>
+
+<h2>Folds</h2>
+<div class="note">
+  In-sample and out-of-sample are published as a <strong>pair</strong>. No ratio between them is taken anywhere on this page: it is undefined once in-sample approaches zero, which happens in ordinary folds.
+</div>
+<div class="note">
+  <strong>"IS baseline" is not the sample the search worked on.</strong> Each fold is run in-sample once on the <em>strategy file's own</em> parameters, and only then handed to the selector, which evaluates its own trials over the same window. A baseline that closed no trades says the template parameters found no setups — it says nothing about the search, whose sample is the <strong>scored</strong> column beside it.
+</div>
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Fold</th><th>OOS window</th><th>IS baseline trades</th><th>Search scored / trials</th><th>OOS trades</th>
+      <th>IS exp. R</th><th>OOS exp. R</th><th>IS Sortino</th><th>OOS Sortino</th>
+      <th>Parameters</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for fold in source.folds %}
+    {% set seg = (source.segments | selectattr("index", "equalto", fold.index) | list | first) %}
+    <tr>
+      <td>{{ fold.index }}{% if fold.insufficient %} <span class="thin"></span>{% endif %}</td>
+      <td>{{ fold.oos_window.trade_start.date() }} → {{ fold.oos_window.trade_end.date() }}</td>
+      <td class="num{% if fold.is_trade_count == 0 %} thin{% endif %}"
+          {% if fold.is_trade_count == 0 %}title="The template parameters closed nothing on this window. The search still had a sample — see the next column."{% endif %}>
+        {{ fold.is_trade_count }}{% if fold.is_trade_count == 0 %} (template found none){% endif %}
+      </td>
+      <td class="num">
+        {%- if seg and seg.selection -%}
+          {{ seg.selection.n_scored }} / {{ seg.selection.n_trials }}
+        {%- else -%}—{%- endif -%}
+      </td>
+      <td class="num">{{ fold.oos_trade_count }}</td>
+      <td class="num">{{ "%.4f"|format(fold.is_expectancy_r) if fold.is_expectancy_r is not none else "—" }}</td>
+      <td class="num {{ 'pos' if (fold.oos_expectancy_r or 0) > 0 else 'neg' }}">{{ "%.4f"|format(fold.oos_expectancy_r) if fold.oos_expectancy_r is not none else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(fold.is_sortino) if fold.is_sortino is not none else "—" }}</td>
+      <td class="num">{{ "%.3f"|format(fold.oos_sortino) if fold.oos_sortino is not none else "—" }}</td>
+      <td style="text-align:left">
+        {%- if seg -%}
+          {%- for k, v in seg.parameters.items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor -%}
+        {%- endif -%}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<h2>Metrics</h2>
+{% if thin_sample %}
+<div class="note warn">
+  <strong>{{ source.trades | length }} trades, below the {{ reliable_trades }} this system treats as the floor for a judgement.</strong> Every trade-derived statistic below is marked ▲ and should be read as an observation, not an estimate.
+</div>
+{% else %}
+<div class="note">▲ marks a statistic computed over fewer than {{ reliable_trades }} observations.</div>
+{% endif %}
+<div class="scroll">
+<table>
+  <thead><tr><th>Group</th><th>Metric</th><th>Value</th><th>n</th></tr></thead>
+  <tbody>
+  {% for row in metric_rows %}
+    <tr>
+      <td>{{ row.group }}</td>
+      <td>{{ row.name }}</td>
+      <td class="num {% if row.unreliable %}thin{% endif %}">{{ row.value }}</td>
+      <td class="num sub">{{ row.sample if row.sample is not none else "" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Distribution of R</h2>
+<div class="chart">{{ figures.r_distribution }}</div>
+
+<h2>Monthly</h2>
+<div class="chart">{{ figures.monthly }}</div>
+
+<h2>Excursions</h2>
+{% if excursion_stats.count %}
+<div class="note">
+  Measured in R against each trade's own frozen risk distance, over the bars that opened <strong>strictly after</strong> the entry fill — the entry bar's range includes movement that happened before the fill.
+  {% if excursion_stats.skipped %} {{ excursion_stats.skipped }} trade(s) skipped for want of bars.{% endif %}
+</div>
+<table>
+  <thead><tr><th>Statistic</th><th>Value</th><th>Reads as</th></tr></thead>
+  <tbody>
+    <tr><td>mean MAE</td><td class="num">{{ "%.3f"|format(excursion_stats.mean_mae_r) }}R</td>
+        <td style="text-align:left">how far trades ran against, on average; well under 1R says stops were rarely approached</td></tr>
+    <tr><td>median MAE</td><td class="num">{{ "%.3f"|format(excursion_stats.median_mae_r) }}R</td><td></td></tr>
+    <tr><td>mean MFE</td><td class="num">{{ "%.3f"|format(excursion_stats.mean_mfe_r) }}R</td>
+        <td style="text-align:left">how far they ran in favour</td></tr>
+    <tr><td>median MFE</td><td class="num">{{ "%.3f"|format(excursion_stats.median_mfe_r) }}R</td><td></td></tr>
+    <tr><td>capture (aggregate)</td>
+        <td class="num">{{ "%.3f"|format(excursion_stats.capture) if excursion_stats.capture is not none else "—" }}</td>
+        <td style="text-align:left">total R taken over total R offered; not a mean of per-trade ratios, which a near-zero MFE blows up</td></tr>
+    <tr><td>capture (median trade)</td>
+        <td class="num">{{ "%.3f"|format(excursion_stats.median_capture) if excursion_stats.median_capture is not none else "—" }}</td>
+        <td style="text-align:left">what a typical trade took of what it was offered</td></tr>
+    <tr><td>losers that ran ≥1R in favour</td><td class="num">{{ excursion_stats.losers_with_favourable_run }}</td>
+        <td style="text-align:left">the concrete form of "targets sit past what the trade reaches"</td></tr>
+  </tbody>
+</table>
+<div class="chart">{{ figures.excursions }}</div>
+{% else %}
+<div class="note warn"><strong>Not measured.</strong> {{ excursion_stats.skipped }} trade(s) had no bars available for their stream, so no excursion could be computed. Pass the run's frames to measure them.</div>
+{% endif %}
+
+<h2>Quality against realised R</h2>
+<div class="note {% if quality.correlation is none %}warn{% endif %}">
+  {{ quality.note }}
+</div>
+{% if quality.groups %}
+<table>
+  <thead><tr><th>Quality</th><th>Trades</th><th>Expectancy R</th><th>Median R</th><th>Win rate</th></tr></thead>
+  <tbody>
+  {% for group in quality.groups %}
+    <tr>
+      <td>{{ group.label }}</td>
+      <td class="num">{{ group.count }}</td>
+      <td class="num {{ 'pos' if group.expectancy_r > 0 else 'neg' }}">{{ "%.4f"|format(group.expectancy_r) }}</td>
+      <td class="num">{{ "%.4f"|format(group.median_r) }}</td>
+      <td class="num">{{ "%.1f"|format(group.win_rate * 100) }}%</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% if quality.gap %}
+<h3>Top minus bottom</h3>
+<table>
+  <thead><tr><th>Comparison</th><th>Difference</th><th>95% interval</th><th>t</th><th>p</th><th>Correlation</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>{{ quality.gap.high_label }} (n={{ quality.gap.n_high }}) − {{ quality.gap.low_label }} (n={{ quality.gap.n_low }})</td>
+      <td class="num {{ 'pos' if quality.gap.difference > 0 else 'neg' }}">{{ "%+.4f"|format(quality.gap.difference) }}R</td>
+      <td class="num">
+        {%- if quality.gap.ci_low is not none -%}
+          [{{ "%+.4f"|format(quality.gap.ci_low) }}, {{ "%+.4f"|format(quality.gap.ci_high) }}]
+        {%- else -%}—{%- endif -%}
+      </td>
+      <td class="num">{{ "%.3f"|format(quality.gap.t_statistic) if quality.gap.t_statistic is not none else "—" }}</td>
+      <td class="num">{{ "%.4f"|format(quality.gap.p_value) if quality.gap.p_value is not none else "—" }}</td>
+      <td class="num">{{ "%.4f"|format(quality.correlation) if quality.correlation is not none else "—" }}</td>
+    </tr>
+  </tbody>
+</table>
+<div class="note">An interval spanning zero says the score did not separate the trades on this sample. The correlation is shown beside the difference, never instead of it: on two levels it is the same information rescaled, and it hides both group sizes.</div>
+{% endif %}
+
+<h2>Attribution</h2>
+{% if kind == "walkforward" %}
+<div class="note">Cut over <strong>every fold's out-of-sample trades pooled</strong> — the only sample large enough to slice. Parameters differ between folds, so a bucket mixes them.</div>
+{% endif %}
+<div class="grid">
+{% for name, cut in slices.items() %}
+  <div>
+    <h3>{{ name }}</h3>
+    {% if not cut.partitions %}
+    <div class="note">Buckets overlap — a trade counts in every session active at its entry, so these rows sum to more than {{ cut.n_trades }}.</div>
+    {% endif %}
+    <table>
+      <thead><tr><th>{{ name }}</th><th>n</th><th>Net</th><th>Exp. R</th><th>Win</th></tr></thead>
+      <tbody>
+      {% for row in cut.rows %}
+        <tr>
+          <td>{{ row.label }}</td>
+          <td class="num {% if row.thin %}thin{% endif %}">{{ row.count }}</td>
+          <td class="num {{ 'pos' if row.net > 0 else 'neg' }}">{{ "{:,.2f}".format(row.net) }}</td>
+          <td class="num {{ 'pos' if row.expectancy_r > 0 else 'neg' }}">{{ "%.3f"|format(row.expectancy_r) }}</td>
+          <td class="num">{{ "%.0f"|format(row.win_rate * 100) }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endfor %}
+</div>
+
+{% endif %}
+
+<footer>
+  Generated by trading_system · analytics/report.py · ▲ marks a statistic whose sample is below {{ reliable_trades }} observations.
+</footer>
+</div>
+</body>
+</html>

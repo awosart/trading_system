@@ -15,6 +15,15 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
+from trading_system.analytics.report import (
+    build,
+    build_comparison,
+    export_metrics,
+    fold_selections_from_disk,
+    source_from_run,
+    source_from_walkforward,
+    write,
+)
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
 from trading_system.backtest.orchestrator import StrategyBinding
@@ -24,6 +33,7 @@ from trading_system.core.exceptions import ValidationError
 from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.logging import get_logger, setup_logging
 from trading_system.core.types import Timeframe
+from trading_system.data.models import OHLCVFrame
 from trading_system.data.providers.csv_provider import CSVProvider, CSVSchema
 from trading_system.data.providers.dukascopy_provider import DukascopyProvider
 from trading_system.data.quality import QualityConfig, check_frame
@@ -68,6 +78,7 @@ from trading_system.validation.optimization import (
     read_fold_selection,
 )
 from trading_system.validation.report import (
+    StrategyVerdict,
     WalkForwardReport,
     build_report,
     build_verdict,
@@ -99,9 +110,11 @@ app = typer.Typer(help="Modular trading system.")
 data_app = typer.Typer(help="Market data management.")
 strategy_app = typer.Typer(help="Strategy spec management.")
 validate_app = typer.Typer(help="Out-of-sample validation.")
+report_app = typer.Typer(help="HTML reports over stored runs.")
 app.add_typer(data_app, name="data")
 app.add_typer(strategy_app, name="strategy")
 app.add_typer(validate_app, name="validate")
+app.add_typer(report_app, name="report")
 
 logger = get_logger(__name__)
 
@@ -1302,6 +1315,152 @@ def validate_verdict(
             f"(perm {graded.metric('permutation_percentile')}, "
             f"synth {graded.metric('synthetic_percentile')})"
         )
+
+
+def _report_streams(
+    settings: Settings, symbol: str | None, timeframe: Timeframe | None
+) -> dict[StreamKey, OHLCVFrame]:
+    """Bars for the excursion section, or nothing when the caller named no stream.
+
+    Excursions need the price path, which a closed trade does not carry (P14
+    stage 2). Absent bars produce a section saying so, never a silently missing
+    one.
+    """
+    if symbol is None or timeframe is None:
+        return {}
+    frame = ParquetStore(settings.data_dir).get(symbol, timeframe)
+    return {} if frame.is_empty else {StreamKey(symbol, timeframe): frame}
+
+
+def _stored_verdict(directory: Path) -> StrategyVerdict | None:
+    """A walk-forward's verdict, if ``validate verdict`` has been run over it."""
+    path = directory / "verdict.json"
+    if not path.exists():
+        return None
+    return StrategyVerdict.from_dict(json.loads(path.read_text()))
+
+
+@report_app.command("run")
+def report_run(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(..., help="Run id under the runs directory."),
+    out: Path | None = typer.Option(None, "--out", help="Where to write the page."),
+    symbol: str | None = typer.Option(None, "--symbol", help="Symbol whose bars to load."),
+    timeframe: Timeframe | None = typer.Option(None, "--timeframe", help="Its timeframe."),
+    metrics_out: Path | None = typer.Option(None, "--metrics", help="Also export metrics JSON."),
+) -> None:
+    """Render one stored backtest as a self-contained HTML page."""
+    settings: Settings = ctx.obj
+    directory = settings.runs_dir / run_id
+    if not directory.exists():
+        typer.echo(f"no run {run_id} under {settings.runs_dir}")
+        raise typer.Exit(code=1)
+
+    source = source_from_run(
+        directory, streams=_report_streams(settings, symbol, timeframe), label=run_id
+    )
+    rendered = build(source)
+    destination = out or directory / "report.html"
+    write(rendered, destination)
+    typer.echo(f"{run_id}: {len(source.trades)} trades → {destination}")
+    if metrics_out is not None:
+        export_metrics(rendered, metrics_out)
+        typer.echo(f"  metrics → {metrics_out}")
+
+
+@report_app.command("walkforward")
+def report_walkforward(
+    ctx: typer.Context,
+    wf_id: str = typer.Argument(..., help="Walk-forward id."),
+    min_trades_per_fold: int = typer.Option(
+        10, "--min-trades-per-fold", help="Below this, a fold is flagged insufficient."
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Where to write the page."),
+    symbol: str | None = typer.Option(None, "--symbol", help="Symbol whose bars to load."),
+    timeframe: Timeframe | None = typer.Option(None, "--timeframe", help="Its timeframe."),
+    metrics_out: Path | None = typer.Option(None, "--metrics", help="Also export metrics JSON."),
+) -> None:
+    """Render a finished walk-forward: stitched out-of-sample curve, folds, verdict.
+
+    The page presents the walk-forward as a **procedure**, not as one
+    strategy's account — the axis is a multiple of the starting point and every
+    fold seam is labelled with the parameters that segment traded on.
+    """
+    settings: Settings = ctx.obj
+    directory = settings.runs_dir / "walkforward" / wf_id
+    if not (directory / WF_MANIFEST_FILE).exists():
+        typer.echo(f"no walk-forward {wf_id} under {settings.runs_dir}")
+        raise typer.Exit(code=1)
+
+    source = source_from_walkforward(
+        directory,
+        store_root=settings.runs_dir,
+        min_trades_per_fold=min_trades_per_fold,
+        streams=_report_streams(settings, symbol, timeframe),
+        label=wf_id,
+        verdict=_stored_verdict(directory),
+        selections=fold_selections_from_disk(directory),
+    )
+    rendered = build(source)
+    destination = out or directory / "report.html"
+    write(rendered, destination)
+    typer.echo(
+        f"{wf_id}: {len(source.folds)} folds, {len(source.trades)} pooled OOS trades "
+        f"→ {destination}"
+    )
+    if metrics_out is not None:
+        export_metrics(rendered, metrics_out)
+        typer.echo(f"  metrics → {metrics_out}")
+
+
+@report_app.command("compare")
+def report_compare(
+    ctx: typer.Context,
+    ids: list[str] = typer.Argument(..., help="Walk-forward ids to compare."),
+    labels: str | None = typer.Option(
+        None, "--labels", help="Comma-separated display names, in the same order as the ids."
+    ),
+    min_trades_per_fold: int = typer.Option(10, "--min-trades-per-fold"),
+    out: Path = typer.Option(Path("comparison.html"), "--out", help="Where to write the page."),
+    metrics_out: Path | None = typer.Option(None, "--metrics", help="Also export metrics JSON."),
+) -> None:
+    """Put several walk-forwards on one page: curves, metrics and verdicts side by side.
+
+    Curves are normalised to their own starting points. They are different
+    accounts over different periods, so only their shapes compare.
+    """
+    settings: Settings = ctx.obj
+    names = labels.split(",") if labels else []
+    if names and len(names) != len(ids):
+        typer.echo(f"--labels has {len(names)} names for {len(ids)} ids")
+        raise typer.Exit(code=1)
+
+    sources = []
+    for index, wf_id in enumerate(ids):
+        directory = settings.runs_dir / "walkforward" / wf_id
+        if not (directory / WF_MANIFEST_FILE).exists():
+            typer.echo(f"no walk-forward {wf_id} under {settings.runs_dir}")
+            raise typer.Exit(code=1)
+        sources.append(
+            source_from_walkforward(
+                directory,
+                store_root=settings.runs_dir,
+                min_trades_per_fold=min_trades_per_fold,
+                label=names[index] if names else wf_id,
+                verdict=_stored_verdict(directory),
+                selections=fold_selections_from_disk(directory),
+            )
+        )
+
+    rendered = build_comparison(sources)
+    write(rendered, out)
+    typer.echo(f"compared {len(sources)} runs → {out}")
+    for source in sources:
+        grade = source.verdict.verdict.value if source.verdict else "not graded"
+        typer.echo(f"  {source.label}: {len(source.trades)} trades, {grade}")
+    if metrics_out is not None:
+        export_metrics(rendered, metrics_out)
+        typer.echo(f"  metrics → {metrics_out}")
 
 
 @app.command()

@@ -250,6 +250,59 @@ class TestTheStore:
         with pytest.raises(ReproducibilityError, match="disagree"):
             read_run(directory)
 
+    def test_a_run_stored_under_an_older_schema_says_so_rather_than_failing_on_a_key(
+        self, inputs: RunInputs, tmp_path: Path
+    ) -> None:
+        """A reader who opens ``runs/`` months later must be told what happened.
+
+        Dropping a column is exactly what adding a field to ``TradeRecord``
+        does to every run stored before it. Without a schema check the failure
+        is ``KeyError: 'quality'`` from inside a row rebuild: a message that
+        names the symptom, not the cause, and offers no remedy. The remedy is
+        the only one available — the column is not recoverable from what was
+        written, so the run has to be produced again.
+        """
+        directory = write_run(tmp_path, manifest_of(inputs), inputs.run())
+        table = pl.read_parquet(directory / TRADES_FILE)
+        table.drop("quality").write_parquet(directory / TRADES_FILE)
+
+        with pytest.raises(ReproducibilityError, match="result schema has changed"):
+            read_run(directory)
+
+    def test_the_schema_message_names_the_column_and_the_remedy(
+        self, inputs: RunInputs, tmp_path: Path
+    ) -> None:
+        directory = write_run(tmp_path, manifest_of(inputs), inputs.run())
+        table = pl.read_parquet(directory / TRADES_FILE)
+        table.drop("quality").write_parquet(directory / TRADES_FILE)
+
+        with pytest.raises(ReproducibilityError) as error:
+            read_run(directory)
+        message = str(error.value)
+        assert "quality" in message
+        assert "re-run it" in message
+        # Must not be reported as corruption: the artefacts agree with each
+        # other perfectly, they were simply written by an older version.
+        assert "disagree" not in message
+
+    def test_an_unknown_extra_column_is_refused_in_the_same_way(
+        self, inputs: RunInputs, tmp_path: Path
+    ) -> None:
+        """A column this version does not know about is a version mismatch too.
+
+        Checked in both directions because the failure is symmetric: reading a
+        run written by a *newer* version is no safer than reading one written
+        by an older one.
+        """
+        directory = write_run(tmp_path, manifest_of(inputs), inputs.run())
+        table = pl.read_parquet(directory / TRADES_FILE)
+        table.with_columns(pl.lit(1.0).alias("from_the_future")).write_parquet(
+            directory / TRADES_FILE
+        )
+
+        with pytest.raises(ReproducibilityError, match="result schema has changed"):
+            read_run(directory)
+
 
 class TestTheDescriptionRefusesWhatItCannotSee:
     """A digest that quietly accepts anything is a digest that certifies nothing."""

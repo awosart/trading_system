@@ -281,6 +281,53 @@ class CCI(ScalarIndicator):
         """Bars consumed before the window is full."""
         return self.period - 1
 
+    @property
+    def parity_rtol(self) -> float:
+        """Relative slack the two paths need, because this formula cancels by construction.
+
+        **CCI subtracts nearly equal numbers twice, and then divides one
+        remainder by the other.** Both ``typical - mean`` and every ``|x - mean|``
+        inside the mean absolute deviation throw away the digits the price level
+        and its own window mean share. On a window whose prices sit at 1.00002
+        and whose deviations are 1.3e-05, that is about five decimal digits gone
+        before either path does anything wrong — of the ~16 a double carries,
+        ~11 remain.
+
+        What is left is decided by which double the window mean rounds to, and
+        the two paths do not have to pick the same one: the vectorised path sums
+        the window inside polars' rolling mean, the incremental one sums its own
+        deque. **One ULP of difference in that mean is the entire disagreement.**
+        Measured on the counterexample that forced this property: the mean's
+        last bit moves the output by 1.1687e-07 on a value of 666.67, and the
+        two paths differed by 1.169e-07 — the same number to four figures, with
+        the exact answer (666.6666666666666, computed in rational arithmetic on
+        the same inputs) sitting between them, each path wrong by the same
+        5.84e-08 in opposite directions. That symmetry is the signature of
+        rounding, not of two different formulas.
+
+        The amplification is ``~2 * eps * price_level / mean_deviation``, so the
+        bound is a property of the window rather than of this class. Prices in
+        the parity generator are whole ticks, so two typical prices differ by at
+        least a third of a tick, which puts the worst reachable relative error
+        near 1e-9 — and a sweep of 1500 generated frames (~210k bars) measured
+        the worst actually reached at **1.33e-09**, agreeing with that estimate.
+        ``1e-7`` therefore carries about 75x of margin while staying far tighter
+        than any real formula difference, which shows up in whole units. It is
+        **not** a bound for an arbitrarily degenerate window; below
+        :data:`_FLAT_TOLERANCE` of the price level both paths return 0.0 and the
+        question does not arise, and the band between the two is narrow enough
+        that no generated or market bar has reached it.
+
+        **Practical consequence, stated because it is real rather than
+        theoretical.** A disagreement in the tenth significant digit cannot
+        change any comparison in this system except one: ``cross_above`` (or
+        ``cross_below``) against a CCI threshold on exactly the bar where the
+        crossing happens, where the two paths could place the crossing on
+        adjacent bars. Rare, but not impossible, and it is the only place where
+        the paths' choice matters to a decision.
+        """
+        return 1e-7
+
     def _expression(self) -> pl.Expr:
         """Deviation from the mean typical price, scaled by mean absolute deviation."""
         typical = source_expression("hlc3")

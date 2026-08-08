@@ -84,6 +84,10 @@ class OpenPosition:
             restating open risk and as the fallback when a mark cannot be priced.
         risk_amount: Money at stake if the stop is hit, in account currency.
             Restated whenever the stop moves or a partial closes.
+        entry_quality: The opening signal's ``quality``. Carried so the closed
+            trade can report it — nothing in this layer reads it to decide
+            anything, which is the point: it is a record of what the Entry
+            Engine scored the setup, not an input to sizing or exit.
         deferred_exit: A ``BAR_CLOSE`` decision awaiting this stream's next open.
             Held here, on the object that outlives the loop — not in a local
             variable, which is how it gets lost, and not on the plan, which is
@@ -103,6 +107,7 @@ class OpenPosition:
     entry_bar_index: int
     entry_fx_rate: Decimal
     risk_amount: Decimal
+    entry_quality: float
     deferred_exit: DeferredExit | None = None
     commission_paid: Decimal = Decimal(0)
     swap_paid: Decimal = Decimal(0)
@@ -165,6 +170,17 @@ class TradeRecord:
         opened_at: Entry fill time.
         closed_at: Time of the last closing leg.
         entry_price: Executable entry price, after spread and slippage.
+        quality: The opening signal's ``quality``, in ``[0, 1]``. A record, not
+            a decision: by the time a trade is filed, quality has already done
+            whatever sizing it was going to do. It is here so P14 can ask
+            whether the score predicted anything — a question that needs the
+            score and the realised R on the same row.
+        initial_risk_distance: Entry price to initial stop, in price units,
+            frozen at entry — the denominator ``realized_r`` was measured
+            against. Carried for the same reason ``quality`` is: excursions
+            (MAE/MFE) are only interpretable in R, and R needs a denominator
+            that no consumer of a closed trade can otherwise reconstruct —
+            ``realized_r`` is size-weighted across legs and does not invert.
         gross: Leg profit summed over the position's legs, account currency.
         commission: Commission across the entry fill and every closing fill.
         swap: Financing, signed.
@@ -181,6 +197,8 @@ class TradeRecord:
     opened_at: datetime
     closed_at: datetime
     entry_price: Price
+    quality: float
+    initial_risk_distance: float
     gross: Decimal
     commission: Decimal
     swap: Decimal
@@ -438,6 +456,8 @@ class Portfolio:
             opened_at=held.position.opened_at,
             closed_at=ensure_utc(closed_at),
             entry_price=held.position.entry_price,
+            quality=held.entry_quality,
+            initial_risk_distance=held.position.initial_risk_distance,
             gross=held.realized,
             commission=held.commission_paid,
             swap=held.swap_paid,
