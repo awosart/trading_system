@@ -41,7 +41,22 @@ analytics = [
 optimization = [
     "optuna>=3.6",
 ]
+
+# The dev toolchain is a dependency GROUP (PEP 735), not an extra, because an
+# extra is package metadata — something a consumer of this package could install
+# — and nobody consuming trading-system wants its linter. The three above stay
+# extras precisely because they are the opposite: real optional runtime features.
+[dependency-groups]
 dev = [
+    # Self-reference, so the versions stay declared once, up in the extras. mypy
+    # --strict has to see optuna and scipy to typecheck OptunaSearch and the
+    # analytics layer; a developer environment without them is one that cannot
+    # run `make all`. `ui` stays out — streamlit pulls pandas (P02).
+    "trading-system[analytics,optimization]",
+    # uv manages this environment from inside it. Declared rather than left to the
+    # pip bootstrap in `make install`, so that `uv sync` — which prunes whatever the
+    # resolution does not name — is never in a position to remove the tool running it.
+    "uv>=0.12",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "hypothesis>=6.0",
@@ -51,6 +66,17 @@ dev = [
     "types-PyYAML>=6.0",
     "scipy-stubs>=1.11",
 ]
+
+# What a bare `uv sync` installs. `sync` resolves the environment down to exactly
+# this set and UNINSTALLS everything else, so a toolchain reachable only behind a
+# flag is a toolchain that some future `uv sync` silently deletes — leaving a tree
+# that looks fine until `make all` fails on a missing import.
+#
+# Groups are the only lever here: there is no `default-extras` setting (uv 0.12
+# rejects the key outright), which is the other half of why the dev toolchain is a
+# group and why that group reaches the two extras it needs by self-reference.
+[tool.uv]
+default-groups = ["dev"]
 
 [tool.ruff]
 line-length = 100

@@ -11,16 +11,16 @@ PYTHON ?= python3.12
 VENV := $(CURDIR)/.venv
 BIN := $(VENV)/bin
 
-# Every extra except `ui`, which is deliberately left out: it pulls streamlit,
-# and streamlit pulls pandas, which this project does not use (P02).
-# `optimization` is installed even though the runtime does without it — OptunaSearch
-# is production code and mypy --strict has to see optuna's types to check it. The
-# rule that a plain backtest imports without extras is a runtime property, and it
-# is enforced where it belongs, by the try/except ImportError around the import.
+# `uv sync`, with no extra flags, so that this target and the command a developer
+# types by hand are the same operation against the same lockfile — the set of
+# packages to install is pyproject's business (see [tool.uv] default-groups), not
+# something spelled out a second time here, where the two spellings could drift.
+# pip is used once, only to bootstrap a uv to run that sync with; the dev group
+# declares uv itself, so every later sync keeps it.
 install:
 	$(PYTHON) -m venv $(VENV)
 	$(BIN)/python -m pip install -qU pip uv
-	VIRTUAL_ENV=$(VENV) $(BIN)/uv pip install -e ".[dev,analytics,optimization]"
+	$(BIN)/uv sync
 
 lint:
 	$(BIN)/ruff check src/ tests/
