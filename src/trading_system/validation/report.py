@@ -18,12 +18,15 @@ information, on top of every counter this module already exists to preserve.
 """
 
 import json
+import math
+import statistics
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from trading_system.analytics.metrics import daily_curve, sharpe_daily, sortino_daily, trade_stats
 from trading_system.backtest.portfolio import EquityPoint, TradeRecord
@@ -31,6 +34,10 @@ from trading_system.backtest.reproducibility import read_run
 from trading_system.validation.splitting import Fold, FoldWindow
 from trading_system.validation.stitching import StitchedCurve, stitch
 from trading_system.validation.walkforward import WalkForwardResult
+
+if TYPE_CHECKING:
+    from trading_system.validation.monte_carlo import MonteCarloReport
+    from trading_system.validation.robustness import RobustnessReport
 
 
 def _equity_at(curve: Sequence[EquityPoint], ts: datetime) -> Decimal | None:
@@ -349,3 +356,425 @@ def write_report(report: WalkForwardReport, path: Path) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report.to_dict(), indent=2))
+
+
+# ---------------------------------------------------------------------------
+# The verdict
+# ---------------------------------------------------------------------------
+
+
+class Verdict(StrEnum):
+    """What a walk-forward, its nulls and its perturbations add up to.
+
+    Evaluated in the order declared, first match winning. The order is the
+    substance, not a detail: a sample too small to measure cannot be called
+    fragile, and something that fails its own no-structure null is not merely
+    fragile either.
+    """
+
+    #: Not enough evidence to grade. A gate, not a grade — nothing else is
+    #: evaluated once this fires, because every criterion below is a statement
+    #: about a measurement that was not possible.
+    INSUFFICIENT = "INSUFFICIENT"
+
+    #: Measurable, and indistinguishable from (or worse than) a null that has
+    #: no edge in it by construction.
+    OVERFIT = "OVERFIT"
+
+    #: A real result that does not survive being asked slightly differently.
+    FRAGILE = "FRAGILE"
+
+    #: Passed every gate.
+    ROBUST = "ROBUST"
+
+
+@dataclass(frozen=True)
+class VerdictThresholds:
+    """Every number the verdict depends on, in one place and never inline.
+
+    Attributes:
+        min_trades_total: Fewest pooled out-of-sample trades that can support
+            any judgement at all.
+        min_folds: Fewest folds. A walk-forward with three folds cannot
+            distinguish a strategy from a regime.
+        max_folds_without_trades: How many folds may close nothing before the
+            sample is called insufficient. Zero: a fold that never traded is a
+            fold whose out-of-sample window was never actually tested.
+        null_percentile: Percentile a real score must exceed against a null
+            distribution to count as distinguishable from it.
+        degradation_alpha: One-sided significance level for the paired IS/OOS
+            degradation test.
+        min_profitable_periods_fraction: Share of equal time slices that must
+            be profitable.
+        max_drawdown_percentile: If the observed drawdown sits below this
+            percentile of its own block-permutation distribution, the realised
+            path was luckier than the ordering alone justifies, and the result
+            is called fragile rather than robust.
+        min_noise_retention: Share of the smallest-noise expectancy that must
+            survive at the largest noise level.
+        max_start_shift_dispersion: Largest standard deviation of expectancy
+            across shifted starts that still counts as stable.
+        min_expectancy_r: Pooled out-of-sample expectancy below this is not a
+            result worth grading as robust however stable it is.
+    """
+
+    min_trades_total: int = 100
+    min_folds: int = 5
+    max_folds_without_trades: int = 0
+    null_percentile: float = 95.0
+    degradation_alpha: float = 0.05
+    min_profitable_periods_fraction: float = 0.5
+    max_drawdown_percentile: float = 5.0
+    min_noise_retention: float = 0.5
+    max_start_shift_dispersion: float = 0.5
+    min_expectancy_r: float = 0.0
+
+
+@dataclass(frozen=True)
+class DegradationTest:
+    """Paired in-sample to out-of-sample degradation across folds.
+
+    **The formula, stated here because a reader must not have to read the
+    implementation to know what was tested.** For every fold where both sides
+    scored::
+
+        d[i] = oos_expectancy_r[i] - is_expectancy_r[i]
+        t    = mean(d) / (stdev(d) / sqrt(k))        on k - 1 degrees of freedom
+        p    = P(T <= t)                             one-sided, T ~ Student-t
+
+    and the criterion is ``p < degradation_alpha``: out-of-sample is
+    *significantly worse* than in-sample.
+
+    **Paired, because folds differ by regime far more than by degradation.** An
+    unpaired comparison of ``mean(oos)`` against ``mean(is)`` has its variance
+    dominated by between-fold regime differences, which would swamp the effect
+    being measured. A fold's in-sample and out-of-sample windows are adjacent in
+    time and share a regime, so their difference isolates degradation.
+
+    **On ``expectancy_r`` and never on the objective score.** The objective is
+    Sortino times the square root of trade count, so it scales with sample size,
+    and an in-sample window of 360 days against an out-of-sample window of 270
+    days produces systematically different counts. Measured on that, "degradation"
+    would partly be a measurement of the window lengths. ``expectancy_r`` is a
+    per-trade mean and does not scale with the sample.
+
+    **Student-t, not a normal approximation**, because k is the number of folds
+    — eight in the reference configuration, not a large sample.
+
+    Attributes:
+        n_pairs: Folds where both sides scored.
+        n_excluded: Folds dropped because one side had no trades.
+        mean_difference: ``mean(d)``. Negative means out-of-sample was worse.
+        t_statistic: The statistic above, or ``None`` when undefined.
+        p_value: One-sided p, or ``None`` when undefined.
+        degraded: Whether ``p < alpha``.
+    """
+
+    n_pairs: int
+    n_excluded: int
+    mean_difference: float | None
+    t_statistic: float | None
+    p_value: float | None
+    degraded: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to JSON-able data."""
+        return {
+            "n_pairs": self.n_pairs,
+            "n_excluded": self.n_excluded,
+            "mean_difference": self.mean_difference,
+            "t_statistic": self.t_statistic,
+            "p_value": self.p_value,
+            "degraded": self.degraded,
+        }
+
+
+def degradation_test(report: WalkForwardReport, *, alpha: float = 0.05) -> DegradationTest:
+    """Run the paired IS/OOS degradation test. See :class:`DegradationTest` for the formula.
+
+    Args:
+        report: The walk-forward's own report.
+        alpha: One-sided significance level.
+
+    Returns:
+        The test. Undefined cases (fewer than two usable pairs, or zero
+        dispersion with a non-negative mean) report ``degraded=False`` with a
+        ``None`` statistic rather than an invented number — "could not be
+        measured" is not evidence of degradation, and the pair counts are
+        published so the distinction is visible.
+    """
+    from scipy import stats
+
+    pairs = [
+        (fold.is_expectancy_r, fold.oos_expectancy_r)
+        for fold in report.folds
+        if fold.is_expectancy_r is not None and fold.oos_expectancy_r is not None
+    ]
+    excluded = len(report.folds) - len(pairs)
+    if len(pairs) < 2:
+        return DegradationTest(len(pairs), excluded, None, None, None, False)
+
+    differences = [oos - is_ for is_, oos in pairs]
+    mean = statistics.fmean(differences)
+    spread = statistics.stdev(differences)
+    if spread == 0:
+        # Every fold degraded by exactly the same amount. A t-statistic is
+        # infinite here; the honest reading is "degraded iff that amount is
+        # negative", with no statistic to report.
+        return DegradationTest(len(pairs), excluded, mean, None, None, mean < 0)
+
+    t_stat = mean / (spread / math.sqrt(len(differences)))
+    p_value = float(stats.t.cdf(t_stat, df=len(differences) - 1))
+    return DegradationTest(len(pairs), excluded, mean, t_stat, p_value, p_value < alpha)
+
+
+@dataclass(frozen=True)
+class VerdictCheck:
+    """One named criterion and whether it held.
+
+    Attributes:
+        name: What was checked.
+        passed: Whether it held.
+        detail: The measurement, for a reader who wants the number rather than
+            the boolean.
+    """
+
+    name: str
+    passed: bool
+    detail: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to JSON-able data."""
+        return {"name": self.name, "passed": self.passed, "detail": self.detail}
+
+
+@dataclass(frozen=True)
+class StrategyVerdict:
+    """The judgement, and every check it was assembled from.
+
+    Attributes:
+        verdict: The grade.
+        thresholds: What it was graded against.
+        sufficiency: Sample-size gates.
+        overfit_checks: Null and degradation gates.
+        fragility_checks: Perturbation gates.
+        reasons: Human-readable failures, in evaluation order.
+        may_approve: Whether ``status=APPROVED`` is permitted — true only for
+            :attr:`Verdict.ROBUST`. A property of the verdict rather than a
+            judgement call left to whoever writes the strategy file.
+    """
+
+    verdict: Verdict
+    thresholds: VerdictThresholds
+    sufficiency: tuple[VerdictCheck, ...]
+    overfit_checks: tuple[VerdictCheck, ...]
+    fragility_checks: tuple[VerdictCheck, ...]
+    reasons: tuple[str, ...]
+
+    @property
+    def may_approve(self) -> bool:
+        """Whether the strategy may be moved to ``APPROVED``."""
+        return self.verdict is Verdict.ROBUST
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to JSON-able data."""
+        return {
+            "verdict": self.verdict.value,
+            "may_approve": self.may_approve,
+            "reasons": list(self.reasons),
+            "sufficiency": [check.to_dict() for check in self.sufficiency],
+            "overfit_checks": [check.to_dict() for check in self.overfit_checks],
+            "fragility_checks": [check.to_dict() for check in self.fragility_checks],
+            "thresholds": asdict(self.thresholds),
+        }
+
+
+def build_verdict(
+    report: WalkForwardReport,
+    *,
+    thresholds: VerdictThresholds | None = None,
+    monte_carlo: "MonteCarloReport | None" = None,
+    robustness: "RobustnessReport | None" = None,
+    permutation_percentile: float | None = None,
+    random_entry_percentile: float | None = None,
+) -> StrategyVerdict:
+    """Grade a walk-forward against its nulls and perturbations.
+
+    Args:
+        report: The walk-forward's own report.
+        thresholds: What to grade against. Defaults are
+            :class:`VerdictThresholds`'s own.
+        monte_carlo: Resampling results, if run. Its block-permutation family
+            is the only one read — see
+            :mod:`trading_system.validation.monte_carlo` on why the pooled one
+            is deliberately excluded.
+        robustness: Perturbation results, if run.
+        permutation_percentile: Where the real score fell against the
+            bar-permutation null, if that calibration was run.
+        random_entry_percentile: Where it fell against the random-entry null.
+
+    Returns:
+        The verdict.
+
+    Notes:
+        A check whose input was not supplied does not fail — it is recorded as
+        passed with a detail saying it was not run. Treating an unrun check as
+        a failure would make a partial evaluation indistinguishable from a bad
+        result; treating it as a silent pass would hide it. The detail string
+        is the difference, and it is always present.
+    """
+    limits = thresholds if thresholds is not None else VerdictThresholds()
+    reasons: list[str] = []
+
+    def check(name: str, passed: bool, detail: str, bucket: list[VerdictCheck]) -> None:
+        bucket.append(VerdictCheck(name, passed, detail))
+        if not passed:
+            reasons.append(f"{name}: {detail}")
+
+    sufficiency: list[VerdictCheck] = []
+    check(
+        "min_trades_total",
+        report.stitched_trade_count >= limits.min_trades_total,
+        f"{report.stitched_trade_count} pooled OOS trades, need {limits.min_trades_total}",
+        sufficiency,
+    )
+    check(
+        "min_folds",
+        report.n_folds >= limits.min_folds,
+        f"{report.n_folds} folds, need {limits.min_folds}",
+        sufficiency,
+    )
+    check(
+        "folds_without_trades",
+        report.n_folds_without_oos_trades <= limits.max_folds_without_trades,
+        f"{report.n_folds_without_oos_trades} fold(s) closed no OOS trades, "
+        f"allowed {limits.max_folds_without_trades}",
+        sufficiency,
+    )
+    if not all(item.passed for item in sufficiency):
+        return StrategyVerdict(
+            verdict=Verdict.INSUFFICIENT,
+            thresholds=limits,
+            sufficiency=tuple(sufficiency),
+            overfit_checks=(),
+            fragility_checks=(),
+            reasons=tuple(reasons),
+        )
+
+    degradation = degradation_test(report, alpha=limits.degradation_alpha)
+    overfit: list[VerdictCheck] = []
+    expectancy = report.stitched_expectancy_r
+    check(
+        "positive_expectancy",
+        expectancy is not None and expectancy > limits.min_expectancy_r,
+        f"pooled OOS expectancy_r {expectancy}, need > {limits.min_expectancy_r}",
+        overfit,
+    )
+    check(
+        "beats_random_entry_null",
+        random_entry_percentile is None or random_entry_percentile >= limits.null_percentile,
+        "not run"
+        if random_entry_percentile is None
+        else f"percentile {random_entry_percentile:.1f}, need >= {limits.null_percentile}",
+        overfit,
+    )
+    check(
+        "beats_permutation_null",
+        permutation_percentile is None or permutation_percentile >= limits.null_percentile,
+        "not run"
+        if permutation_percentile is None
+        else f"percentile {permutation_percentile:.1f}, need >= {limits.null_percentile}",
+        overfit,
+    )
+    synthetic_pct = None if robustness is None else robustness.synthetic.real_percentile
+    check(
+        "beats_synthetic_null",
+        synthetic_pct is None or synthetic_pct >= limits.null_percentile,
+        "not run"
+        if synthetic_pct is None
+        else f"percentile {synthetic_pct:.1f}, need >= {limits.null_percentile}",
+        overfit,
+    )
+    check(
+        "no_significant_is_oos_degradation",
+        not degradation.degraded,
+        f"paired t={degradation.t_statistic}, p={degradation.p_value}, "
+        f"mean difference {degradation.mean_difference} over {degradation.n_pairs} folds",
+        overfit,
+    )
+    if not all(item.passed for item in overfit):
+        return StrategyVerdict(
+            verdict=Verdict.OVERFIT,
+            thresholds=limits,
+            sufficiency=tuple(sufficiency),
+            overfit_checks=tuple(overfit),
+            fragility_checks=(),
+            reasons=tuple(reasons),
+        )
+
+    fragility: list[VerdictCheck] = []
+    dd_pct = (
+        None if monte_carlo is None else monte_carlo.verdict_basis.max_drawdown.observed_percentile
+    )
+    check(
+        "drawdown_not_flattered_by_ordering",
+        dd_pct is None or dd_pct >= limits.max_drawdown_percentile,
+        "not run"
+        if dd_pct is None
+        else f"observed drawdown at percentile {dd_pct:.1f} of its own reorderings, "
+        f"need >= {limits.max_drawdown_percentile}",
+        fragility,
+    )
+    if robustness is not None:
+        period = robustness.period
+        share = period.n_profitable / period.n_periods
+        check(
+            "period_consistency",
+            share >= limits.min_profitable_periods_fraction,
+            f"{period.n_profitable}/{period.n_periods} periods profitable, "
+            f"need >= {limits.min_profitable_periods_fraction:.0%}",
+            fragility,
+        )
+        check(
+            "noise_retention",
+            robustness.noise_retention is None
+            or robustness.noise_retention >= limits.min_noise_retention,
+            "undefined"
+            if robustness.noise_retention is None
+            else f"{robustness.noise_retention:.2f} of low-noise expectancy survives, "
+            f"need >= {limits.min_noise_retention}",
+            fragility,
+        )
+        check(
+            "start_shift_stability",
+            robustness.start_shift_dispersion is None
+            or robustness.start_shift_dispersion <= limits.max_start_shift_dispersion,
+            "undefined"
+            if robustness.start_shift_dispersion is None
+            else f"expectancy stdev {robustness.start_shift_dispersion:.3f} across shifted "
+            f"starts, allowed {limits.max_start_shift_dispersion}",
+            fragility,
+        )
+    else:
+        check("robustness_suite", True, "not run", fragility)
+
+    verdict = Verdict.ROBUST if all(item.passed for item in fragility) else Verdict.FRAGILE
+    return StrategyVerdict(
+        verdict=verdict,
+        thresholds=limits,
+        sufficiency=tuple(sufficiency),
+        overfit_checks=tuple(overfit),
+        fragility_checks=tuple(fragility),
+        reasons=tuple(reasons),
+    )
+
+
+def write_verdict(verdict: StrategyVerdict, path: Path) -> None:
+    """Export a verdict to JSON.
+
+    Args:
+        verdict: The verdict.
+        path: File to write.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(verdict.to_dict(), indent=2))
