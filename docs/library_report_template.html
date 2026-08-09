@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strategy library — trading_system report</title>
+<style>
+  :root {
+    --ink: #1c2128;
+    --muted: #5b6672;
+    --line: #e3e6ea;
+    --bg: #ffffff;
+    --panel: #f7f8f9;
+    --pos: #1b7f5e;
+    --neg: #b3402f;
+    --warn: #8a6d1f;
+    --warn-bg: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 28px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 14px; margin: 22px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .note {
+    background: var(--panel); border-left: 3px solid var(--muted);
+    padding: 10px 14px; margin: 12px 0; font-size: 13px; color: var(--muted);
+  }
+  .note strong { color: var(--ink); }
+  .warn { background: var(--warn-bg); border-left-color: var(--warn); color: var(--warn); }
+  .warn strong { color: var(--warn); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0 4px; }
+  th, td { text-align: right; padding: 5px 9px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+  tbody tr:hover { background: var(--panel); }
+  .num { font-variant-numeric: tabular-nums; }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .muted { color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  .verdict { display: inline-block; padding: 3px 10px; border-radius: 3px; font-weight: 600; letter-spacing: 0.04em; font-size: 12px; }
+  .v-ROBUST { background: #e3f3ec; color: var(--pos); }
+  .v-OVERFIT, .v-FRAGILE { background: #fbe9e5; color: var(--neg); }
+  .v-INSUFFICIENT { background: var(--warn-bg); color: var(--warn); }
+  .v-ungraded { background: var(--panel); color: var(--muted); }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 14px 0 6px; }
+  .tile { background: var(--panel); border-radius: 4px; padding: 12px 14px; text-align: center; }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 4px; }
+  .tile .value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .tile.robust .value { color: var(--pos); }
+  .tile.bad .value { color: var(--neg); }
+  .corr-cell { text-align: center; font-variant-numeric: tabular-nums; min-width: 64px; }
+  .corr-diag { background: var(--panel); color: var(--muted); }
+  .corr-abs { color: var(--muted); font-size: 10px; display: block; }
+  footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Strategy library</h1>
+  <div class="sub">
+    {{ report.rows | length }} measured, {{ report.not_measured | length }} not measured,
+    {{ report.orphaned | length }} orphaned result(s) &mdash; generated {{ generated_at.strftime("%Y-%m-%d %H:%M UTC") }}.
+    Not a comparison of runs you chose: every entry the library holds, whether or not anyone has run it.
+  </div>
+</header>
+
+<h2>Library</h2>
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>Strategy</th><th>Version</th><th>Type</th><th>Status</th>
+      <th>Runs</th><th>Last verdict</th><th>Expectancy&nbsp;R</th><th>Sharpe</th>
+      <th>DSR</th><th>Trades</th><th>Last run</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in report.rows %}
+    <tr>
+      <td>{{ row.strategy_id }}{% if not row.last_run_resolves %} <span class="muted">(unresolvable)</span>{% endif %}</td>
+      <td class="num">v{{ row.version }}</td>
+      <td>{{ row.spec_type }}</td>
+      <td>{{ row.status }}</td>
+      <td class="num">{{ row.n_runs }}</td>
+      <td>
+        {% if row.last_run and row.last_run.verdict %}
+          <span class="verdict v-{{ row.last_run.verdict }}">{{ row.last_run.verdict }}</span>
+        {% else %}
+          <span class="verdict v-ungraded">ungraded</span>
+        {% endif %}
+      </td>
+      <td class="num {{ 'pos' if row.expectancy_r and row.expectancy_r > 0 else 'neg' if row.expectancy_r and row.expectancy_r < 0 else '' }}">
+        {{ "%.4f"|format(row.expectancy_r) if row.expectancy_r is not none else "—" }}
+      </td>
+      <td class="num">{{ "%.3f"|format(row.sharpe) if row.sharpe is not none else "—" }}</td>
+      <td class="num" title="{{ row.dsr_reason or '' }}">
+        {{ "%.4f"|format(row.dsr) if row.dsr is not none else "—" }}
+      </td>
+      <td class="num">{{ "%d"|format(row.n_trades) if row.n_trades is not none else "—" }}</td>
+      <td class="num">{{ row.last_run_at.strftime("%Y-%m-%d") if row.last_run_at else "—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div class="note">
+  <strong>Runs</strong> counts every recorded result, superseded ones included &mdash; a strategy re-measured after an
+  engine change shows two rows' worth of history compressed into one, not the latest overwriting the record of the
+  first. <strong>DSR</strong> is recomputed here from the last run's own curve and search summary, never read off a
+  stored field: no command in this project persists a single Deflated Sharpe number. Hover a DSR cell reading
+  &ldquo;&mdash;&rdquo; for why.
+</div>
+
+<h2>Not measured</h2>
+{% if report.not_measured %}
+<div class="note">
+  These entries have zero recorded results. Not an error &mdash; a fact about the library, shown here rather than
+  left to a per-strategy <code>ts strategy show</code> lookup.
+</div>
+<table>
+  <tbody>
+  {% for strategy_id in report.not_measured %}
+    <tr><td>{{ strategy_id }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="note">Every entry in the library has at least one recorded result.</div>
+{% endif %}
+
+<h2>Orphaned results</h2>
+{% if report.orphaned %}
+<div class="note warn">
+  <strong>{{ report.orphaned | length }} result(s) reference a run that can no longer be read back from
+  <code>runs/</code>.</strong> Each is a measurement that once existed and is no longer reproducible or reportable
+  &mdash; the strategy's <code>runs</code> count above still includes it, but its own metrics could not enter that
+  row's &ldquo;last run&rdquo; figures if it was the newest. Cleaning these up is a manual, out-of-API operation on
+  <code>results.parquet</code>, the same recipe CLAUDE.md's known limitations already describe &mdash; not something
+  this report does for you.
+</div>
+<div class="scroll">
+<table>
+  <thead><tr><th>Strategy</th><th>Run id</th><th>Kind</th><th>Verdict</th><th>Recorded</th><th>Why unresolvable</th></tr></thead>
+  <tbody>
+  {% for item in report.orphaned %}
+    <tr>
+      <td>{{ item.strategy_id }}</td>
+      <td class="num">{{ item.run_id[:16] }}</td>
+      <td>{{ item.run_kind }}</td>
+      <td>{{ item.verdict or "ungraded" }}</td>
+      <td class="num">{{ item.created_at.strftime("%Y-%m-%d") }}</td>
+      <td style="text-align:left">{{ item.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="note">None currently. Every recorded result's run still resolves, down to every fold's own stored curve.</div>
+{% endif %}
+
+<h2>Verdicts</h2>
+<div class="tile-grid">
+  <div class="tile robust"><div class="label">Robust</div><div class="value">{{ report.verdicts.robust }}</div></div>
+  <div class="tile bad"><div class="label">Overfit</div><div class="value">{{ report.verdicts.overfit }}</div></div>
+  <div class="tile bad"><div class="label">Fragile</div><div class="value">{{ report.verdicts.fragile }}</div></div>
+  <div class="tile"><div class="label">Insufficient</div><div class="value">{{ report.verdicts.insufficient }}</div></div>
+  <div class="tile"><div class="label">Ungraded</div><div class="value">{{ report.verdicts.ungraded }}</div></div>
+</div>
+{% if report.verdicts.nothing_to_approve %}
+<div class="note warn"><strong>Nothing to approve.</strong> {{ report.portfolio_note }}</div>
+{% endif %}
+
+<h2>Equity-curve correlation</h2>
+<div class="note">
+  For checking intent, not for selection: if strategies built around different ideas produce correlated
+  out-of-sample curves, they are exposed to the market the same way, whatever their entry logic claims. This is
+  computed over full daily returns, flat (no-position) days included &mdash; see the module docstring on why that,
+  and not restricting to days both strategies were active, is the quantity that actually answers &ldquo;is this
+  twenty strategies or one bet with the risk turned up.&rdquo; A cell reads &ldquo;&mdash;&rdquo; when the two
+  out-of-sample windows share fewer than {{ min_shared_days }} overlapping trading days.
+  <strong>The count under each figure is how many of those shared
+  days both strategies actually held a position</strong> &mdash; look at it before trusting the coefficient above it;
+  a correlation resting on a handful of co-active days is not the same claim as one resting on hundreds.
+</div>
+{% if correlation_ids %}
+<div class="scroll">
+<table>
+  <thead>
+    <tr><th></th>{% for id in correlation_ids %}<th>{{ id }}</th>{% endfor %}</tr>
+  </thead>
+  <tbody>
+  {% for row_id in correlation_ids %}
+    <tr>
+      <th>{{ row_id }}</th>
+      {% for col_id in correlation_ids %}
+        {% if row_id == col_id %}
+          <td class="corr-cell corr-diag">1.00</td>
+        {% else %}
+          {% set found = correlation_lookup.get((row_id, col_id)) %}
+          {% if found and found.correlation is not none %}
+          <td class="corr-cell num"
+              style="background: {% if found.correlation > 0 %}rgba(179,64,47,{{ (found.correlation | abs * 0.55) | round(2) }}){% else %}rgba(27,127,94,{{ (found.correlation | abs * 0.55) | round(2) }}){% endif %};">
+            {{ "%.2f"|format(found.correlation) }}
+            <span class="corr-abs">n={{ found.n_both_active }}</span>
+          </td>
+          {% else %}
+          <td class="corr-cell muted">
+            —
+            <span class="corr-abs">{% if found %}shared={{ found.n_shared_days }}{% endif %}</span>
+          </td>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="note">Fewer than two strategies have a resolvable last run; nothing to correlate yet.</div>
+{% endif %}
+
+<h2>Selected strategies</h2>
+<div class="note{% if report.verdicts.nothing_to_approve %} warn{% endif %}">
+  {{ report.portfolio_note }}
+</div>
+{% if not report.verdicts.nothing_to_approve %}
+<div class="note">
+  This section is a placeholder even so: once a strategy carries ROBUST, what belongs here is a portfolio curve of
+  the top-N least-correlated approved strategies against the best single one, total heat, and behavioural
+  clustering &mdash; none of which this report computes yet.
+</div>
+{% endif %}
+
+<footer>trading_system &middot; strategy library report</footer>
+</div>
+</body>
+</html>

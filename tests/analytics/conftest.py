@@ -5,15 +5,36 @@ Real :class:`~trading_system.backtest.portfolio.EquityPoint` and
 analytics-only stand-ins: ``metrics.py``'s contract is against the actual
 backtest types, and a hand-rolled look-alike could drift from their real
 shape without any test noticing.
+
+``registry``/``library`` are redeclared here rather than inherited from
+``tests/backtest/conftest.py``, which is not visible from this directory —
+the same reason ``tests/validation/conftest.py`` redeclares them.
 """
 
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
+import pytest
+
+from tests.backtest.conftest import LIBRARY_PATH, REGISTRY_PATH
 from trading_system.analytics.metrics import DailyCurve
 from trading_system.backtest.portfolio import EquityPoint, TradeRecord
+from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.types import Price, Side
+from trading_system.exit.library import ExitLibrarySpec
+
+
+@pytest.fixture(scope="session")
+def registry() -> InstrumentRegistry:
+    """The bundled instrument registry."""
+    return load_instruments(REGISTRY_PATH)
+
+
+@pytest.fixture(scope="session")
+def library() -> ExitLibrarySpec:
+    """The bundled exit library, as specs."""
+    return ExitLibrarySpec.model_validate_json(LIBRARY_PATH.read_text())
 
 
 def point(

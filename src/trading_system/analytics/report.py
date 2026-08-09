@@ -83,8 +83,8 @@ from trading_system.validation.report import (
     WalkForwardReport,
     build_report,
 )
-from trading_system.validation.stitching import stitch
-from trading_system.validation.walkforward import read_result
+from trading_system.validation.stitching import StitchedCurve, stitch
+from trading_system.validation.walkforward import WalkForwardResult, read_result
 
 #: Pooled trades below which every trade-derived statistic on the page is
 #: marked thin. The same floor the verdict uses for ``min_trades_total``, so a
@@ -339,6 +339,48 @@ def source_from_run(
     )
 
 
+def load_walkforward_curve(
+    wf_directory: Path, store_root: Path
+) -> tuple[WalkForwardResult, StitchedCurve, list[TradeRecord]]:
+    """Read a stored walk-forward back and splice its out-of-sample curves.
+
+    The one place ``read_result`` + ``read_run`` + ``stitch`` compose to answer
+    "what did this walk-forward actually produce, out of sample" — factored out
+    so that a caller wanting only the curve (not a full :class:`ReportSource`)
+    is not forced to also build a :class:`WalkForwardReport` and every fold's
+    ``FoldReport``, which needs a ``min_trades_per_fold`` this caller may have
+    no natural value for.
+    :func:`~trading_system.analytics.library_report` is such a caller: it wants
+    the curve for the Deflated Sharpe Ratio and for cross-strategy correlation,
+    neither of which is a per-fold question.
+
+    Args:
+        wf_directory: ``runs/walkforward/{wf_id}``.
+        store_root: Where the per-fold runs live — ``runs``.
+
+    Returns:
+        The rebuilt result, the stitched out-of-sample curve, and every fold's
+        out-of-sample trades pooled.
+
+    Raises:
+        Exception: Whatever :func:`~trading_system.validation.walkforward.read_result`
+            or :func:`~trading_system.backtest.reproducibility.read_run` raises
+            when a referenced file is missing or unreadable — not narrowed here,
+            because a caller checking whether a walk-forward can still be read
+            back needs to see the real cause, not a laundered one.
+    """
+    wf_id = wf_directory.name
+    result = read_result(wf_directory / "manifest.json", wf_id, store_root)
+    curves: list[Sequence[EquityPoint]] = []
+    pooled: list[TradeRecord] = []
+    for fold_run in result.folds:
+        stored = read_run(fold_run.oos_run.path)
+        curves.append(stored.result.curve)
+        pooled.extend(stored.result.trades)
+    stitched = stitch([fold_run.fold for fold_run in result.folds], curves)
+    return result, stitched, pooled
+
+
 def source_from_walkforward(
     wf_directory: Path,
     *,
@@ -376,17 +418,8 @@ def source_from_walkforward(
     Returns:
         The source.
     """
-    wf_id = wf_directory.name
-    result = read_result(wf_directory / "manifest.json", wf_id, store_root)
+    result, stitched, pooled = load_walkforward_curve(wf_directory, store_root)
     report = build_report(result, min_trades_per_fold=min_trades_per_fold)
-
-    curves: list[Sequence[EquityPoint]] = []
-    pooled: list[TradeRecord] = []
-    for fold_run in result.folds:
-        stored = read_run(fold_run.oos_run.path)
-        curves.append(stored.result.curve)
-        pooled.extend(stored.result.trades)
-    stitched = stitch([fold_run.fold for fold_run in result.folds], curves)
 
     chosen = selections or {}
     segments = tuple(
@@ -405,7 +438,7 @@ def source_from_walkforward(
     )
     return ReportSource(
         kind=SourceKind.WALKFORWARD,
-        label=label or wf_id,
+        label=label or wf_directory.name,
         curve=stitched.points,
         trades=pooled,
         streams=streams or {},

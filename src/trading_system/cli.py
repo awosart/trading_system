@@ -15,6 +15,9 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
+from trading_system.analytics.library_report import build_library_report
+from trading_system.analytics.library_report import render as render_library_report
+from trading_system.analytics.library_report import write as write_library_report
 from trading_system.analytics.report import (
     build,
     build_comparison,
@@ -482,6 +485,40 @@ def strategy_show(
             f"{run.period_start:%Y-%m-%d}..{run.period_end:%Y-%m-%d} "
             f"{','.join(run.symbols)}{stale}"
         )
+
+
+@strategy_app.command("report")
+def strategy_report(
+    ctx: typer.Context,
+    library: Path = typer.Option(DEFAULT_STRATEGY_LIBRARY, "--library", help="Repository root."),
+    results: Path | None = typer.Option(None, "--results", help="Result log. Defaults to library."),
+    out: Path | None = typer.Option(
+        None, "--out", help="Where to write the page. Defaults to <library>/report.html."
+    ),
+) -> None:
+    """Render the whole library as one page: what exists, what is missing, what is worth.
+
+    Not ``ts report compare`` — that command takes run ids a caller already
+    picked. This one walks every entry the library holds, whether or not
+    anyone has ever run it, and reports what is not measured and what is
+    recorded but can no longer be read back from ``runs/``, alongside a
+    strategy-by-strategy table and a cross-strategy correlation matrix.
+    """
+    settings: Settings = ctx.obj
+    repository = StrategyRepository(library)
+    link = ResultsLink(results if results is not None else library)
+    report = build_library_report(repository, link, settings.runs_dir)
+    rendered = render_library_report(report)
+    destination = out or library / "report.html"
+    write_library_report(rendered, destination)
+    typer.echo(
+        f"{len(report.rows)} measured, {len(report.not_measured)} not measured, "
+        f"{len(report.orphaned)} orphaned result(s) -> {destination}"
+    )
+    if report.orphaned:
+        typer.echo(f"  WARNING: {len(report.orphaned)} recorded result(s) cannot be read back")
+    if report.verdicts.nothing_to_approve:
+        typer.echo("  nothing to approve: no ROBUST verdict in the library")
 
 
 @strategy_app.command("diff")
