@@ -45,8 +45,8 @@ instant left it. The full phase order is in :mod:`trading_system.backtest.engine
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -101,6 +101,13 @@ from trading_system.features.indicators.structure import SwingPoints
 from trading_system.features.indicators.trend import EMA
 from trading_system.features.indicators.volatility import ATR
 from trading_system.features.pipeline import FeaturePipeline, FeatureSpec
+from trading_system.prop.guard import (
+    GuardDecision,
+    PropAccountState,
+    PropGuard,
+    ProposedOrder,
+)
+from trading_system.prop.rules import day_origin_divergence
 from trading_system.risk.circuit_breakers import SlippageReport
 from trading_system.risk.conversion import FxConverter
 from trading_system.risk.engine import RiskEngine
@@ -237,6 +244,19 @@ class SignalDrop(StrEnum):
     #: leave the risk denominator meaningless and every R figure derived from it
     #: a fiction.
     FILLED_THROUGH_STOP = "filled_through_stop"
+
+    #: A configured :class:`~trading_system.prop.guard.PropGuard` refused the
+    #: order outright. Counted here rather than as a Risk Engine rejection: the
+    #: firm's rulebook and the engine's own sizing refusals are different
+    #: authorities, and folding one into the other would make "the sizing said
+    #: no" indistinguishable from "the firm said no" in aggregate.
+    PROP_GUARD = "prop_guard"
+
+    #: A configured guard permitted the order at a smaller size than the Risk
+    #: Engine sized. Not a drop — the trade happened — but counted alongside
+    #: them because a run whose sizes were quietly cut is not the run whose
+    #: sizes were computed, and the difference is otherwise invisible.
+    PROP_REDUCED = "prop_reduced"
 
 
 def empty_signal_drops() -> dict[SignalDrop, int]:
@@ -409,6 +429,7 @@ class Orchestrator:
         converter: FxConverter,
         market_fill: MarketFillModel | None = None,
         run_seed: int = 0,
+        prop_guard: PropGuard | None = None,
     ) -> None:
         """Assemble a run.
 
@@ -423,6 +444,10 @@ class Orchestrator:
             market_fill: When a close-decided order executes. ``NextBarOpen`` by
                 default, which is the only timing bar data honestly supports.
             run_seed: Seed for the per-fill random streams.
+            prop_guard: The firm's account rules, applied after sizing and
+                before an order is queued. ``None`` is a run on nobody's prop
+                account, which is every run in this repository until one is
+                asked for — not a disabled guard but an absent firm.
 
         Raises:
             ValueError: If a binding names a stream that was not supplied, or
@@ -532,6 +557,28 @@ class Orchestrator:
         self._expired_orders = 0
         self._issued_ids: set[str] = set()
         self._instant_index = -1
+
+        self._prop = prop_guard
+        # Day-start figures are recomputed from the curve, never accumulated:
+        # the same reasoning circuit_breakers.py gives for holding no "blocked"
+        # flag. Cached by the firm's own day label rather than kept as a single
+        # mutable "today" slot — a single refreshed slot is exactly the leak
+        # CorrelationProvider avoids, where a later instant's value is read by
+        # an earlier decision.
+        self._prop_day_start: dict[date, tuple[Decimal, Decimal]] = {}
+        self._prop_high_water = config.starting_balance
+        if prop_guard is not None:
+            divergence = day_origin_divergence(prop_guard.rules, config.day_origin)
+            if divergence is not None:
+                logger.warning(
+                    "prop.day_origin_divergence",
+                    firm=prop_guard.rules.name,
+                    firm_tz=prop_guard.rules.daily_reset_tz,
+                    firm_at=str(prop_guard.rules.daily_reset_time),
+                    run_tz=config.day_origin.tz,
+                    run_at=str(config.day_origin.at),
+                    detail=divergence,
+                )
 
     def __repr__(self) -> str:
         """Compact description naming the streams and strategies."""
@@ -802,6 +849,10 @@ class Orchestrator:
             )
             if not decision.approved:
                 continue
+            permitted = self._prop_check(decision, signal, event)
+            if permitted is None:
+                continue
+            decision = permitted
             # The engine keeps no memory of what it approved, so the approval is
             # fed back here. Two signals at one instant would otherwise both be
             # measured against headroom the first has already taken.
@@ -819,6 +870,128 @@ class Orchestrator:
     # ------------------------------------------------------------------
     # Internals.
     # ------------------------------------------------------------------
+
+    def _prop_check(
+        self, decision: RiskDecision, signal: EntrySignal, event: BarEvent
+    ) -> RiskDecision | None:
+        """Put a sized order past the firm's rulebook, the last veto before queuing.
+
+        Runs after the Risk Engine and before the order is queued — the
+        position CLAUDE.md's architecture line already draws. After sizing
+        because a ``REDUCE`` verdict has to name a size, and no size exists
+        before then.
+
+        A refusal returns ``None`` and is counted in
+        :class:`SignalDrop`, this layer's own tally, rather than being dressed
+        up as a :class:`~trading_system.risk.models.RiskDecision` carrying some
+        borrowed :class:`~trading_system.risk.models.RiskReason`. The firm's
+        rulebook and the Risk Engine's own refusals are different authorities
+        and must stay countable apart — which is the same reason
+        :class:`~trading_system.prop.guard.PropReason` is a separate enum.
+
+        Args:
+            decision: The Risk Engine's approval.
+            signal: The signal it approved.
+            event: The bar being sized on.
+
+        Returns:
+            The decision unchanged when the firm permits it, a proportionally
+            reduced one when the firm permits less, or ``None`` when it permits
+            nothing. A reduction rescales ``risk_amount`` with the size rather
+            than keeping the original figure: what the decision reports has to
+            stay what the account actually stands to lose, the same invariant
+            the Risk Engine maintains when it recomputes after lot
+            quantisation.
+        """
+        guard = self._prop
+        if guard is None:
+            return decision
+        instrument = self._instruments.get(signal.symbol)
+        if instrument is None:  # pragma: no cover - the Risk Engine refuses these
+            return decision
+
+        verdict = guard.check(
+            ProposedOrder(
+                symbol=signal.symbol,
+                size=decision.size,
+                risk_amount=decision.risk_amount,
+                instrument=instrument,
+            ),
+            self._prop_account(event.close_ts),
+        )
+        if verdict.decision is GuardDecision.ALLOW:
+            return decision
+        if verdict.decision is GuardDecision.REJECT:
+            self._signal_drops[SignalDrop.PROP_GUARD] += 1
+            logger.debug(
+                "prop.rejected",
+                strategy=signal.strategy_id,
+                symbol=signal.symbol,
+                reason=verdict.reason.value,
+                detail=verdict.detail,
+            )
+            return None
+
+        self._signal_drops[SignalDrop.PROP_REDUCED] += 1
+        scale = verdict.allowed_size / decision.size
+        return replace(
+            decision,
+            size=verdict.allowed_size,
+            risk_amount=decision.risk_amount * scale,
+            risk_pct=decision.risk_pct * float(scale),
+            reasons=(*decision.reasons, f"{verdict.reason.value}: {verdict.detail}"),
+        )
+
+    def _prop_account(self, at: datetime) -> PropAccountState:
+        """The account as the firm's rules measure it, at this instant.
+
+        The day-start figures are recomputed from the equity curve and cached
+        by the **firm's** day label. Cached because a linear scan of the curve
+        on every bar would make a 45 000-bar run quadratic; keyed by the label
+        rather than held in one "today" slot because a single refreshed slot is
+        how a later instant's value ends up read by an earlier decision — the
+        leak :class:`~trading_system.risk.correlation.CorrelationProvider`
+        keys its own cache by trading day to avoid.
+        """
+        guard = self._prop
+        assert guard is not None  # only called with a guard configured
+        day = guard.trading_day_of(at)
+        portfolio = self._portfolio
+        cached = self._prop_day_start.get(day)
+        if cached is None:
+            opening = self._day_opening(day, guard)
+            self._prop_day_start[day] = opening
+            cached = opening
+        equity = portfolio.equity
+        self._prop_high_water = max(self._prop_high_water, equity)
+        return PropAccountState(
+            at=at,
+            equity=equity,
+            balance=portfolio.balance,
+            day_start_balance=cached[0],
+            day_start_equity=cached[1],
+            high_water_mark=self._prop_high_water,
+            day=day,
+        )
+
+    def _day_opening(self, day: date, guard: PropGuard) -> tuple[Decimal, Decimal]:
+        """``(balance, equity)`` as they stood when the firm's day opened.
+
+        Read off the last curve row belonging to an **earlier** firm-day: that
+        row is the account as the previous day left it, which is what the new
+        day's allowance is measured from. With no earlier row — the first day
+        of the run — the run's own starting balance stands in, since that is
+        literally what the account opened at.
+        """
+        previous: EquityPoint | None = None
+        for point in reversed(self._portfolio.curve):
+            if guard.trading_day_of(point.ts) < day:
+                previous = point
+                break
+        if previous is None:
+            start = self._config.starting_balance
+            return start, start
+        return previous.balance, previous.equity
 
     def _prepare(
         self,

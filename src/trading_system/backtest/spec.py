@@ -32,6 +32,8 @@ from trading_system.core.instruments import InstrumentRegistry
 from trading_system.data.models import OHLCVFrame
 from trading_system.execution.config import CostConfig
 from trading_system.execution.costs import CostModel
+from trading_system.prop.guard import PropGuard
+from trading_system.prop.rules import PropRules
 from trading_system.risk.circuit_breakers import CircuitBreakerConfig, CircuitBreakers
 from trading_system.risk.conversion import FxConverter, SameCurrencyConverter
 from trading_system.risk.engine import RiskEngine, RiskEngineConfig
@@ -57,6 +59,12 @@ class RunInputs:
         risk: Engine-wide risk settings.
         limits: Concurrent-risk ceilings.
         breakers: When trading stops altogether.
+        prop_rules: The firm's account rules, or ``None`` for a run on nobody's
+            prop account. A rule *set* rather than an assembled
+            :class:`~trading_system.prop.guard.PropGuard`, for the same reason
+            every other field here is a config rather than an engine: the guard
+            accumulates counters over one run, and a description has to be
+            hashable, picklable and varyable before the machine exists.
     """
 
     config: BacktestConfig
@@ -69,6 +77,7 @@ class RunInputs:
     risk: RiskEngineConfig = field(default_factory=RiskEngineConfig)
     limits: PortfolioLimitsConfig = field(default_factory=PortfolioLimitsConfig)
     breakers: CircuitBreakerConfig = field(default_factory=CircuitBreakerConfig)
+    prop_rules: PropRules | None = None
 
     def orchestrator(self) -> Orchestrator:
         """Assemble the run this describes.
@@ -107,6 +116,7 @@ class RunInputs:
             ),
             converter=self.converter,
             run_seed=self.costs.run_seed,
+            prop_guard=PropGuard(self.prop_rules) if self.prop_rules is not None else None,
         )
 
     def run(self) -> BacktestResult:
@@ -134,6 +144,7 @@ class RunInputs:
             "risk": self.risk,
             "limits": self.limits,
             "breakers": self.breakers,
+            "prop_rules": self.prop_rules,
         }
 
     def manifest(self, *, code: CodeVersion | None = None) -> RunManifest:

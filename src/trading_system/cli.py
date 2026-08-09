@@ -47,6 +47,16 @@ from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.data.store import ParquetStore
 from trading_system.execution.config import CostConfig
 from trading_system.exit.library import DEFAULT_LIBRARY_PATH, ExitLibrarySpec, known_exit_ids
+from trading_system.prop.rules import (
+    DEFAULT_RULES_PATH,
+    day_origin_divergence,
+    load_prop_rules,
+)
+from trading_system.prop.simulator import (
+    REPORT_ITERATIONS,
+    sample_from_walkforward,
+    simulate,
+)
 from trading_system.risk.engine import RiskEngineConfig
 from trading_system.risk.margin import load_prop_profiles
 from trading_system.risk.sizing.methods import FixedFractional
@@ -145,10 +155,12 @@ data_app = typer.Typer(help="Market data management.")
 strategy_app = typer.Typer(help="Strategy spec management.")
 validate_app = typer.Typer(help="Out-of-sample validation.")
 report_app = typer.Typer(help="HTML reports over stored runs.")
+prop_app = typer.Typer(help="Prop-firm account rules: would this survive one.")
 app.add_typer(data_app, name="data")
 app.add_typer(strategy_app, name="strategy")
 app.add_typer(validate_app, name="validate")
 app.add_typer(report_app, name="report")
+app.add_typer(prop_app, name="prop")
 
 logger = get_logger(__name__)
 
@@ -1555,6 +1567,81 @@ def report_compare(
     if metrics_out is not None:
         export_metrics(rendered, metrics_out)
         typer.echo(f"  metrics → {metrics_out}")
+
+
+@prop_app.command("simulate")
+def prop_simulate(
+    ctx: typer.Context,
+    wf_id: str = typer.Argument(..., help="Walk-forward whose out-of-sample trades to replay."),
+    config: Path = typer.Option(..., "--config", help="The same run config the walk-forward used."),
+    rules: list[str] = typer.Option(
+        [], "--rules", help="Rule sets to apply. Every shipped one when omitted."
+    ),
+    iterations: int = typer.Option(
+        REPORT_ITERATIONS, "--iterations", help="Simulated attempts per rule set."
+    ),
+    seed: int = typer.Option(0, "--seed", help="Permutation seed, shared across rule sets."),
+    rules_path: Path = typer.Option(
+        DEFAULT_RULES_PATH, "--rules-file", help="Prop rule sets YAML."
+    ),
+) -> None:
+    """Replay a finished walk-forward's trades through prop-firm rulebooks.
+
+    Reports the odds of passing each account and of losing it, from a block
+    permutation of the out-of-sample trades — the same resampling unit P15
+    uses, shuffling within a fold and preserving fold order.
+    """
+    settings: Settings = ctx.obj
+    cli_config = WalkForwardCliConfig.model_validate_json(config.read_text())
+
+    manifest_path = settings.runs_dir / "walkforward" / wf_id / WF_MANIFEST_FILE
+    if not manifest_path.exists():
+        typer.echo(f"no walk-forward {wf_id} under {settings.runs_dir}")
+        raise typer.Exit(code=1)
+
+    library = load_prop_rules(rules_path)
+    wanted = list(rules) if rules else list(library.names)
+    try:
+        chosen = [library.get(name) for name in wanted]
+    except ValidationError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1) from error
+
+    result = read_result(manifest_path, wf_id, settings.runs_dir)
+    sample = sample_from_walkforward(result, risk_pct=cli_config.risk_pct)
+    typer.echo(
+        f"{wf_id}: {sample.n_trades} out-of-sample trades over {len(sample.folds)} folds, "
+        f"risked at {cli_config.risk_pct:.2%} of equity"
+    )
+
+    run_origin = BacktestConfig(
+        account_currency=cli_config.account_currency,
+        starting_balance=cli_config.starting_balance,
+    ).day_origin
+    for item in chosen:
+        divergence = day_origin_divergence(item, run_origin)
+        simulation = simulate(sample, item, iterations=iterations, seed=seed)
+        typer.echo("")
+        typer.echo(f"  {simulation.summary()}")
+        typer.echo(
+            f"    drawdown median {simulation.drawdown_median:.1%}, "
+            f"p95 {simulation.drawdown_p95:.1%}, worst {simulation.drawdown_worst:.1%}"
+        )
+        days = simulation.mean_calendar_days_to_pass
+        typer.echo(
+            f"    mean trading days {simulation.mean_trading_days:.1f}, "
+            + (f"mean calendar days to pass {days:.0f}" if days is not None else "never passed")
+        )
+        share = simulation.observed_day_share
+        typer.echo(
+            "    best single day, as it actually happened: "
+            + (f"{share:.1%} of total profit" if share is not None else "no profit to share")
+        )
+        typer.echo(
+            f"    trades blocked by the daily limit, median {simulation.blocked_trades_median:.0f}"
+        )
+        if divergence is not None:
+            typer.echo(f"    NOTE  {divergence}")
 
 
 @app.command()

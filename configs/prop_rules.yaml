@@ -1,0 +1,120 @@
+# Prop-firm account RULES: drawdown limits, profit target, consistency.
+#
+# ---------------------------------------------------------------------------
+# SOURCE, AND WHY YOU MUST CHECK IT YOURSELF
+#
+# Every number below is SECONDARY, of UNKNOWN DATE, and is what a backtest
+# assumes rather than what a firm currently enforces. Prop-firm rules change
+# often and without notice: targets move, daily-loss bases switch between
+# balance and equity, consistency rules appear and vanish, and the same brand
+# runs several plans whose only published difference is a percentage. Before
+# any of this is used to decide whether a real account would survive,
+# reconcile it against the firm's own rulebook.
+#
+# The same caveat already stands on configs/prop_profiles.yaml, which carries
+# the LEVERAGE side of the same firms. These two files are deliberately not
+# merged: that one says what the firm lets you hold, this one says what the
+# firm lets you lose, and they are published, revised and verified separately.
+# Each entry here names its counterpart by `prop_profile`; leverage is not
+# restated in this file, because a second copy of a number is a second number.
+# ---------------------------------------------------------------------------
+#
+# `daily_loss_basis` decides what the day's allowance is measured from:
+#   balance_at_day_start - closed equity at the reset, floating P&L on a
+#                          position carried through the reset does NOT count
+#                          against the new day
+#   equity               - equity at the reset, floating included
+# The two differ by exactly the floating P&L of whatever was open at the
+# rollover, which is the whole of the disagreement between firms on this point.
+#
+# `total_loss_basis` decides where the account's floor sits:
+#   static               - a fixed fraction below the starting balance; the
+#                          floor never moves
+#   trailing_high_water  - the same fraction below the highest equity reached;
+#                          the floor rises with profit and never falls
+#
+# `daily_reset_tz` is the FIRM'S timezone, not the run's and not the machine's.
+# It is an IANA zone rather than an offset because 00:00 Prague is 23:00 UTC in
+# winter and 22:00 UTC in summer; a stored offset is right for half the year.
+# It is also separate from the run's own `BacktestConfig.day_origin`, which is
+# a market-data convention (FX rolls 17:00 New York) rather than a firm rule.
+# When the two disagree the run says so, in the log and in the report.
+
+source: >-
+  Secondary readings, unverified, undated. Reconcile against each firm's own
+  rulebook before trusting any figure here.
+
+rules:
+  - name: ftmo_normal
+    prop_profile: ftmo_standard
+    source: secondary reading of FTMO's "normal" risk plan
+    account_size: "100000"
+    profit_target_pct: 0.10
+    max_daily_loss_pct: 0.05
+    daily_loss_basis: balance_at_day_start
+    daily_reset_time: "00:00"
+    daily_reset_tz: Europe/Prague
+    max_total_loss_pct: 0.10
+    total_loss_basis: static
+    max_single_day_profit_share: 0.5
+    min_trading_days: 4
+    notes: >-
+      Standard plan. Does not permit holding through the weekend, so it does
+      not apply to any strategy currently in this repository — every one of
+      them is H1/H4 with overnight and weekend exposure. Recorded for contrast
+      with ftmo_swing rather than for use.
+
+  - name: ftmo_swing
+    prop_profile: ftmo_swing
+    source: secondary reading of FTMO's swing plan
+    account_size: "100000"
+    profit_target_pct: 0.10
+    max_daily_loss_pct: 0.05
+    daily_loss_basis: balance_at_day_start
+    daily_reset_time: "00:00"
+    daily_reset_tz: Europe/Prague
+    max_total_loss_pct: 0.10
+    total_loss_basis: static
+    max_single_day_profit_share: 0.5
+    min_trading_days: 4
+    notes: >-
+      The plan that permits weekend holding, and therefore the only FTMO plan
+      the strategies in this repository could be run under at all. Lower
+      leverage in exchange (see prop_profiles.yaml, ftmo_swing: 1:30 across
+      FX, indices and metals).
+
+  - name: the5ers_bootcamp
+    prop_profile: the5ers
+    source: secondary reading of The5ers Bootcamp
+    account_size: "100000"
+    profit_target_pct: 0.06
+    max_daily_loss_pct: 0.03
+    daily_loss_basis: equity
+    daily_reset_time: "00:00"
+    daily_reset_tz: Asia/Jerusalem
+    max_total_loss_pct: 0.06
+    total_loss_basis: static
+    max_single_day_profit_share: 0.5
+    min_trading_days: 3
+    notes: >-
+      The tightest daily limit on file at 3%. Consistency applies before the
+      first payout.
+
+  - name: the5ers_high_stakes
+    prop_profile: the5ers
+    source: secondary reading of The5ers High Stakes
+    account_size: "100000"
+    profit_target_pct: 0.08
+    max_daily_loss_pct: 0.04
+    daily_loss_basis: equity
+    daily_reset_time: "00:00"
+    daily_reset_tz: Asia/Jerusalem
+    max_total_loss_pct: 0.06
+    total_loss_basis: static
+    max_single_day_profit_share: 0.5
+    min_trading_days: 3
+    notes: >-
+      Daily 4%, maximum 6% of the starting balance — a narrower gap between
+      the daily and total limits than FTMO's (1 percentage point rather than
+      5), which means a single bad day consumes two thirds of the whole
+      allowance.
