@@ -9,5 +9,6 @@
   "atr_baseline_bars": 500,
   "max_drain_bars": 200,
   "min_trades_per_fold": 10,
-  "parallel_threshold_seconds": 2.0
+  "parallel_threshold_seconds": 2.0,
+  "prop_profile": "ftmo_swing"
 }

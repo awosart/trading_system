@@ -49,7 +49,8 @@ that gets silently reordered by a well-meaning refactor.
    contains.
 7. **Risk sizing** of the signals from phase 3, against the snapshot from phase
    6. Each approval is fed straight back through ``AccountState.with_opened``,
-   so a second signal at the same instant sees the headroom the first consumed.
+   so a second signal at the same instant sees the headroom the first consumed
+   — risk headroom, free margin and exposure alike.
 8. **Queue** approved orders for ``open(t+1)``, which is phase 2 of the next
    instant for that stream.
 

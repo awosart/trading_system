@@ -77,7 +77,14 @@ class TestCorrelatedSignalsDoNotMultiplyRisk:
             decision = evaluate(engine, registry, symbol, state)
             if decision.approved:
                 approved += 1
-                state = state.with_opened(symbol, "test-strategy", Side.BUY, decision.risk_amount)
+                state = state.with_opened(
+                    symbol,
+                    "test-strategy",
+                    Side.BUY,
+                    decision.risk_amount,
+                    margin=Decimal(0),
+                    notional=Decimal(0),
+                )
 
         assert approved >= 2, "the cluster limit should permit more than one position"
         assert approved < 5, "five uncapped positions is the failure being guarded against"
@@ -110,7 +117,14 @@ class TestCorrelatedSignalsDoNotMultiplyRisk:
         for symbol in ("EURUSD", "XAUUSD", "NAS100", "US30", "BTCUSD"):
             decision = evaluate(engine, registry, symbol, state)
             assert decision.approved
-            state = state.with_opened(symbol, "test-strategy", Side.BUY, decision.risk_amount)
+            state = state.with_opened(
+                symbol,
+                "test-strategy",
+                Side.BUY,
+                decision.risk_amount,
+                margin=Decimal(0),
+                notional=Decimal(0),
+            )
         assert state.open_risk_amount == Decimal("2500")
 
     def test_a_signal_is_trimmed_rather_than_refused(
@@ -132,7 +146,9 @@ class TestCorrelatedSignalsDoNotMultiplyRisk:
             equity=Decimal("100000"),
             as_of=NOW,
             open_risks=(),
-        ).with_opened("XAUUSD", "other", Side.BUY, Decimal("300"))
+        ).with_opened(
+            "XAUUSD", "other", Side.BUY, Decimal("300"), margin=Decimal(0), notional=Decimal(0)
+        )
 
         decision = evaluate(engine_factory(portfolio=portfolio), registry, "EURUSD", state)
         assert decision.approved
@@ -155,7 +171,9 @@ class TestCorrelatedSignalsDoNotMultiplyRisk:
         )
         state = AccountState(
             currency="USD", balance=Decimal("100000"), equity=Decimal("100000"), as_of=NOW
-        ).with_opened("EURUSD", "other", Side.BUY, Decimal("200"))
+        ).with_opened(
+            "EURUSD", "other", Side.BUY, Decimal("200"), margin=Decimal(0), notional=Decimal(0)
+        )
 
         engine = engine_factory(portfolio=portfolio)
         decision = evaluate(engine, registry, "EURUSD", state)
@@ -197,7 +215,9 @@ class TestCorrelationDegradation:
         engine = engine_factory(correlations=CorrelationProvider({}))
         state = AccountState(
             currency="USD", balance=Decimal("100000"), equity=Decimal("100000"), as_of=NOW
-        ).with_opened("XAUUSD", "other", Side.BUY, Decimal("100"))
+        ).with_opened(
+            "XAUUSD", "other", Side.BUY, Decimal("100"), margin=Decimal(0), notional=Decimal(0)
+        )
 
         decision = evaluate(engine, registry, "EURUSD", state)
         assert decision.approved
@@ -229,7 +249,9 @@ class TestCorrelationDegradation:
         engine = engine_factory(portfolio=portfolio, correlations=CorrelationProvider({}))
         state = AccountState(
             currency="USD", balance=Decimal("100000"), equity=Decimal("100000"), as_of=NOW
-        ).with_opened("XAUUSD", "other", Side.BUY, Decimal("400"))
+        ).with_opened(
+            "XAUUSD", "other", Side.BUY, Decimal("400"), margin=Decimal(0), notional=Decimal(0)
+        )
 
         decision = evaluate(engine, registry, "EURUSD", state)
         assert not decision.approved
@@ -243,7 +265,9 @@ class TestCorrelationDegradation:
         engine = engine_factory(correlations=None)
         state = AccountState(
             currency="USD", balance=Decimal("100000"), equity=Decimal("100000"), as_of=NOW
-        ).with_opened("XAUUSD", "other", Side.BUY, Decimal("100"))
+        ).with_opened(
+            "XAUUSD", "other", Side.BUY, Decimal("100"), margin=Decimal(0), notional=Decimal(0)
+        )
         evaluate(engine, registry, "EURUSD", state)
         assert engine.degradations[RiskReason.CORRELATION_UNAVAILABLE] == 0
 
@@ -376,7 +400,12 @@ class TestPortfolioRiskNeverExceedsItsLimit:
             )
             if decision.approved:
                 state = state.with_opened(
-                    symbol, "test-strategy", sides[index % len(sides)], decision.risk_amount
+                    symbol,
+                    "test-strategy",
+                    sides[index % len(sides)],
+                    decision.risk_amount,
+                    margin=Decimal(0),
+                    notional=Decimal(0),
                 )
             # The invariant, asserted after every single decision rather than
             # once at the end: a breach that is later offset would otherwise

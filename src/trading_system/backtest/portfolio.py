@@ -60,6 +60,7 @@ from trading_system.exit.plan import DeferredExit, ExitPlan
 from trading_system.exit.position import ClosedLeg, ManagedPosition
 from trading_system.risk.circuit_breakers import ClosedTrade
 from trading_system.risk.conversion import FxConverter, FxRateUnavailableError
+from trading_system.risk.margin import quantise_up
 from trading_system.risk.models import AccountState, OpenRisk
 
 logger = get_logger(__name__)
@@ -88,6 +89,16 @@ class OpenPosition:
             trade can report it — nothing in this layer reads it to decide
             anything, which is the point: it is a record of what the Entry
             Engine scored the setup, not an input to sizing or exit.
+        margin_per_lot: Collateral one lot locks up, account currency, frozen at
+            the opening price and rate. Frozen rather than marked to market: a
+            second price-dependent quantity recomputed every bar would need its
+            own answer for a partially closed ladder, and the P&L that the price
+            move produces already reaches equity by its own route. What it is
+            **not** frozen against is size — see :meth:`Portfolio.used_margin`.
+        notional_per_lot: Exposure one lot puts on the market, account currency,
+            frozen the same way. Kept beside the margin rather than derived from
+            it because the two differ by the asset class's margin rate, so
+            neither is recoverable from the other in a mixed portfolio.
         deferred_exit: A ``BAR_CLOSE`` decision awaiting this stream's next open.
             Held here, on the object that outlives the loop — not in a local
             variable, which is how it gets lost, and not on the plan, which is
@@ -108,6 +119,8 @@ class OpenPosition:
     entry_fx_rate: Decimal
     risk_amount: Decimal
     entry_quality: float
+    margin_per_lot: Decimal = Decimal(0)
+    notional_per_lot: Decimal = Decimal(0)
     deferred_exit: DeferredExit | None = None
     commission_paid: Decimal = Decimal(0)
     swap_paid: Decimal = Decimal(0)
@@ -315,6 +328,33 @@ class Portfolio:
     def swap_paid(self) -> Decimal:
         """Cumulative financing, signed."""
         return self._swap
+
+    @property
+    def used_margin(self) -> Decimal:
+        """Collateral locked up by open positions, account currency.
+
+        Scaled by ``remaining_size``, which is what makes a partial close
+        release margin **in proportion and without a line of code to do it**:
+        the fraction leaves the position inside
+        :meth:`~trading_system.exit.position.ManagedPosition.close`, and the
+        next caller of this property sees the smaller figure. Because that
+        happens where the closing leg is *filled*, the release lands at the same
+        instant the leg's P&L is booked — the same bar for a level touch, the
+        next bar's open for a ``BAR_CLOSE`` decision, which has no price until
+        then and would have released nothing at a real broker either.
+        """
+        return sum(
+            (held.margin_per_lot * held.position.remaining_size for held in self._open.values()),
+            Decimal(0),
+        )
+
+    @property
+    def used_notional(self) -> Decimal:
+        """Exposure of open positions, account currency. Scales the same way."""
+        return sum(
+            (held.notional_per_lot * held.position.remaining_size for held in self._open.values()),
+            Decimal(0),
+        )
 
     @property
     def unrealized(self) -> Decimal:
@@ -568,6 +608,8 @@ class Portfolio:
                     strategy_id=held.strategy_id,
                     side=held.side,
                     risk_amount=held.risk_amount,
+                    margin=quantise_up(held.margin_per_lot * held.position.remaining_size),
+                    notional=quantise_up(held.notional_per_lot * held.position.remaining_size),
                 )
                 for held in self._open.values()
             ),

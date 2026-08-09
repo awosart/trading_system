@@ -44,6 +44,8 @@ from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.data.store import ParquetStore
 from trading_system.execution.config import CostConfig
 from trading_system.exit.library import DEFAULT_LIBRARY_PATH, ExitLibrarySpec, known_exit_ids
+from trading_system.risk.engine import RiskEngineConfig
+from trading_system.risk.margin import load_prop_profiles
 from trading_system.risk.sizing.methods import FixedFractional
 from trading_system.strategies.repository import META_SUFFIX, Status, StrategyRepository
 from trading_system.strategies.results_link import (
@@ -107,6 +109,33 @@ from trading_system.validation.walkforward import (
 #: Where the strategy library lives when ``--library`` is not given. A repo-root
 #: relative default, because the library is version-controlled alongside the code.
 DEFAULT_STRATEGY_LIBRARY = Path("strategies")
+
+#: Prop-firm profile a run config assumes when it names none. Swing rather than
+#: standard because every strategy in this repository holds through the weekend,
+#: which is the only plan type that permits it, and because it is the strictest
+#: complete profile on file — a default that errs towards refusing a trade.
+DEFAULT_PROP_PROFILE = "ftmo_swing"
+
+
+def _risk_config(settings: Settings, profile_name: str | None) -> RiskEngineConfig:
+    """Build the engine config for a run, resolving its prop profile by name.
+
+    Args:
+        settings: Process settings, naming the profiles file.
+        profile_name: Profile to trade under, or ``None`` to trade under the
+            venue leverage each instrument already declares.
+
+    Returns:
+        The config. A name that resolves to nothing raises out of
+        :meth:`~trading_system.risk.margin.PropProfileLibrary.get` rather than
+        falling back, since a run silently trading under rules nobody chose is
+        worse than one that will not start.
+    """
+    if profile_name is None:
+        return RiskEngineConfig()
+    library = load_prop_profiles(settings.prop_profiles_path)
+    return RiskEngineConfig(prop_profile=library.get(profile_name))
+
 
 app = typer.Typer(help="Modular trading system.")
 data_app = typer.Typer(help="Market data management.")
@@ -612,6 +641,13 @@ class WalkForwardCliConfig(BaseModel):
         parallel_threshold_seconds: Below this many seconds for the first run
             of a batch, the rest of that batch runs sequentially rather than
             paying a process pool's spawn cost.
+        prop_profile: Name of the prop-firm profile in
+            ``configs/prop_profiles.yaml`` this account trades under.
+            ``ftmo_swing`` by default: every strategy in the repository holds
+            through the weekend, which is what a swing plan is for, and it is
+            also the strictest complete profile on file — a default that errs
+            towards refusing. ``null`` trades under the venue leverage declared
+            on each instrument alone.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -627,6 +663,7 @@ class WalkForwardCliConfig(BaseModel):
     max_drain_bars: int = Field(gt=0)
     min_trades_per_fold: int = Field(ge=0)
     parallel_threshold_seconds: float = Field(default=2.0, gt=0)
+    prop_profile: str | None = DEFAULT_PROP_PROFILE
 
 
 def _parse_duration(text: str) -> timedelta:
@@ -722,6 +759,7 @@ def validate_walkforward(
         instruments=registry,
         costs=CostConfig(run_seed=cli_config.run_seed),
         sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+        risk=_risk_config(settings, cli_config.prop_profile),
     )
     splitter = WalkForwardSplitter(
         mode=mode,
@@ -887,6 +925,7 @@ def validate_optimize(
         instruments=registry,
         costs=CostConfig(run_seed=cli_config.run_seed),
         sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+        risk=_risk_config(settings, cli_config.prop_profile),
     )
     splitter = WalkForwardSplitter(
         mode=mode,
@@ -1049,6 +1088,10 @@ class NullCliConfig(BaseModel):
         max_concurrent_positions: Cap for the random-entry null's own strategy.
         parallel_threshold_seconds: Below this many seconds for the first
             iteration, the rest of the batch runs sequentially.
+        prop_profile: Prop-firm profile the null runs under. The same one the
+            real run uses, necessarily: a null calibrated under looser margin
+            rules than the run it is compared against would be measuring the
+            rules, not the entries.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -1064,6 +1107,7 @@ class NullCliConfig(BaseModel):
     stop_pips: float = Field(default=20.0, gt=0)
     max_concurrent_positions: int = Field(default=50, gt=0)
     parallel_threshold_seconds: float = Field(default=2.0, gt=0)
+    prop_profile: str | None = DEFAULT_PROP_PROFILE
 
 
 def _zero_cost_registry(registry: InstrumentRegistry, symbol: str) -> InstrumentRegistry:
@@ -1142,6 +1186,7 @@ def validate_null(
         instruments=run_registry,
         costs=CostConfig(run_seed=cli_config.run_seed),
         sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+        risk=_risk_config(settings, cli_config.prop_profile),
     )
     real_result = base.run()
     objective = SortinoTimesSqrtTrades()
@@ -1247,6 +1292,7 @@ def validate_verdict(
         instruments=load_instruments(settings.instruments_path),
         costs=CostConfig(run_seed=cli_config.run_seed),
         sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+        risk=_risk_config(settings, cli_config.prop_profile),
     )
 
     manifest_path = settings.runs_dir / "walkforward" / wf_id / WF_MANIFEST_FILE

@@ -17,6 +17,17 @@
 # commission_basis is required on every entry and has no default. "7.00 per
 # lot" is ambiguous between per-side and round-turn, the readings differ by
 # exactly 2x, and a default would make one of them a silent assumption.
+#
+# margin_rate is the fraction of notional the VENUE requires, filled per asset
+# class from the ESMA/FCA retail leverage limits: FX majors 1:30 (0.0333),
+# major indices and gold 1:20 (0.05), crypto 1:2 (0.5). A real published limit
+# rather than one broker's marketing, so that a run naming no prop firm still
+# refuses positions no regulated retail account could open.
+#
+# A prop firm's own leverage is a DIFFERENT and usually stricter figure, and it
+# lives in configs/prop_profiles.yaml, which overrides this per asset class. The
+# two are not duplicated here on purpose: this file says what the venue permits,
+# that one says what the firm permits, and they disagree by design.
 
 instruments:
   # --- FX: quote currency is the account's, so no conversion ---------------
@@ -30,7 +41,7 @@ instruments:
     contract_size: "100000"
     base_currency: EUR
     quote_currency: USD
-    margin_rate: 0.0333
+    margin_rate: 0.0333       # 1:30, the ESMA retail limit for an FX major
     typical_spread_points: 0.8
     commission_per_lot: "7.00"
     commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
@@ -49,7 +60,7 @@ instruments:
     contract_size: "100000"
     base_currency: GBP
     quote_currency: JPY
-    margin_rate: 0.0333
+    margin_rate: 0.0333       # 1:30, the ESMA retail limit for an FX major
     typical_spread_points: 2.4
     commission_per_lot: "7.00"
     commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
@@ -68,7 +79,7 @@ instruments:
     contract_size: "100"
     base_currency: XAU
     quote_currency: USD
-    margin_rate: 0.05
+    margin_rate: 0.05         # 1:20, the ESMA retail limit for gold
     typical_spread_points: 25.0
     commission_per_lot: "0"
     commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
@@ -87,7 +98,7 @@ instruments:
     contract_size: "20"          # USD per index point, as CME prices the NQ
     base_currency: USD
     quote_currency: USD
-    margin_rate: 0.01
+    margin_rate: 0.05          # 1:20, the ESMA retail limit for a major index
     typical_spread_points: 1.5
     commission_per_lot: "0"
     commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
@@ -105,7 +116,7 @@ instruments:
     contract_size: "5"           # USD per index point, as CME prices the YM
     base_currency: USD
     quote_currency: USD
-    margin_rate: 0.01
+    margin_rate: 0.05          # 1:20, the ESMA retail limit for a major index
     typical_spread_points: 2.0
     commission_per_lot: "0"
     commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
@@ -124,7 +135,7 @@ instruments:
     contract_size: "1"
     base_currency: BTC
     quote_currency: USD
-    margin_rate: 0.5
+    margin_rate: 0.5          # 1:2, the ESMA retail limit for crypto
     typical_spread_points: 22.0
     commission_per_lot: "0"
     commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent

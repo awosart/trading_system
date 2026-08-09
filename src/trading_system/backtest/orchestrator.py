@@ -17,7 +17,13 @@ a note saying "whoever holds both sides fills this in". This is that holder:
   from the entry engine, so that ``SignalReverseExit`` never imports Entry.
 * :meth:`~trading_system.risk.models.AccountState.with_opened` is called on every
   approval, which is the contract that makes the portfolio guarantee hold across
-  signals arriving at one instant.
+  signals arriving at one instant — for free margin and exposure as well as for
+  risk. The reservation is self-healing: the account is rebuilt from live
+  positions at the next snapshot, so an approved order that never fills stops
+  consuming margin without anything having to release it.
+* ``InstrumentSpec.margin_rate`` finally has a reader. It reaches the engine
+  through :class:`~trading_system.backtest.portfolio.Portfolio.used_margin`,
+  which scales each position's frozen per-lot figure by what is left of it.
 * ``EntryOrderSpec.expire_after_bars`` is finally read. P06 stage 1 left it
   untouched on the grounds that an order's lifetime is Execution's business, not
   Entry's. The config's ``default_entry_order_ttl_bars`` is a **fallback for a
@@ -800,7 +806,12 @@ class Orchestrator:
             # fed back here. Two signals at one instant would otherwise both be
             # measured against headroom the first has already taken.
             account = account.with_opened(
-                signal.symbol, binding.spec.id, signal.side, decision.risk_amount
+                signal.symbol,
+                binding.spec.id,
+                signal.side,
+                decision.risk_amount,
+                margin=decision.margin_amount,
+                notional=decision.notional_amount,
             )
             self._account = account
             self._queue_entry(binding, signal, decision, event)
@@ -1076,6 +1087,8 @@ class Orchestrator:
             entry_fx_rate=pending.decision.fx_rate,
             risk_amount=pending.decision.risk_amount,
             entry_quality=pending.signal.quality,
+            margin_per_lot=pending.decision.margin_per_lot,
+            notional_per_lot=pending.decision.notional_per_lot,
         )
         self._portfolio.open(held)
         self._portfolio.restate_risk(held)

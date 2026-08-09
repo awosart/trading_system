@@ -32,6 +32,12 @@ class Settings(BaseSettings):
             A setting rather than a constant because tick sizes, lot bounds and
             swap rates are broker-specific: two brokers' EURUSD are two files,
             and hardcoding one of them would silently size against the wrong one.
+        prop_profiles_path: Prop-firm account rules — leverage per asset class
+            and any cap on total exposure — loaded by
+            :func:`~trading_system.risk.margin.load_prop_profiles`. Separate
+            from ``instruments_path`` because the two say different things: that
+            file is what the venue permits, this one is what the firm permits on
+            top of it.
         runs_dir: Root directory backtest and walk-forward runs are stored
             under, by
             :func:`~trading_system.backtest.reproducibility.write_run` and
@@ -52,4 +58,5 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     log_file: Path | None = None
     instruments_path: Path = Path("configs/instruments.yaml")
+    prop_profiles_path: Path = Path("configs/prop_profiles.yaml")
     runs_dir: Path = Path("runs")

@@ -1,0 +1,154 @@
+# Prop-firm account profiles: leverage per asset class, and any firm-level cap
+# on total exposure.
+#
+# ---------------------------------------------------------------------------
+# SOURCE, AND WHY YOU MUST CHECK IT YOURSELF
+#
+# Two independent readings went into this file and they disagreed with each
+# other. One was a set of figures carried from secondary reviews; the other was
+# the comparison table at wladislav.com, an affiliate site. Neither is a firm's
+# own rulebook. The disagreement was not cosmetic — FTMO metals read as 1:30 in
+# one and 1:50 in the other, The5ers forex as 1:30 in one and 1:100 in the
+# other, a factor of over three on the margin a gold position locks up.
+#
+# So: every number below is SECONDARY, of UNKNOWN DATE, and is what a backtest
+# assumes rather than what a firm currently enforces. Before any of this is used
+# to size a real position, reconcile it against the firm's own published rules.
+# The `source` field on each profile says which reading it came from; it is not
+# a claim that the reading was verified.
+# ---------------------------------------------------------------------------
+#
+# `leverage` is written the way firms publish it: 30.0 means 1:30, which the
+# code turns into a margin rate of 1/30. Only asset classes the firm publishes
+# are listed — a class absent here keeps the broker rate already declared in
+# instruments.yaml, because that file is the authority on what an instrument is
+# and a profile is an amendment to it, not a replacement.
+#
+# `leverage_cap` is a DIFFERENT rule: a ceiling on total notional as a multiple
+# of equity, enforced by the firm rather than by margin arithmetic. It is
+# mandatory on every profile and must be written out even when it is `null`, so
+# that "the firm publishes no such rule" cannot be confused with "nobody looked".
+#
+# Metals and energy both map to COMMODITY, which is one class in
+# core/instruments.py. Where a firm publishes different figures for the two
+# (The5ers: metals 1:33, energy 1:5) the METALS figure is recorded, because the
+# only commodity in instruments.yaml is XAUUSD. Adding an energy instrument to
+# the registry forces this choice to be made properly rather than inherited.
+
+source: >-
+  Secondary readings, unverified: a comparison table at wladislav.com (an
+  affiliate site, undated) cross-checked against figures carried from secondary
+  reviews. Reconcile against each firm's own rules before live use.
+
+profiles:
+  # Swing accounts are the ones that may hold through the weekend, which is
+  # what every strategy in this repository does. The default for that reason,
+  # and it is also the strictest complete profile here — a default that errs
+  # towards refusing.
+  - name: ftmo_swing
+    source: wladislav.com comparison table, FTMO "Swing" row
+    leverage:
+      FX: 30.0
+      INDEX: 30.0
+      COMMODITY: 30.0        # published as "Gold & Silver 30" and "Gas & Oil 30"
+      CRYPTO: 2.0
+    leverage_cap: null
+    notes: >-
+      FTMO's swing plan. Lower leverage than the standard plan in exchange for
+      being allowed to hold over the weekend and through news.
+
+  - name: ftmo_standard
+    source: wladislav.com comparison table, FTMO "Standard" row
+    leverage:
+      FX: 100.0
+      INDEX: 50.0
+      COMMODITY: 50.0        # "Gold & Silver 50", "Gas & Oil 50"
+      CRYPTO: 2.0
+    leverage_cap: null
+    notes: >-
+      Standard plan. Does not permit holding positions over the weekend, so it
+      does not apply to any strategy currently in this repository.
+
+  - name: the5ers
+    source: wladislav.com comparison table, The5ers row
+    leverage:
+      FX: 100.0
+      INDEX: 25.0
+      COMMODITY: 33.0        # metals; the same row publishes energy at 1:5
+      CRYPTO: 2.0
+    leverage_cap: null
+
+  - name: fundednext
+    source: wladislav.com comparison table, FundedNext row
+    leverage:
+      FX: 100.0
+      INDEX: 15.0
+      COMMODITY: 25.0        # metals; energy published at 1:25 as well
+      CRYPTO: 1.0
+    leverage_cap: null
+
+  - name: brightfunded
+    source: wladislav.com comparison table, Brightfunded row
+    leverage:
+      FX: 100.0
+      INDEX: 20.0
+      COMMODITY: 40.0
+      CRYPTO: 5.0
+    leverage_cap: null
+
+  - name: finotive
+    source: wladislav.com comparison table, FinotiveFunding row
+    leverage:
+      FX: 100.0
+      INDEX: 10.0
+      COMMODITY: 20.0        # metals; energy published at 1:20 as well
+      CRYPTO: 2.0
+      EQUITY: 5.0
+    leverage_cap: 12.5
+    notes: >-
+      The only profile here carrying an explicit exposure ceiling: the row reads
+      "Notional Volume Limit ... Max Exposure: $1,250,000 (for 100k account)",
+      which is 12.5x equity. This is the rule the LEVERAGE_LIMIT_EXCEEDED
+      refusal exists for, and it binds where margin alone does not.
+
+  - name: pipfarm
+    source: wladislav.com comparison table, PipFarm 100k row
+    leverage:
+      FX: 30.0
+      INDEX: 20.0
+      COMMODITY: 20.0
+      CRYPTO: 5.0
+    leverage_cap: null
+    notes: The same row states leverage rises with account XP; the base figure is recorded.
+
+  - name: e8
+    source: wladislav.com comparison table, E8 Markets row
+    leverage:
+      FX: 50.0
+      INDEX: 50.0
+      COMMODITY: 50.0
+      CRYPTO: 5.0
+    leverage_cap: null
+
+  - name: maven
+    source: wladislav.com comparison table, Maven 100k row
+    leverage:
+      FX: 75.0
+      INDEX: 20.0
+      COMMODITY: 20.0
+      CRYPTO: 2.0
+    leverage_cap: null
+
+  - name: rebels_funded
+    source: wladislav.com comparison table, RebelsFunding row, funded column
+    leverage:
+      FX: 50.0               # majors; the row publishes 25 for crosses, 25 for exotics
+      INDEX: 15.0
+      COMMODITY: 15.0
+      CRYPTO: 2.5
+      EQUITY: 2.5
+    leverage_cap: null
+    notes: >-
+      The one firm here publishing different leverage before and after funding
+      (majors 1:100 on challenge, 1:50 funded). The funded figures are recorded,
+      being the ones a live account trades under.

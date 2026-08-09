@@ -21,12 +21,15 @@ on are invisible here by design.
 5. **The cap and the correlation adjustment.** The proposal is capped at
    ``max_risk_pct`` of equity, then trimmed to the tightest limit's headroom.
    Both act on one number on one line, so no sizing method can escape either.
-6. **Lot rounding**, always down, then the instrument's bounds and the exit
-   plan's smallest close.
-7. ``risk_amount`` is recomputed from the quantised size. What the decision
+6. **Lot rounding**, always down, then the instrument's bounds.
+7. **Margin, then the firm's leverage cap**, then the exit plan's smallest
+   close. Here rather than earlier because both are computed from the size that
+   will actually be traded, and see :mod:`trading_system.risk.margin` for why
+   they are two refusals rather than one.
+8. ``risk_amount`` is recomputed from the quantised size. What the decision
    reports is what the account actually stands to lose, not what was asked for.
 
-Step 7 is what makes both ceilings exact rather than approximate. Quantisation
+Step 8 is what makes both ceilings exact rather than approximate. Quantisation
 only rounds down, so recomputing after it can only lower the figure — the
 reported risk is at or below the cap *and* at or below the headroom for every
 input, which is what the two property tests claim.
@@ -66,6 +69,12 @@ from trading_system.entry.signal import EntrySignal
 from trading_system.risk.circuit_breakers import CircuitBreakers, ClosedTrade
 from trading_system.risk.conversion import FxConverter, FxRateUnavailableError
 from trading_system.risk.correlation import CorrelationProvider
+from trading_system.risk.margin import (
+    PropProfile,
+    margin_rate_for,
+    notional_per_lot,
+    quantise_up,
+)
 from trading_system.risk.models import (
     NO_STOP,
     AccountState,
@@ -118,12 +127,19 @@ class RiskEngineConfig(BaseModel):
             method's own figure — that is per-method configuration — but the
             bound no method may exceed, whatever it was configured with.
         stop_buffer: How far past the invalidation level stops are pushed.
+        prop_profile: The firm's account rules, or ``None`` for a run trading
+            under the venue leverage already declared on each instrument. The
+            margin check itself is **not** conditional on this — every
+            instrument carries a mandatory ``margin_rate`` and every broker
+            enforces it — so a profile only ever changes the rate used and adds
+            the optional cap on total notional.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     max_risk_pct: float = Field(default=0.02, gt=0, le=1)
     stop_buffer: StopBufferConfig = Field(default_factory=StopBufferConfig)
+    prop_profile: PropProfile | None = None
 
 
 class RiskEngine:
@@ -473,6 +489,56 @@ class RiskEngine:
                 reasons=tuple(reasons),
             )
 
+        # --- 6.5. Margin, then the firm's ceiling on total exposure ----------
+        # After quantisation, because the requirement is computed from the size
+        # that will actually be traded: rounding is always downwards, so
+        # checking the unquantised quotient would refuse trades that do fit, on
+        # a number no run ever trades. Before the ladder check, because a
+        # position the broker will not open makes "is the ladder executable
+        # inside it" a question about nothing.
+        rate = margin_rate_for(instrument, self._config.prop_profile)
+        per_lot_notional = notional_per_lot(instrument, signal.reference_price, fx_rate)
+        per_lot_margin = per_lot_notional * rate
+        margin_amount = quantise_up(per_lot_margin * size)
+        notional_amount = quantise_up(per_lot_notional * size)
+
+        # Margin first, and the order decides only which reason a trade refused
+        # by both reports. A requirement the account cannot meet is a physical
+        # fact about the broker; the cap below is a rule the firm chose. When
+        # both bind, the physical fact is the more informative of the two.
+        free_margin = account.free_margin
+        if margin_amount > free_margin:
+            return self._refuse(
+                RiskReason.INSUFFICIENT_MARGIN,
+                f"{signal.symbol}: {size} lots at {signal.reference_price:.6g} is "
+                f"{notional_amount} notional, needing {margin_amount} margin at a rate of "
+                f"{rate:.6f}; equity {account.equity} less {account.used_margin} already "
+                f"posted leaves {free_margin} free",
+                stop_price=stop.stop_price,
+                reasons=tuple(reasons),
+            )
+
+        cap = (
+            self._config.prop_profile.leverage_cap
+            if self._config.prop_profile is not None
+            else None
+        )
+        if cap is not None:
+            ceiling = account.equity * Decimal(str(cap))
+            exposure = account.used_notional + notional_amount
+            if exposure > ceiling:
+                return self._refuse(
+                    RiskReason.LEVERAGE_LIMIT_EXCEEDED,
+                    f"{signal.symbol}: {notional_amount} notional on top of "
+                    f"{account.used_notional} already open is {exposure}, over the "
+                    f"{self._config.prop_profile.name if self._config.prop_profile else ''} "
+                    f"ceiling of {cap:g}x equity {account.equity} = {ceiling}. The margin was "
+                    f"there ({free_margin} free against {margin_amount} needed); the rule was "
+                    "not met",
+                    stop_price=stop.stop_price,
+                    reasons=tuple(reasons),
+                )
+
         smallest_close = instrument.round_volume(size * smallest_exit_fraction)
         if smallest_close < instrument.min_lot:
             return self._refuse(
@@ -510,6 +576,8 @@ class RiskEngine:
             rejection=None,
             fx_rate=fx_rate,
             point_value=point_value,
+            margin_per_lot=per_lot_margin,
+            notional_per_lot=per_lot_notional,
         )
 
     def _refuse(

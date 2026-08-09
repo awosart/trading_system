@@ -12,13 +12,18 @@ from typing import Protocol
 
 import pytest
 
-from trading_system.core.instruments import InstrumentRegistry, load_instruments
+from trading_system.core.instruments import (
+    InstrumentClass,
+    InstrumentRegistry,
+    load_instruments,
+)
 from trading_system.core.types import Price, Side
 from trading_system.entry.signal import EntrySignal
 from trading_system.risk.circuit_breakers import CircuitBreakerConfig, CircuitBreakers
 from trading_system.risk.conversion import StaticFxConverter
 from trading_system.risk.correlation import CorrelationProvider
 from trading_system.risk.engine import RiskEngine, RiskEngineConfig
+from trading_system.risk.margin import PropProfile
 from trading_system.risk.models import AccountState
 from trading_system.risk.portfolio_risk import PortfolioLimitsConfig, PortfolioRisk
 from trading_system.risk.sizing.base import SizingMethod
@@ -98,6 +103,23 @@ NO_BREAKERS = CircuitBreakerConfig(
     max_daily_loss_pct=None, max_weekly_loss_pct=None, max_monthly_loss_pct=None
 )
 
+#: Leverage loose enough that margin never binds, for tests about something else.
+#:
+#: The default here rather than the real rates, and the reason is a finding
+#: rather than convenience: several of the hand-computed sizing cases in this
+#: directory are genuinely unaffordable at real leverage — 10 lots of gold on a
+#: 100k account is 2.05M of notional and 102 500 of margin at 1:20 — and nothing
+#: noticed until :mod:`trading_system.risk.margin` gave ``margin_rate`` a
+#: reader. Those tests are about the sizing arithmetic, so they keep testing it;
+#: that the same cases are refused under a real profile is asserted where it
+#: belongs, in ``test_margin.py``.
+NO_MARGIN_LIMIT = PropProfile(
+    name="test-unconstrained",
+    source="test fixture; not a firm",
+    leverage=dict.fromkeys(InstrumentClass, 1e6),
+    leverage_cap=None,
+)
+
 
 class EngineFactory(Protocol):
     """Builds a :class:`RiskEngine` with the pieces a test wants to vary."""
@@ -111,6 +133,7 @@ class EngineFactory(Protocol):
         portfolio: PortfolioRisk | None = None,
         breakers: CircuitBreakers | None = None,
         correlations: CorrelationProvider | None = None,
+        prop_profile: PropProfile | None = NO_MARGIN_LIMIT,
     ) -> RiskEngine:
         """Build the engine."""
         ...
@@ -137,6 +160,7 @@ def engine_factory(
         portfolio: PortfolioRisk | None = None,
         breakers: CircuitBreakers | None = None,
         correlations: CorrelationProvider | None = None,
+        prop_profile: PropProfile | None = NO_MARGIN_LIMIT,
     ) -> RiskEngine:
         return RiskEngine(
             instruments=registry,
@@ -145,6 +169,7 @@ def engine_factory(
             config=RiskEngineConfig(
                 max_risk_pct=max_risk_pct,
                 stop_buffer=buffer if buffer is not None else exact_buffer,
+                prop_profile=prop_profile,
             ),
             portfolio=portfolio if portfolio is not None else PortfolioRisk(PERMISSIVE_LIMITS),
             breakers=breakers if breakers is not None else CircuitBreakers(NO_BREAKERS),

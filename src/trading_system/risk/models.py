@@ -35,6 +35,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from trading_system.core.types import Price, Side, ensure_utc
+from trading_system.risk.margin import quantise_up
 
 #: Stop level on a refusal taken before any stop was computed.
 NO_STOP = Price(0.0)
@@ -59,6 +60,17 @@ class RiskReason(StrEnum):
     BELOW_MIN_LOT = "below_min_lot"
     ABOVE_MAX_LOT = "above_max_lot"
     EXIT_LADDER_UNEXECUTABLE = "exit_ladder_unexecutable"
+
+    # --- refusals from margin and leverage (stage 3) ----------------------
+    #: The broker's own arithmetic: the position's margin requirement exceeds
+    #: ``equity - used_margin``. The money is not there.
+    INSUFFICIENT_MARGIN = "insufficient_margin"
+
+    #: The firm's ceiling on total notional was reached. Deliberately a separate
+    #: member from the one above, because the two answer different questions —
+    #: "the account cannot afford it" and "the account is not allowed it" — and
+    #: a single reason covering both would leave a refused trade unexplainable.
+    LEVERAGE_LIMIT_EXCEEDED = "leverage_limit_exceeded"
 
     # --- refusals from portfolio limits (stage 2) -------------------------
     PORTFOLIO_HEAT_EXCEEDED = "portfolio_heat_exceeded"
@@ -104,6 +116,8 @@ REJECTION_REASONS: frozenset[RiskReason] = frozenset(
         RiskReason.BELOW_MIN_LOT,
         RiskReason.ABOVE_MAX_LOT,
         RiskReason.EXIT_LADDER_UNEXECUTABLE,
+        RiskReason.INSUFFICIENT_MARGIN,
+        RiskReason.LEVERAGE_LIMIT_EXCEEDED,
         RiskReason.PORTFOLIO_HEAT_EXCEEDED,
         RiskReason.INSTRUMENT_LIMIT_EXCEEDED,
         RiskReason.CLUSTER_LIMIT_EXCEEDED,
@@ -163,25 +177,41 @@ class OpenRisk:
             breakeven puts nothing at risk any more, and holding the value fixed
             at entry would keep charging the portfolio for a risk that no longer
             exists.
+        margin: Collateral this position locks up, account currency. Frozen at
+            the opening price and scaled by what is left of the position, so a
+            partial close releases it in proportion without anything having to
+            remember to do so.
+        notional: Exposure this position puts on the market, account currency.
+            Not derivable from ``margin`` across a mixed portfolio — two
+            positions of equal notional in different asset classes lock up
+            different collateral — which is why the leverage cap needs its own
+            figure rather than reading the one above.
     """
 
     symbol: str
     strategy_id: str
     side: Side
     risk_amount: Decimal
+    margin: Decimal = Decimal(0)
+    notional: Decimal = Decimal(0)
 
     def __post_init__(self) -> None:
         """Reject a negative stake.
 
         Raises:
-            ValueError: If ``risk_amount`` is negative. Zero is allowed: a
-                position whose stop has moved past breakeven genuinely risks
-                nothing.
+            ValueError: If ``risk_amount``, ``margin`` or ``notional`` is
+                negative. Zero is allowed for all three: a position whose stop
+                has moved past breakeven genuinely risks nothing, and a run
+                that does not model margin genuinely posts none.
         """
         if self.risk_amount < 0:
             raise ValueError(
                 f"{self.symbol}: risk_amount must not be negative, got {self.risk_amount}"
             )
+        if self.margin < 0:
+            raise ValueError(f"{self.symbol}: margin must not be negative, got {self.margin}")
+        if self.notional < 0:
+            raise ValueError(f"{self.symbol}: notional must not be negative, got {self.notional}")
 
 
 @dataclass(frozen=True)
@@ -232,8 +262,41 @@ class AccountState:
         """Total money at risk across open positions, in account currency."""
         return sum((position.risk_amount for position in self.open_risks), Decimal(0))
 
+    @property
+    def used_margin(self) -> Decimal:
+        """Collateral already locked up by open positions, account currency.
+
+        Derived from :attr:`open_risks` for the same reason
+        :attr:`open_risk_amount` is: a stored total and the composition it
+        summarises drift apart the moment one is updated and the other is not.
+        """
+        return sum((position.margin for position in self.open_risks), Decimal(0))
+
+    @property
+    def free_margin(self) -> Decimal:
+        """Equity not already posted as collateral.
+
+        Can go negative on a losing account whose positions are still open —
+        that is a real state (a broker would be issuing a margin call), and
+        clamping it at zero would hide it. Nothing new can be opened against a
+        negative figure either way.
+        """
+        return self.equity - self.used_margin
+
+    @property
+    def used_notional(self) -> Decimal:
+        """Total exposure of open positions, account currency."""
+        return sum((position.notional for position in self.open_risks), Decimal(0))
+
     def with_opened(
-        self, symbol: str, strategy_id: str, side: Side, risk: Decimal
+        self,
+        symbol: str,
+        strategy_id: str,
+        side: Side,
+        risk: Decimal,
+        *,
+        margin: Decimal,
+        notional: Decimal,
     ) -> "AccountState":
         """This state, plus a position that has just been opened.
 
@@ -250,6 +313,16 @@ class AccountState:
             strategy_id: Strategy that opened it.
             side: Direction of the exposure.
             risk: Money at stake, from :attr:`RiskDecision.risk_amount`.
+            margin: Collateral locked up, from :attr:`RiskDecision.margin_amount`.
+                Keyword-only and with **no default**, by the same discipline that
+                makes ``smallest_exit_fraction`` mandatory on
+                :meth:`~trading_system.risk.engine.RiskEngine.evaluate`: a
+                default of zero would turn "forgot to pass it" into "the second
+                signal of this instant was measured against free margin the
+                first one had already spent", which is silent over-commitment
+                rather than a visible error.
+            notional: Exposure added, from :attr:`RiskDecision.notional_amount`.
+                Mandatory for the same reason, against the leverage cap.
 
         Returns:
             A new state including the position. Equity is unchanged: opening a
@@ -259,7 +332,14 @@ class AccountState:
             self,
             open_risks=(
                 *self.open_risks,
-                OpenRisk(symbol=symbol, strategy_id=strategy_id, side=side, risk_amount=risk),
+                OpenRisk(
+                    symbol=symbol,
+                    strategy_id=strategy_id,
+                    side=side,
+                    risk_amount=risk,
+                    margin=margin,
+                    notional=notional,
+                ),
             ),
         )
 
@@ -295,6 +375,18 @@ class RiskDecision:
             can be reproduced without going back to the market data.
         point_value: What one point of this instrument was worth, per lot, in
             account currency, at the moment of the decision.
+        margin_per_lot: Collateral one lot of this position locks up, account
+            currency, at the price and rate it was decided on. Per lot rather
+            than in total so that the figure survives partial closes: the
+            position's own margin is this times whatever size remains, which is
+            what makes a 50/25/25 ladder release collateral in proportion
+            without any rule having to know that it should.
+        notional_per_lot: Exposure one lot puts on the market, account currency.
+            Carried beside ``margin_per_lot`` rather than derived from it: the
+            two differ by the asset class's margin rate, so a portfolio holding
+            more than one class cannot recover either from the other. They are
+            frozen together at the decision and never updated apart, so there is
+            no drift for a single stored quantity to have.
     """
 
     approved: bool
@@ -306,6 +398,22 @@ class RiskDecision:
     rejection: RiskReason | None
     fx_rate: Decimal
     point_value: Decimal
+    margin_per_lot: Decimal = Decimal(0)
+    notional_per_lot: Decimal = Decimal(0)
+
+    @property
+    def margin_amount(self) -> Decimal:
+        """Collateral the whole approved position locks up, account currency.
+
+        Rounded **up** to the cent — see :data:`~trading_system.risk.margin.MARGIN_STEP`
+        on why this one quantisation in the layer goes the other way.
+        """
+        return quantise_up(self.margin_per_lot * self.size)
+
+    @property
+    def notional_amount(self) -> Decimal:
+        """Exposure the whole approved position puts on, account currency."""
+        return quantise_up(self.notional_per_lot * self.size)
 
     def __post_init__(self) -> None:
         """Enforce that approval and refusal are each internally consistent.

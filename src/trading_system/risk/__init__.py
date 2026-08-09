@@ -13,6 +13,11 @@ from trading_system.risk.conversion import (
     convert,
 )
 from trading_system.risk.engine import RiskEngine, RiskEngineConfig
+from trading_system.risk.margin import (
+    PropProfile,
+    PropProfileLibrary,
+    load_prop_profiles,
+)
 from trading_system.risk.models import AccountState, RiskDecision, RiskReason
 from trading_system.risk.pnl import leg_pnl, realized_pnl
 from trading_system.risk.stop_calculator import StopBufferConfig, calculate_stop
@@ -22,6 +27,8 @@ __all__ = [
     "BarFxConverter",
     "FxConverter",
     "FxRateUnavailableError",
+    "PropProfile",
+    "PropProfileLibrary",
     "RiskDecision",
     "RiskEngine",
     "RiskEngineConfig",
@@ -32,5 +39,6 @@ __all__ = [
     "calculate_stop",
     "convert",
     "leg_pnl",
+    "load_prop_profiles",
     "realized_pnl",
 ]

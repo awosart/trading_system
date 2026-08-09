@@ -215,7 +215,9 @@ class TestOpenRiskTotal:
 
     def test_with_opened_appends_and_leaves_equity_alone(self) -> None:
         state = account(position("EURUSD", "500"))
-        after = state.with_opened("XAUUSD", "s2", Side.SELL, Decimal("300"))
+        after = state.with_opened(
+            "XAUUSD", "s2", Side.SELL, Decimal("300"), margin=Decimal(0), notional=Decimal(0)
+        )
         assert after.open_risk_amount == Decimal("800")
         assert after.equity == state.equity
         # And the original is untouched: it is a value, not a mutable ledger.
