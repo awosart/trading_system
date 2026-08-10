@@ -139,9 +139,15 @@ class OffsetTable(BaseModel):
             to repeat the measurement.
         method: One sentence on how a day was decided.
         generated_on: When the measurement was run.
-        symbol_scope: Symbols the table is asserted to cover, and how that
-            assertion was reached, verbatim enough to see which symbols were
-            confirmed and which inherited the finding.
+        symbol_scope: Prose account of how the scope was established, verbatim
+            enough to repeat. It explains ``verified_symbols`` and
+            ``inherited_symbols``; it is not what code reads to decide.
+        verified_symbols: Symbols whose clock was confirmed by measurement.
+        inherited_symbols: Symbols in the same export whose clock was *not*
+            measured and is assumed to match. Structured rather than left to the
+            prose because an importer has to act on the difference, and a
+            consumer that had to grep ``symbol_scope`` for a symbol name would
+            be a second authority free to disagree with the first.
         runs: Offsets by period, ascending and non-overlapping.
         ambiguous_days: Market days no offset won. They are usually inside a run
             decided by their neighbours; listed so that "covered" is never
@@ -157,9 +163,51 @@ class OffsetTable(BaseModel):
     method: str = Field(min_length=1)
     generated_on: date
     symbol_scope: str = Field(min_length=1)
+    verified_symbols: tuple[str, ...] = ()
+    inherited_symbols: tuple[str, ...] = ()
     runs: tuple[OffsetRun, ...]
     ambiguous_days: tuple[date, ...] = ()
     smoothed_days: tuple[date, ...] = ()
+
+    @model_validator(mode="after")
+    def _check_symbol_sets(self) -> "OffsetTable":
+        """Reject a symbol claimed as both measured and assumed."""
+        both = sorted(set(self.verified_symbols) & set(self.inherited_symbols))
+        if both:
+            raise ValueError(f"symbols listed as both verified and inherited: {both}")
+        return self
+
+    def check_symbol(self, symbol: str) -> None:
+        """Assert that this table may be applied to ``symbol``.
+
+        Called once per file rather than per row: a symbol the table does not
+        vouch for is a property of the request, not of any particular bar, and
+        discovering it eight million times is not discovering it better.
+
+        Args:
+            symbol: Instrument the caller wants to normalise.
+
+        Raises:
+            DataError: If the symbol's clock was assumed rather than measured,
+                or if the table says nothing about it at all. The two get
+                different messages because they need different work: the first
+                needs a reference series for that symbol, the second needs
+                somebody to establish whether it belongs to this export.
+        """
+        if symbol in self.verified_symbols:
+            return
+        if symbol in self.inherited_symbols:
+            raise DataError(
+                f"no calibration for {symbol}: its clock is inherited from the rest of "
+                f"the {self.vendor} export, not measured. Every other symbol was "
+                "confirmed by triangular identity, which a metal does not admit. "
+                "A separate reference series for this symbol is needed before it "
+                "can be imported."
+            )
+        raise DataError(
+            f"no calibration for {symbol}: it is not among the symbols this "
+            f"{self.vendor} table covers ({', '.join(sorted(self.verified_symbols))})"
+        )
 
     @model_validator(mode="after")
     def _check_runs(self) -> "OffsetTable":

@@ -4,6 +4,26 @@
   "method": "per-UTC-day median absolute difference of hourly closes against the reference, over candidate whole-hour shifts 0..3; a day is decided when the winning shift's median is beaten by the runner-up's by more than 1.5x and the day carries at least 12 matched hours; isolated runs shorter than 2 days between agreeing neighbours absorbed",
   "generated_on": "2026-08-10",
   "symbol_scope": "All 16 Forexite exports. The shared clock was verified for the 15 FX symbols by seven triangular identities (GBPJPY = GBPUSD x USDJPY and six others), median error 0.7-4.9 pips over ~7.9M minutes each, where a one-hour disagreement would show as tens of pips. XAGUSD admits no such identity and INHERITS the finding rather than confirming it.",
+  "verified_symbols": [
+    "AUDJPY",
+    "AUDUSD",
+    "CHFJPY",
+    "EURCAD",
+    "EURCHF",
+    "EURGBP",
+    "EURJPY",
+    "GBPCHF",
+    "GBPJPY",
+    "GBPUSD",
+    "NZDJPY",
+    "NZDUSD",
+    "USDCAD",
+    "USDCHF",
+    "USDJPY"
+  ],
+  "inherited_symbols": [
+    "XAGUSD"
+  ],
   "runs": [
     {
       "start": "2019-01-02",
