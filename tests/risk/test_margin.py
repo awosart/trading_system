@@ -364,8 +364,14 @@ class TestTheReservationHoldsAcrossOneInstant:
     ) -> None:
         profile = _profile("ftmo_swing")
         engine = engine_factory(FixedFractional(0.005), prop_profile=profile)
-        signal = signal_with_stop_points(registry, "XAUUSD", points=50)
-        # 500 / (50 * 1) = 10.00 lots at 2050 = 2 050 000 notional; 1:30 -> 68 333.34.
+        signal = signal_with_stop_points(registry, "XAUUSD", points=100)
+        # 500 / (100 * 1) = 5.00 lots at 2050 = 1 025 000 notional; 1:15 -> 68 333.34.
+        # The stop was widened from 50 points when ftmo_swing's metals leverage
+        # was corrected from 1:30 to 1:15: halving the size against a doubled
+        # rate leaves the reserved figure identical, so this test still asserts
+        # the reservation and not an arithmetic coincidence of the old profile.
+        # At 50 points the first signal alone would now need 136 666.67 on a
+        # 100k account and be refused, leaving nothing to reserve.
         first = engine.evaluate(
             signal,
             account=account,

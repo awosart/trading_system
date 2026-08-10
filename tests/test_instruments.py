@@ -197,13 +197,48 @@ class TestRegistryFile:
     def test_the_bundled_registry_loads(self) -> None:
         registry = load_instruments(REGISTRY_PATH)
         assert set(registry.symbols) == {
+            # FX, quoted in USD
             "EURUSD",
+            "GBPUSD",
+            "AUDUSD",
+            "NZDUSD",
+            # FX, quoted in JPY
+            "USDJPY",
+            "EURJPY",
             "GBPJPY",
+            "CHFJPY",
+            "AUDJPY",
+            "NZDJPY",
+            # FX, quoted in CHF / CAD / GBP
+            "USDCHF",
+            "USDCAD",
+            "EURGBP",
+            "EURCHF",
+            "EURCAD",
+            "GBPCHF",
+            # Metals, indices, crypto
             "XAUUSD",
+            "XAGUSD",
             "NAS100",
             "US30",
             "BTCUSD",
         }
+
+    def test_every_non_usd_quote_has_its_conversion_pair_in_the_registry(self) -> None:
+        # A USD account cannot size a CHF-quoted pair without a CHF/USD rate,
+        # and risk/conversion.py refuses rather than assuming parity. Shipping a
+        # cross whose conversion pair is absent is therefore shipping an
+        # instrument that cannot be traded, which is worse than not shipping it.
+        registry = load_instruments(REGISTRY_PATH)
+        carried = set(registry.symbols)
+        for symbol in registry:
+            quote = registry[symbol].quote_currency
+            if quote == "USD":
+                continue
+            assert f"USD{quote}" in carried or f"{quote}USD" in carried, (
+                f"{symbol} is quoted in {quote} but neither USD{quote} nor "
+                f"{quote}USD is in the registry to convert it"
+            )
 
     def test_the_registry_spans_four_asset_classes(self) -> None:
         # Deliberately mixed: a sizing bug that only shows up on a non-FX

@@ -14,15 +14,39 @@
 # currency. Everything derived from price (value_per_point_quote) is in the
 # instrument's quote currency and needs converting; see risk/conversion.py.
 #
+# Every FX swap below comes from one rule, so that the file cannot hold two
+# incompatible models of financing:
+#
+#   swap_long  = notional_usd * (r_base - r_quote - 0.90) / 100 / 365
+#   swap_short = notional_usd * (r_quote - r_base - 0.90) / 100 / 365
+#
+# The 0.90%/yr markup is calibrated on the EURUSD figures this file already
+# carried, which decompose to 0.86% and a EUR-minus-USD differential of -1.52%.
+# Assumed policy rates, %/yr: USD 3.50, EUR 2.00, GBP 3.75, JPY 0.75, CHF 0.25,
+# CAD 2.50, AUD 3.60, NZD 2.75. Those eight numbers are the ONLY input to check;
+# the thirty swap figures are derived from them and are not independent
+# evidence. Metals keep their own pair of numbers, decomposing to a 1.10%
+# markup. Like everything here these are representative, not a broker's table.
+#
 # commission_basis is required on every entry and has no default. "7.00 per
 # lot" is ambiguous between per-side and round-turn, the readings differ by
 # exactly 2x, and a default would make one of them a silent assumption.
 #
-# margin_rate is the fraction of notional the VENUE requires, filled per asset
-# class from the ESMA/FCA retail leverage limits: FX majors 1:30 (0.0333),
-# major indices and gold 1:20 (0.05), crypto 1:2 (0.5). A real published limit
-# rather than one broker's marketing, so that a run naming no prop firm still
-# refuses positions no regulated retail account could open.
+# margin_rate is the fraction of notional the VENUE requires, filled from the
+# ESMA/FCA retail leverage limits: FX majors 1:30 (0.0333), FX non-majors 1:20
+# (0.05), major indices and gold 1:20 (0.05), commodities other than gold 1:10
+# (0.10), crypto 1:2 (0.5). A real published limit rather than one broker's
+# marketing, so that a run naming no prop firm still refuses positions no
+# regulated retail account could open.
+#
+# Those five tiers do NOT line up with InstrumentClass, which is why margin_rate
+# is a field on the instrument and not a table keyed by asset class. ESMA splits
+# FX by the composition of the pair — a major is any two of USD, EUR, JPY, GBP,
+# CAD, CHF, so AUDUSD and NZDJPY sit at 1:20 while EURCAD and CHFJPY sit at 1:30
+# — and it splits COMMODITY by the metal, gold at 1:20 against silver at 1:10.
+# A prop profile overriding by class collapses both distinctions; see the note
+# at the head of configs/prop_profiles.yaml for why that is correct rather than
+# a defect.
 #
 # A prop firm's own leverage is a DIFFERENT and usually stricter figure, and it
 # lives in configs/prop_profiles.yaml, which overrides this per asset class. The
@@ -49,7 +73,64 @@ instruments:
     swap_short: "2.10"
     min_stop_distance_points: 1.0
 
-  # --- FX: quote currency is JPY, so a USD account needs USDJPY -----------
+  - symbol: GBPUSD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "100"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: USD
+    margin_rate: 0.0333       # 1:30, the ESMA retail limit for an FX major
+    typical_spread_points: 1.0
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
+    swap_long: "-2.39"
+    swap_short: "-4.22"
+    min_stop_distance_points: 1.0
+
+  # AUD and NZD are outside ESMA's major list, so a pair carrying either leg
+  # sits a tier lower at 1:20 no matter how liquid it is.
+  - symbol: AUDUSD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "100"
+    contract_size: "100000"
+    base_currency: AUD
+    quote_currency: USD
+    margin_rate: 0.05         # 1:20, the ESMA retail limit for a NON-major pair
+    typical_spread_points: 1.0
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-1.42"
+    swap_short: "-1.78"
+    min_stop_distance_points: 1.0
+
+  - symbol: NZDUSD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "100"
+    contract_size: "100000"
+    base_currency: NZD
+    quote_currency: USD
+    margin_rate: 0.05         # 1:20, the ESMA retail limit for a NON-major pair
+    typical_spread_points: 1.5
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-2.71"
+    swap_short: "-0.25"
+    min_stop_distance_points: 1.5
+
+  # --- FX: quote currency is JPY, so a USD account needs USDJPY, which this
+  #     file now carries as an instrument in its own right -------------------
   - symbol: GBPJPY
     asset_class: FX
     tick_size: 0.001
@@ -64,9 +145,214 @@ instruments:
     typical_spread_points: 2.4
     commission_per_lot: "7.00"
     commission_basis: ROUND_TURN   # 3.50 charged on each of the two fills
-    swap_long: "-12.40"
-    swap_short: "-4.80"
+    # Recomputed on the same carry rule as every other pair here. The previous
+    # figures (-12.40 / -4.80) decompose to a 2.34%/yr broker markup and a
+    # GBP-minus-JPY differential of -1.04%/yr — that is, JPY rates a point
+    # ABOVE GBP, which holds in no period this repository has data for. Long
+    # GBPJPY earns carry; it was being charged for it.
+    swap_long: "7.71"
+    swap_short: "-14.32"
     min_stop_distance_points: 2.0
+
+  - symbol: USDJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01          # one pip on a JPY cross
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: USD
+    quote_currency: JPY
+    margin_rate: 0.0333       # 1:30, the ESMA retail limit for an FX major
+    typical_spread_points: 0.9
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "5.07"
+    swap_short: "-10.00"
+    min_stop_distance_points: 1.0
+
+  - symbol: EURJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: JPY
+    margin_rate: 0.0333
+    typical_spread_points: 1.3
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "1.10"
+    swap_short: "-6.77"
+    min_stop_distance_points: 1.5
+
+  - symbol: CHFJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: CHF
+    quote_currency: JPY
+    margin_rate: 0.0333
+    typical_spread_points: 2.2
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-4.79"
+    swap_short: "-1.37"
+    min_stop_distance_points: 2.5
+
+  - symbol: AUDJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: AUD
+    quote_currency: JPY
+    margin_rate: 0.05         # 1:20, the ESMA retail limit for a NON-major pair
+    typical_spread_points: 1.7
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "3.47"
+    swap_short: "-6.68"
+    min_stop_distance_points: 2.0
+
+  - symbol: NZDJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: NZD
+    quote_currency: JPY
+    margin_rate: 0.05         # 1:20, the ESMA retail limit for a NON-major pair
+    typical_spread_points: 2.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "1.81"
+    swap_short: "-4.77"
+    min_stop_distance_points: 2.5
+
+  # --- FX: quote currency is CHF, CAD or GBP, so a USD account needs the
+  #     matching conversion pair, all three of which are carried above -------
+  - symbol: USDCHF
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: USD
+    quote_currency: CHF
+    margin_rate: 0.0333
+    typical_spread_points: 1.2
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "6.44"
+    swap_short: "-11.37"
+    min_stop_distance_points: 1.5
+
+  - symbol: USDCAD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: USD
+    quote_currency: CAD
+    margin_rate: 0.0333
+    typical_spread_points: 1.3
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "0.27"
+    swap_short: "-5.21"
+    min_stop_distance_points: 1.5
+
+  - symbol: EURGBP
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: GBP
+    margin_rate: 0.0333
+    typical_spread_points: 1.1
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-8.35"
+    swap_short: "2.68"
+    min_stop_distance_points: 1.5
+
+  - symbol: EURCHF
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: CHF
+    margin_rate: 0.0333
+    typical_spread_points: 1.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "2.68"
+    swap_short: "-8.35"
+    min_stop_distance_points: 1.5
+
+  - symbol: EURCAD
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: CAD
+    margin_rate: 0.0333
+    typical_spread_points: 2.0
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-4.41"
+    swap_short: "-1.26"
+    min_stop_distance_points: 2.0
+
+  - symbol: GBPCHF
+    asset_class: FX
+    tick_size: 0.00001
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: CHF
+    margin_rate: 0.0333
+    typical_spread_points: 2.6
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "9.55"
+    swap_short: "-16.15"
+    min_stop_distance_points: 3.0
 
   # --- Metal CFD: 100 oz per lot, quoted in USD --------------------------
   - symbol: XAUUSD
@@ -86,6 +372,30 @@ instruments:
     swap_long: "-18.60"
     swap_short: "6.20"
     min_stop_distance_points: 30.0
+
+  # --- Metal CFD: 5000 oz per lot, quoted in USD -------------------------
+  # A point is one cent of the quote currency, the same meaning XAUUSD's point
+  # has, so the two metals' spreads are directly comparable. Unlike gold the
+  # tick is a third decimal the feed really carries, so here a point is ten
+  # ticks where for gold the two coincide. Note the tier: ESMA puts gold at
+  # 1:20 and every other commodity, silver included, at 1:10.
+  - symbol: XAGUSD
+    asset_class: COMMODITY
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "5000"
+    base_currency: XAG
+    quote_currency: USD
+    margin_rate: 0.10         # 1:10, the ESMA retail limit for a non-gold commodity
+    typical_spread_points: 2.5
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN   # zero either way; stated so the field is never absent
+    swap_long: "-13.60"
+    swap_short: "4.56"
+    min_stop_distance_points: 3.0
 
   # --- Index CFDs: the exchange multiplier, so a point is NOT a dollar ------
   - symbol: NAS100

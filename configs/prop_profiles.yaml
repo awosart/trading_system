@@ -31,9 +31,37 @@
 #
 # Metals and energy both map to COMMODITY, which is one class in
 # core/instruments.py. Where a firm publishes different figures for the two
-# (The5ers: metals 1:33, energy 1:5) the METALS figure is recorded, because the
-# only commodity in instruments.yaml is XAUUSD. Adding an energy instrument to
-# the registry forces this choice to be made properly rather than inherited.
+# (The5ers: metals 1:33, energy 1:5) the METALS figure is recorded, because
+# every commodity in instruments.yaml is a metal — XAUUSD and XAGUSD. Adding an
+# energy instrument to the registry forces this choice to be made properly
+# rather than inherited.
+#
+# The two metals do not force it. ESMA separates them (gold 1:20, silver 1:10)
+# and instruments.yaml carries that per symbol, but no firm in this file
+# publishes gold and silver apart — FTMO writes them as one row, and its
+# Feb/May 2026 updates moved both to the same figure. A class holding one
+# number is therefore enough for the profile layer. What would force a split is
+# a firm quoting the two metals differently.
+#
+# ---------------------------------------------------------------------------
+# `source_verified_date`, WRITTEN AS A COMMENT ABOVE EACH PROFILE
+#
+# Each profile below carries a `source_verified_date:` comment line stating the
+# date its figures were last reconciled against the firm's OWN published rules,
+# and which classes that reconciliation actually covered. "never" is a legal and
+# common value here, and it is the honest one for most of this file.
+#
+# It is a comment rather than a field for two reasons. `PropProfile` is
+# `extra="forbid"`, so a real key fails to load. And a real field would enter
+# the profile's digest, therefore the `risk` component, therefore `run_id` —
+# recording when somebody last read a website would invalidate every stored run.
+# A comment is digest-neutral; this was checked, not assumed.
+#
+# What the date does NOT say: that the figures were correct for the period a
+# backtest covers. A profile models one snapshot of a firm's rules and applies
+# it to the whole history. See docs/data_schema.md, "PropProfile моделирует
+# правила фирмы на дату сверки".
+# ---------------------------------------------------------------------------
 
 source: >-
   Secondary readings, unverified: a comparison table at wladislav.com (an
@@ -45,30 +73,51 @@ profiles:
   # what every strategy in this repository does. The default for that reason,
   # and it is also the strictest complete profile here — a default that errs
   # towards refusing.
+  # source_verified_date: 2026-08-10 — COMMODITY ONLY. Checked against FTMO's
+  #   own trading updates of 2 Feb 2026 (XAU pairs) and 7 May 2026 (XAG pairs),
+  #   which publish before/after tables directly. COMMODITY was corrected from
+  #   30.0 to 15.0 on that date: FTMO swing metals has never been 1:30, and the
+  #   old figure understated required margin by 2x.
+  #   FX / INDEX / CRYPTO: never checked against a primary source.
   - name: ftmo_swing
-    source: wladislav.com comparison table, FTMO "Swing" row
+    source: >-
+      COMMODITY from FTMO's own trading updates of 2 Feb 2026 and 7 May 2026;
+      FX, INDEX and CRYPTO still from the wladislav.com comparison table,
+      FTMO "Swing" row
     leverage:
       FX: 30.0
       INDEX: 30.0
-      COMMODITY: 30.0        # published as "Gold & Silver 30" and "Gas & Oil 30"
+      COMMODITY: 15.0        # 1:15 since 1 Feb 2026 (gold), 11 May 2026 (silver); 1:9 before
       CRYPTO: 2.0
     leverage_cap: null
     notes: >-
       FTMO's swing plan. Lower leverage than the standard plan in exchange for
       being allowed to hold over the weekend and through news.
 
+  # source_verified_date: 2026-08-10 — COMMODITY ONLY, same two FTMO trading
+  #   updates. The figure below agrees with the firm's CURRENT rules (1:50 on
+  #   both metals) but only became correct on 1 Feb 2026 for gold and
+  #   11 May 2026 for silver; before those dates FTMO published 1:30. Any
+  #   backtest whose history predates them is applying today's rule backwards.
+  #   FX / INDEX / CRYPTO: never checked against a primary source.
   - name: ftmo_standard
-    source: wladislav.com comparison table, FTMO "Standard" row
+    source: >-
+      COMMODITY from FTMO's own trading updates of 2 Feb 2026 and 7 May 2026;
+      FX, INDEX and CRYPTO still from the wladislav.com comparison table,
+      FTMO "Standard" row
     leverage:
       FX: 100.0
       INDEX: 50.0
-      COMMODITY: 50.0        # "Gold & Silver 50", "Gas & Oil 50"
+      COMMODITY: 50.0        # 1:50 since 1 Feb 2026 (gold), 11 May 2026 (silver); 1:30 before
       CRYPTO: 2.0
     leverage_cap: null
     notes: >-
       Standard plan. Does not permit holding positions over the weekend, so it
       does not apply to any strategy currently in this repository.
 
+  # source_verified_date: never — no figure below has been read from The5ers'
+  #   own rulebook. A 2026-08-10 search found only affiliate summaries, the same
+  #   class of source the header already distrusts.
   - name: the5ers
     source: wladislav.com comparison table, The5ers row
     leverage:
@@ -78,6 +127,10 @@ profiles:
       CRYPTO: 2.0
     leverage_cap: null
 
+  # source_verified_date: never — not read from FundedNext's own rulebook. A
+  #   2026-08-10 search surfaced a secondary "commodities 1:25" figure agreeing
+  #   with the line below, which is corroboration from an equally weak source,
+  #   not verification.
   - name: fundednext
     source: wladislav.com comparison table, FundedNext row
     leverage:
@@ -87,6 +140,7 @@ profiles:
       CRYPTO: 1.0
     leverage_cap: null
 
+  # source_verified_date: never — not read from Brightfunded's own rulebook.
   - name: brightfunded
     source: wladislav.com comparison table, Brightfunded row
     leverage:
@@ -96,6 +150,10 @@ profiles:
       CRYPTO: 5.0
     leverage_cap: null
 
+  # source_verified_date: never — and this is the profile where that matters
+  #   most. Its exposure ceiling of 12.5x is the ONLY one in the file and
+  #   the sole reason LEVERAGE_LIMIT_EXCEEDED exists, so an unverified number
+  #   here is an unverified refusal rule, not just an unverified margin rate.
   - name: finotive
     source: wladislav.com comparison table, FinotiveFunding row
     leverage:
@@ -111,6 +169,7 @@ profiles:
       which is 12.5x equity. This is the rule the LEVERAGE_LIMIT_EXCEEDED
       refusal exists for, and it binds where margin alone does not.
 
+  # source_verified_date: never — not read from PipFarm's own rulebook.
   - name: pipfarm
     source: wladislav.com comparison table, PipFarm 100k row
     leverage:
@@ -121,6 +180,7 @@ profiles:
     leverage_cap: null
     notes: The same row states leverage rises with account XP; the base figure is recorded.
 
+  # source_verified_date: never — not read from E8 Markets' own rulebook.
   - name: e8
     source: wladislav.com comparison table, E8 Markets row
     leverage:
@@ -130,6 +190,7 @@ profiles:
       CRYPTO: 5.0
     leverage_cap: null
 
+  # source_verified_date: never — not read from Maven's own rulebook.
   - name: maven
     source: wladislav.com comparison table, Maven 100k row
     leverage:
@@ -139,6 +200,9 @@ profiles:
       CRYPTO: 2.0
     leverage_cap: null
 
+  # source_verified_date: never — not read from RebelsFunding's own rulebook,
+  #   and the challenge/funded split recorded below is itself a reading of the
+  #   affiliate table rather than of the firm.
   - name: rebels_funded
     source: wladislav.com comparison table, RebelsFunding row, funded column
     leverage:
