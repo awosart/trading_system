@@ -73,11 +73,14 @@ profiles:
   # what every strategy in this repository does. The default for that reason,
   # and it is also the strictest complete profile here — a default that errs
   # towards refusing.
-  # source_verified_date: 2026-08-10 — COMMODITY ONLY. Checked against FTMO's
-  #   own trading updates of 2 Feb 2026 (XAU pairs) and 7 May 2026 (XAG pairs),
-  #   which publish before/after tables directly. COMMODITY was corrected from
-  #   30.0 to 15.0 on that date: FTMO swing metals has never been 1:30, and the
-  #   old figure understated required margin by 2x.
+  # source_verified_date: 2026-08-10 — COMMODITY ONLY.
+  #   FTMO leverage on metals, Swing, is 1:15. Confirmed against FTMO's own
+  #   trading updates, which publish before/after tables: 2 Feb 2026 moved the
+  #   XAU pairs from 1:9 to 1:15, 7 May 2026 moved the XAG pairs the same way.
+  #   Both dates are cited because one figure covers two metals and they were
+  #   moved three months apart. Recorded here as 30.0 until 2026-08-10, which
+  #   FTMO has never published for Swing metals and which understated required
+  #   margin by 2x.
   #   FX / INDEX / CRYPTO: never checked against a primary source.
   - name: ftmo_swing
     source: >-
