@@ -1,0 +1,125 @@
+{
+  "vendor": "forexite-ascii-m1",
+  "reference": "Dukascopy GBPUSD H1 from the local store (data/ohlcv/GBPUSD/H1), UTC by construction",
+  "method": "per-UTC-day median absolute difference of hourly closes against the reference, over candidate whole-hour shifts 0..3; a day is decided when the winning shift's median is beaten by the runner-up's by more than 1.5x and the day carries at least 12 matched hours; isolated runs shorter than 2 days between agreeing neighbours absorbed",
+  "generated_on": "2026-08-10",
+  "symbol_scope": "All 16 Forexite exports. The shared clock was verified for the 15 FX symbols by seven triangular identities (GBPJPY = GBPUSD x USDJPY and six others), median error 0.7-4.9 pips over ~7.9M minutes each, where a one-hour disagreement would show as tens of pips. XAGUSD admits no such identity and INHERITS the finding rather than confirming it.",
+  "runs": [
+    {
+      "start": "2019-01-02",
+      "end": "2020-09-30",
+      "offset_hours": 0
+    },
+    {
+      "start": "2020-10-01",
+      "end": "2020-12-24",
+      "offset_hours": 1
+    },
+    {
+      "start": "2020-12-28",
+      "end": "2020-12-31",
+      "offset_hours": 0
+    },
+    {
+      "start": "2021-01-04",
+      "end": "2021-03-26",
+      "offset_hours": 1
+    },
+    {
+      "start": "2021-03-29",
+      "end": "2021-10-29",
+      "offset_hours": 2
+    },
+    {
+      "start": "2021-11-01",
+      "end": "2021-12-24",
+      "offset_hours": 0
+    },
+    {
+      "start": "2021-12-27",
+      "end": "2022-03-25",
+      "offset_hours": 1
+    },
+    {
+      "start": "2022-03-28",
+      "end": "2022-12-05",
+      "offset_hours": 2
+    },
+    {
+      "start": "2022-12-06",
+      "end": "2023-03-24",
+      "offset_hours": 1
+    },
+    {
+      "start": "2023-03-27",
+      "end": "2023-09-29",
+      "offset_hours": 2
+    }
+  ],
+  "ambiguous_days": [
+    "2019-01-03",
+    "2019-01-08",
+    "2019-01-09",
+    "2019-01-10",
+    "2019-01-14",
+    "2019-01-15",
+    "2019-01-16",
+    "2019-01-17",
+    "2019-01-21",
+    "2019-01-28",
+    "2019-01-29",
+    "2019-01-31",
+    "2019-02-01",
+    "2019-02-04",
+    "2019-02-11",
+    "2019-02-13",
+    "2019-02-15",
+    "2019-04-19",
+    "2019-06-12",
+    "2019-06-14",
+    "2019-07-02",
+    "2019-07-04",
+    "2019-07-09",
+    "2019-09-02",
+    "2019-10-07",
+    "2019-11-15",
+    "2019-12-05",
+    "2020-01-17",
+    "2020-02-13",
+    "2020-10-23",
+    "2021-01-19",
+    "2021-03-16",
+    "2021-04-20",
+    "2021-07-01",
+    "2021-07-05",
+    "2021-07-23",
+    "2021-08-05",
+    "2021-08-26",
+    "2021-08-30",
+    "2021-09-02",
+    "2021-10-28",
+    "2021-11-16",
+    "2021-12-20",
+    "2022-02-09",
+    "2022-02-15",
+    "2022-03-18",
+    "2022-04-15",
+    "2022-12-29",
+    "2023-01-02",
+    "2023-02-22",
+    "2023-04-07",
+    "2023-04-11",
+    "2023-04-12",
+    "2023-04-21",
+    "2023-05-16",
+    "2023-05-26",
+    "2023-05-29",
+    "2023-07-04",
+    "2023-07-05",
+    "2023-08-28",
+    "2023-09-07"
+  ],
+  "smoothed_days": [
+    "2021-07-26"
+  ]
+}
