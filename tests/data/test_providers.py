@@ -44,6 +44,15 @@ RAGGED_TSV = (
     "2024-01-01 00:02:00\t1.1010\t1.1020\t1.1005\t1.1015\t110\t4\n"
 )
 
+#: No header at all, and the sixth field is a minute count rather than volume:
+#: 30 on a full M30 bar, less when the tape went quiet. The shape an index CFD
+#: export takes when the underlying reports no volume.
+HEADERLESS_CSV = (
+    "2024-01-01 00:00,1.1000,1.1010,1.0990,1.1005,30\n"
+    "2024-01-01 00:30,1.1005,1.1015,1.1000,1.1010,30\n"
+    "2024-01-01 01:00,1.1010,1.1020,1.1005,1.1015,29\n"
+)
+
 UNSORTED_CSV = """timestamp,open,high,low,close,volume
 2024-01-01T00:02:00,1.1010,1.1020,1.1005,1.1015,110
 2024-01-01T00:00:00,1.1000,1.1010,1.0990,1.1005,100
@@ -189,6 +198,112 @@ class TestVendorFilesWithUnnamedTrailingFields:
         schema = CSVSchema(timestamp_format="%Y-%m-%d %H:%M:%S", drop_unnamed_fields=True)
         with pytest.raises(DataError, match="could not map columns"):
             CSVProvider(self.write(tmp_path), schema).fetch("EURUSD", Timeframe.M1)
+
+
+class TestFilesThatNameTheirColumnsBadlyOrNotAtAll:
+    """Positional naming, for the two files a header cannot describe.
+
+    One names nothing, so there is no header to believe. The other names its
+    sixth field ``Volume`` when the field counts the minutes that carried a
+    tick — worse than no header, because the default map believes it and the
+    number reaches VWAP, MFI and RelativeVolume as a plausible weight.
+    """
+
+    def write(self, tmp_path: Path, text: str) -> Path:
+        (tmp_path / "EURUSD.csv").write_text(text, encoding="utf-8")
+        return tmp_path
+
+    def test_a_headerless_file_is_named_by_position(self, tmp_path: Path) -> None:
+        schema = CSVSchema(
+            has_header=False,
+            positional_columns=("timestamp", "open", "high", "low", "close", None),
+            absent_volume=True,
+            timestamp_format="%Y-%m-%d %H:%M",
+        )
+        frame = CSVProvider(self.write(tmp_path, HEADERLESS_CSV), schema).fetch(
+            "EURUSD", Timeframe.M30
+        )
+        assert len(frame) == 3
+        assert frame.df["close"].to_list() == [1.1005, 1.1010, 1.1015]
+
+    def test_the_minute_count_is_not_stored_as_volume(self, tmp_path: Path) -> None:
+        """The defect the flag exists to prevent, asserted positively.
+
+        The skipped field holds 30, 30, 29 — the shape of a minute count on M30
+        bars. Volume comes out zero, which ``data.quality`` reports on every
+        bar, rather than a number that would pass for a tick count.
+        """
+        schema = CSVSchema(
+            has_header=False,
+            positional_columns=("timestamp", "open", "high", "low", "close", None),
+            absent_volume=True,
+            timestamp_format="%Y-%m-%d %H:%M",
+        )
+        frame = CSVProvider(self.write(tmp_path, HEADERLESS_CSV), schema).fetch(
+            "EURUSD", Timeframe.M30
+        )
+        assert frame.df["volume"].to_list() == [0.0, 0.0, 0.0]
+
+    def test_a_wrong_header_is_overridden_by_position(self, tmp_path: Path) -> None:
+        """The header says ``Volume``; the caller says that field is not volume."""
+        schema = CSVSchema(
+            separator="\t",
+            drop_unnamed_fields=True,
+            positional_columns=("timestamp", "open", "high", "low", "close", None),
+            absent_volume=True,
+            timestamp_format="%Y-%m-%d %H:%M:%S",
+        )
+        frame = CSVProvider(self.write(tmp_path, RAGGED_TSV), schema).fetch("EURUSD", Timeframe.M1)
+        assert frame.df["volume"].to_list() == [0.0, 0.0, 0.0]
+        assert frame.df["close"].to_list() == [1.1005, 1.1010, 1.1015]
+
+    def test_a_field_count_that_disagrees_is_refused(self, tmp_path: Path) -> None:
+        """A file that grew a column must not shift silently."""
+        schema = CSVSchema(
+            has_header=False,
+            positional_columns=("timestamp", "open", "high", "low", "close"),
+            absent_volume=True,
+            timestamp_format="%Y-%m-%d %H:%M",
+        )
+        with pytest.raises(DataError, match="shift every column"):
+            CSVProvider(self.write(tmp_path, HEADERLESS_CSV), schema).fetch("EURUSD", Timeframe.M30)
+
+    def test_naming_volume_while_denying_it_is_refused(self) -> None:
+        with pytest.raises(DataError, match="one of the two is wrong"):
+            CSVSchema(
+                positional_columns=("timestamp", "open", "high", "low", "close", "volume"),
+                absent_volume=True,
+            )
+
+    def test_a_name_outside_the_canonical_set_is_refused(self) -> None:
+        with pytest.raises(DataError, match="not canonical"):
+            CSVSchema(positional_columns=("timestamp", "open", "high", "low", "close", "spread"))
+
+    def test_a_column_that_turns_fractional_late_is_still_read(self, tmp_path: Path) -> None:
+        """Types come from the frame, never from the head of the file.
+
+        An index that traded at whole points on its first day gives polars an
+        integer column to infer, and the first fractional price further down is
+        then unparseable. Inferring nothing and casting once puts the decision
+        where the schema is, not where the file happens to start.
+        """
+        text = (
+            "2024-01-01 00:00,15343,15353,15322,15328,30\n"
+            "2024-01-01 00:30,15328,15341,15322,15324,30\n"
+            "2024-01-01 01:00,14963.8,14970.2,14960.1,14963.4,30\n"
+        )
+        schema = CSVSchema(
+            has_header=False,
+            positional_columns=("timestamp", "open", "high", "low", "close", None),
+            absent_volume=True,
+            timestamp_format="%Y-%m-%d %H:%M",
+        )
+        frame = CSVProvider(self.write(tmp_path, text), schema).fetch("EURUSD", Timeframe.M30)
+        assert frame.df["open"].to_list() == [15343.0, 15328.0, 14963.8]
+
+    def test_a_name_used_twice_is_refused(self) -> None:
+        with pytest.raises(DataError, match="more than once"):
+            CSVSchema(positional_columns=("timestamp", "open", "high", "low", "close", "close"))
 
 
 class TestParquetProvider:
