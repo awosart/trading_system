@@ -30,18 +30,66 @@ a public holiday, short enough that a series which genuinely stopped is caught
 within the week.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Protocol, runtime_checkable
 
 from trading_system.core.exceptions import DataError
+from trading_system.core.instruments import InstrumentSpec
 from trading_system.core.types import ensure_utc
 from trading_system.data.models import OHLCVFrame
 
 #: How old a conversion rate may be before it stops counting as a rate.
 #: Three days rather than one: see the module docstring on FX weekends.
 DEFAULT_MAX_STALENESS = timedelta(days=3)
+
+
+def conversion_pair_candidates(quote_currency: str, account_currency: str) -> tuple[str, ...]:
+    """The pair symbols either of which prices ``quote_currency`` in ``account_currency``.
+
+    Two candidates rather than one because the market quotes each pair in one
+    direction only and which direction that is, is a convention rather than a
+    rule: JPY against USD is published as ``USDJPY``, GBP against USD as
+    ``GBPUSD``. :class:`BarFxConverter` already inverts whichever it is handed,
+    so the caller's job is only to load the one that exists.
+
+    Args:
+        quote_currency: Currency the instrument's point value is born in.
+        account_currency: Currency the account is denominated in.
+
+    Returns:
+        Both spellings, direct first; empty when no conversion is needed.
+    """
+    if quote_currency == account_currency:
+        return ()
+    return (f"{quote_currency}{account_currency}", f"{account_currency}{quote_currency}")
+
+
+def required_conversion_currencies(
+    instruments: Iterable[InstrumentSpec], *, account_currency: str
+) -> tuple[str, ...]:
+    """Every quote currency in ``instruments`` that is not the account's own.
+
+    The question this answers is which rate series a run has to carry, and it is
+    asked of the **quote** currency alone. An instrument's base currency does not
+    enter position sizing at all — one point is worth ``point_size ×
+    contract_size`` in the quote currency and nothing else — so a run trading
+    GBPJPY on a USD account needs JPY/USD and never GBP/USD.
+
+    Args:
+        instruments: Specifications of everything the run may trade.
+        account_currency: Currency the account is denominated in.
+
+    Returns:
+        The distinct currencies needing conversion, sorted, so that a caller
+        building a converter produces the same set every time.
+    """
+    return tuple(
+        sorted(
+            {spec.quote_currency for spec in instruments if spec.quote_currency != account_currency}
+        )
+    )
 
 
 class FxRateUnavailableError(DataError):
