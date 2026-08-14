@@ -18,6 +18,7 @@ from pydantic import ValidationError as PydanticValidationError
 from trading_system.analytics.library_report import build_library_report
 from trading_system.analytics.library_report import render as render_library_report
 from trading_system.analytics.library_report import write as write_library_report
+from trading_system.analytics.metrics import daily_curve, total_return, trade_stats
 from trading_system.analytics.report import (
     build,
     build_comparison,
@@ -32,6 +33,7 @@ from trading_system.analytics.report import (
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
 from trading_system.backtest.orchestrator import StrategyBinding
+from trading_system.backtest.reproducibility import write_run
 from trading_system.backtest.spec import RunInputs
 from trading_system.core.config import Settings
 from trading_system.core.exceptions import ValidationError
@@ -46,7 +48,12 @@ from trading_system.data.resample import FX_DAY_ORIGIN, resample
 from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.data.store import ParquetStore
 from trading_system.execution.config import CostConfig
-from trading_system.exit.library import DEFAULT_LIBRARY_PATH, ExitLibrarySpec, known_exit_ids
+from trading_system.exit.library import (
+    DEFAULT_LIBRARY_PATH,
+    ExitLibrarySpec,
+    ExitPresetSpec,
+    known_exit_ids,
+)
 from trading_system.prop.rules import (
     DEFAULT_RULES_PATH,
     day_origin_divergence,
@@ -194,6 +201,32 @@ def main(ctx: typer.Context) -> None:
     ctx.obj = settings
 
 
+#: Escape sequences a shell will not conveniently pass through as themselves.
+#: Only the ones that are plausible CSV delimiters — a mapping wide enough to
+#: cover "\n" would let a file be split on something no vendor uses.
+_SEPARATOR_ESCAPES = {r"\t": "\t"}
+
+
+def _unescape_separator(text: str) -> str:
+    r"""Resolve a delimiter written as an escape sequence.
+
+    Args:
+        text: The ``--sep`` value as typed, e.g. ``","`` or ``"\t"``.
+
+    Returns:
+        The single character to split on.
+
+    Raises:
+        typer.BadParameter: If the result is not exactly one character. polars
+            takes a single byte, and a two-character delimiter would otherwise
+            fail deep inside the reader rather than at the flag that set it.
+    """
+    resolved = _SEPARATOR_ESCAPES.get(text, text)
+    if len(resolved) != 1:
+        raise typer.BadParameter(f"--sep takes a single character, got {text!r}")
+    return resolved
+
+
 @data_app.command("import")
 def data_import(
     ctx: typer.Context,
@@ -204,6 +237,16 @@ def data_import(
     date_column: str | None = typer.Option(None, "--date-col", help="Separate date column."),
     time_column: str | None = typer.Option(None, "--time-col", help="Separate time column."),
     timestamp_format: str | None = typer.Option(None, "--format", help="chrono parse format."),
+    separator: str = typer.Option(",", "--sep", help=r"Field delimiter. Write a tab as '\t'."),
+    drop_unnamed_fields: bool = typer.Option(
+        False,
+        "--drop-unnamed-fields",
+        help=(
+            "Accept rows carrying more fields than the header names, discarding "
+            "the surplus. Without this such a file is an error, since a row wider "
+            "than its header usually means --sep is wrong."
+        ),
+    ),
 ) -> None:
     """Import bars from a CSV file into the local store."""
     provider = CSVProvider(
@@ -213,6 +256,8 @@ def data_import(
             date_column=date_column,
             time_column=time_column,
             timestamp_format=timestamp_format,
+            separator=_unescape_separator(separator),
+            drop_unnamed_fields=drop_unnamed_fields,
         ),
     )
     frame = provider.fetch(symbol, timeframe)
@@ -754,42 +799,25 @@ def ingest_convert(
     )
 
 
-@app.command()
-def backtest() -> None:
-    """Run backtest."""
-    typer.echo("Backtest")
+class BacktestCliConfig(BaseModel):
+    """Everything one run needs beyond its strategy and its bars.
 
-
-class WalkForwardCliConfig(BaseModel):
-    """Everything ``ts validate walkforward`` needs beyond the fold geometry.
-
-    The fold geometry (``--mode``, ``--is``, ``--oos``, ``--step``,
-    ``--embargo``, ``--warmup``) is on the command line, per the CLAUDE.md
-    spec for this command; everything else a run needs to be built at all —
-    which instrument and timeframe, the account, the sizing — has no natural
-    single-flag form and lives in this file instead.
+    Shared by the flat ``ts backtest`` and, through
+    :class:`WalkForwardCliConfig`, by the fold runners: a field that changes a
+    run's result has to reach every command that builds one, and a second copy
+    of this list is a second place to forget it.
 
     Attributes:
         symbol: Instrument to trade, read from the local store.
         timeframe: Bar size to trade.
         account_currency: Denomination of the account.
-        starting_balance: Opening balance of every fold's own run.
+        starting_balance: Opening balance the run starts from.
         risk_pct: Fraction of equity risked per trade
             (:class:`~trading_system.risk.sizing.methods.FixedFractional`).
-            No optimiser exists yet to choose this per fold, so it is fixed
-            for the whole walk-forward.
-        run_seed: Seed for the per-fill random streams. One for the whole
-            walk-forward — see CLAUDE.md's "Решения P15 этап 1" on why.
+        run_seed: Seed for the per-fill random streams.
         atr_period: ATR period the cost model's volatility ratio is built
             from.
         atr_baseline_bars: Rolling window the ATR is divided by.
-        max_drain_bars: Bars past each OOS window's ``trade_end`` a position
-            already open may still be managed on.
-        min_trades_per_fold: Below this many OOS trades, a fold is flagged
-            insufficient in the report.
-        parallel_threshold_seconds: Below this many seconds for the first run
-            of a batch, the rest of that batch runs sequentially rather than
-            paying a process pool's spawn cost.
         prop_profile: Name of the prop-firm profile in
             ``configs/prop_profiles.yaml`` this account trades under.
             ``ftmo_swing`` by default: every strategy in the repository holds
@@ -809,10 +837,162 @@ class WalkForwardCliConfig(BaseModel):
     run_seed: int = 0
     atr_period: int = Field(default=14, gt=0)
     atr_baseline_bars: int = Field(default=500, gt=1)
+    prop_profile: str | None = DEFAULT_PROP_PROFILE
+
+
+class WalkForwardCliConfig(BacktestCliConfig):
+    """What ``ts validate walkforward`` needs on top of a single run's settings.
+
+    The fold geometry (``--mode``, ``--is``, ``--oos``, ``--step``,
+    ``--embargo``, ``--warmup``) is on the command line, per the CLAUDE.md
+    spec for this command; what is here has no natural single-flag form.
+
+    Attributes:
+        max_drain_bars: Bars past each OOS window's ``trade_end`` a position
+            already open may still be managed on.
+        min_trades_per_fold: Below this many OOS trades, a fold is flagged
+            insufficient in the report.
+        parallel_threshold_seconds: Below this many seconds for the first run
+            of a batch, the rest of that batch runs sequentially rather than
+            paying a process pool's spawn cost.
+    """
+
     max_drain_bars: int = Field(gt=0)
     min_trades_per_fold: int = Field(ge=0)
     parallel_threshold_seconds: float = Field(default=2.0, gt=0)
-    prop_profile: str | None = DEFAULT_PROP_PROFILE
+
+
+def _load_binding(
+    strategy: Path, exit_library: Path
+) -> tuple[StrategySpec, ExitPresetSpec, ExitLibrarySpec]:
+    """Read a strategy and resolve the exit preset it names.
+
+    Args:
+        strategy: Strategy spec JSON file.
+        exit_library: Exit preset library the spec's ``exit_ref`` is looked up in.
+
+    Returns:
+        The spec, its preset, and the library the preset came from.
+
+    Raises:
+        typer.Exit: If ``exit_ref`` names no preset in the library.
+    """
+    spec = StrategySpec.model_validate_json(strategy.read_text())
+    library = ExitLibrarySpec.model_validate_json(exit_library.read_text())
+    preset = next((item for item in library.presets if item.id == spec.exit_ref), None)
+    if preset is None:
+        typer.echo(f"exit_ref {spec.exit_ref!r} not found in {exit_library}")
+        raise typer.Exit(code=1)
+    return spec, preset, library
+
+
+def _run_inputs(
+    settings: Settings,
+    cli_config: BacktestCliConfig,
+    *,
+    spec: StrategySpec,
+    preset: ExitPresetSpec,
+    frame: OHLCVFrame,
+) -> RunInputs:
+    """Assemble the description of one run from a config file and a strategy.
+
+    One function rather than a copy per command, because
+    :meth:`~trading_system.backtest.spec.RunInputs.components` folds every field
+    here into the run id: a command that built its inputs slightly differently
+    would produce runs that are not comparable with the others' and would not
+    say so.
+
+    Args:
+        settings: Process settings, naming the instrument and profile files.
+        cli_config: The account, sizing and cost settings.
+        spec: The strategy to trade.
+        preset: Its exit preset.
+        frame: The bars, already sliced to the period being run.
+
+    Returns:
+        The run, not yet walked.
+    """
+    key = StreamKey(cli_config.symbol, cli_config.timeframe)
+    return RunInputs(
+        config=BacktestConfig(
+            account_currency=cli_config.account_currency,
+            starting_balance=cli_config.starting_balance,
+            atr_period=cli_config.atr_period,
+            atr_baseline_bars=cli_config.atr_baseline_bars,
+        ),
+        streams={key: frame},
+        bindings=(StrategyBinding(spec=spec, exit_preset=preset, keys=(key,)),),
+        instruments=load_instruments(settings.instruments_path),
+        costs=CostConfig(run_seed=cli_config.run_seed),
+        sizing=FixedFractional(risk_pct=cli_config.risk_pct),
+        risk=_risk_config(settings, cli_config.prop_profile),
+    )
+
+
+@app.command()
+def backtest(
+    ctx: typer.Context,
+    config: Path = typer.Option(..., "--config", help="Run config JSON file."),
+    strategy: Path = typer.Option(..., "--strategy", help="Strategy spec JSON file."),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
+    ),
+    start: datetime | None = typer.Option(None, "--start", help="Inclusive lower bound."),
+    end: datetime | None = typer.Option(None, "--end", help="Exclusive upper bound."),
+) -> None:
+    """Walk one strategy over one stream once, and store what it produced.
+
+    A single period on the parameters the strategy file names — no folds, no
+    selection, no null. That makes it an exploratory instrument and not
+    evidence: nothing here is out of sample, so a good number produced by this
+    command is a reason to run ``ts validate walkforward``, never a result.
+    """
+    settings: Settings = ctx.obj
+    cli_config = BacktestCliConfig.model_validate_json(config.read_text())
+    spec, preset, _ = _load_binding(strategy, exit_library)
+
+    frame = ParquetStore(settings.data_dir).get(
+        cli_config.symbol, cli_config.timeframe, _as_utc(start), _as_utc(end)
+    )
+    if frame.is_empty:
+        typer.echo(f"No data stored for {cli_config.symbol} {cli_config.timeframe}.")
+        raise typer.Exit(code=1)
+
+    inputs = _run_inputs(settings, cli_config, spec=spec, preset=preset, frame=frame)
+    result = inputs.run()
+    manifest = inputs.manifest()
+    path = write_run(settings.runs_dir, manifest, result)
+
+    typer.echo(
+        f"{spec.id} on {cli_config.symbol} {cli_config.timeframe}: "
+        f"{len(frame)} bars, {frame.start:%Y-%m-%d} .. {frame.end:%Y-%m-%d}"
+    )
+    typer.echo(f"run {manifest.run_id} -> {path}")
+    typer.echo(
+        f"  trades: {len(result.trades)}   fills: {result.fills}   "
+        f"open_at_end: {result.open_at_end}   expired_orders: {result.expired_orders}"
+    )
+    if result.trades:
+        stats = trade_stats(result.trades)
+        typer.echo(
+            f"  expectancy_r: {stats.expectancy_r:+.4f}   winrate: {stats.winrate:.3f}   "
+            f"profit_factor: {stats.profit_factor:.3f}"
+        )
+        daily = daily_curve(result.curve)
+        typer.echo(f"  total_return: {total_return(daily):+.2%} over {len(daily.days)} days")
+    # Non-zero only; the run's own JSON keeps every reason, including the
+    # zeros, which is where "this never happened" is a recorded fact.
+    for label, counts in (
+        ("signal_drops", result.signal_drops),
+        ("entry_drops", result.entry_drops),
+        ("rejections", result.rejections),
+        ("degradations", result.degradations),
+        ("exit_drops", result.exit_drops),
+    ):
+        fired = {str(reason): count for reason, count in counts.items() if count}
+        if fired:
+            typer.echo(f"  {label}: {fired}")
+    typer.echo(f"Render it with: ts report run {manifest.run_id}")
 
 
 def _parse_duration(text: str) -> timedelta:
@@ -882,34 +1062,13 @@ def validate_walkforward(
     settings: Settings = ctx.obj
     cli_config = WalkForwardCliConfig.model_validate_json(config.read_text())
 
-    registry = load_instruments(settings.instruments_path)
     frame = ParquetStore(settings.data_dir).get(cli_config.symbol, cli_config.timeframe)
     if frame.is_empty:
         typer.echo(f"No data stored for {cli_config.symbol} {cli_config.timeframe}.")
         raise typer.Exit(code=1)
 
-    spec = StrategySpec.model_validate_json(strategy.read_text())
-    library = ExitLibrarySpec.model_validate_json(exit_library.read_text())
-    preset = next((item for item in library.presets if item.id == spec.exit_ref), None)
-    if preset is None:
-        typer.echo(f"exit_ref {spec.exit_ref!r} not found in {exit_library}")
-        raise typer.Exit(code=1)
-
-    key = StreamKey(cli_config.symbol, cli_config.timeframe)
-    base = RunInputs(
-        config=BacktestConfig(
-            account_currency=cli_config.account_currency,
-            starting_balance=cli_config.starting_balance,
-            atr_period=cli_config.atr_period,
-            atr_baseline_bars=cli_config.atr_baseline_bars,
-        ),
-        streams={key: frame},
-        bindings=(StrategyBinding(spec=spec, exit_preset=preset, keys=(key,)),),
-        instruments=registry,
-        costs=CostConfig(run_seed=cli_config.run_seed),
-        sizing=FixedFractional(risk_pct=cli_config.risk_pct),
-        risk=_risk_config(settings, cli_config.prop_profile),
-    )
+    spec, preset, _ = _load_binding(strategy, exit_library)
+    base = _run_inputs(settings, cli_config, spec=spec, preset=preset, frame=frame)
     splitter = WalkForwardSplitter(
         mode=mode,
         is_span=_parse_duration(is_span),

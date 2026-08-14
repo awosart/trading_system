@@ -7,6 +7,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from typer.testing import CliRunner
 
+from trading_system import cli as cli_module
 from trading_system.cli import app
 from trading_system.strategies import schema as strategy_schema_module
 
@@ -43,16 +44,39 @@ def write_minute_csv(path: Path, bars: int = 300) -> None:
 
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Point the CLI at a scratch data directory and away from any real .env."""
+    """Point the CLI at a scratch data directory and away from any real .env.
+
+    Logging setup is stubbed out for the same reason: the root callback
+    configures structlog process-wide with ``cache_logger_on_first_use``, so a
+    module logger first used while a command runs stays bound to that
+    configuration for the rest of the session, and
+    ``structlog.testing.capture_logs`` elsewhere in the suite then intercepts
+    nothing — an assertion about a warning that really was emitted fails, in a
+    file that never mentioned the CLI. What ``setup_logging`` installs is
+    ``tests/test_logging.py``'s subject; these tests are about command wiring.
+    """
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("TS_DATA_DIR", str(tmp_path / "store"))
+    monkeypatch.setattr(cli_module, "setup_logging", lambda **_: None)
 
 
-@pytest.mark.parametrize(("command", "expected"), [("backtest", "Backtest"), ("ui", "UI")])
+@pytest.mark.parametrize(("command", "expected"), [("ui", "UI")])
 def test_placeholder_commands_run(command: str, expected: str) -> None:
     result = runner.invoke(app, [command])
     assert result.exit_code == 0
     assert expected in result.stdout
+
+
+def test_backtest_is_no_longer_a_placeholder() -> None:
+    """It used to echo "Backtest" and exit 0, having run nothing.
+
+    A command that reports success without doing its job is worse than a
+    missing one: the missing one sends you to the API, this one sends you
+    looking for the output.
+    """
+    result = runner.invoke(app, ["backtest"])
+    assert result.exit_code != 0
+    assert "Backtest" not in result.stdout
 
 
 def test_help_lists_command_groups() -> None:
@@ -237,6 +261,72 @@ class TestEndToEnd:
         assert after.exit_code == 0
         assert "EURUSD H1: 5 bars" in after.stdout
 
+    def test_a_tab_separated_export_with_an_unnamed_column_imports(self, tmp_path: Path) -> None:
+        """The shape a broker export arrives in, end to end through the flags.
+
+        Six names in the header, seven fields per row, tabs between them. Both
+        flags are needed and neither is a default: without ``--sep`` the file
+        parses as one column, and without ``--drop-unnamed-fields`` a row wider
+        than its header is an error, because that is usually what a wrong
+        ``--sep`` looks like.
+        """
+        source = tmp_path / "EURUSD.tsv"
+        lines = ["Time\tOpen\tHigh\tLow\tClose\tVolume\n"]
+        for index in range(120):
+            price = 1.1 + index * 0.0001
+            lines.append(
+                f"2020-01-01 {index // 60:02d}:{index % 60:02d}:00\t{price:.5f}\t"
+                f"{price + 0.0002:.5f}\t{price - 0.0002:.5f}\t{price + 0.0001:.5f}\t"
+                f"{100 + index}\t3\n"
+            )
+        source.write_text("".join(lines), encoding="utf-8")
+        arguments = [
+            "data",
+            "import",
+            "--symbol",
+            "EURUSD",
+            "--tf",
+            "M1",
+            "--path",
+            str(source),
+            "--sep",
+            r"\t",
+            "--format",
+            "%Y-%m-%d %H:%M:%S",
+        ]
+
+        refused = runner.invoke(app, arguments)
+        assert refused.exit_code != 0
+
+        imported = runner.invoke(app, [*arguments, "--drop-unnamed-fields"])
+        assert imported.exit_code == 0, imported.stdout
+        assert "Imported 120 bars" in imported.stdout
+
+        coverage = runner.invoke(app, ["data", "coverage"])
+        assert "EURUSD M1: 120 bars" in coverage.stdout
+
+    def test_a_multi_character_separator_is_refused_at_the_flag(self, tmp_path: Path) -> None:
+        """A reader takes one byte; a longer one must fail where it was typed."""
+        source = tmp_path / "EURUSD.csv"
+        write_minute_csv(source, bars=10)
+        result = runner.invoke(
+            app,
+            [
+                "data",
+                "import",
+                "--symbol",
+                "EURUSD",
+                "--tf",
+                "M1",
+                "--path",
+                str(source),
+                "--sep",
+                "||",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "single character" in result.output + result.stderr
+
     def test_reimport_is_idempotent(self, tmp_path: Path) -> None:
         source = tmp_path / "EURUSD.csv"
         write_minute_csv(source, bars=120)
@@ -316,3 +406,114 @@ def test_quality_without_data_exits_nonzero() -> None:
     result = runner.invoke(app, ["data", "quality", "--symbol", "EURUSD", "--tf", "M1"])
     assert result.exit_code == 1
     assert "No data stored" in result.stdout
+
+
+class TestFlatBacktest:
+    """``ts backtest``: one strategy, one stream, one period, stored."""
+
+    def _prepare(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+        """Fill the store and write the spec and config the command reads."""
+        from tests.backtest.conftest import strategy
+        from trading_system.core.types import Timeframe
+
+        repository_root = Path(__file__).resolve().parent.parent
+        monkeypatch.setenv("TS_INSTRUMENTS_PATH", str(repository_root / "configs/instruments.yaml"))
+        monkeypatch.setenv(
+            "TS_PROP_PROFILES_PATH", str(repository_root / "configs/prop_profiles.yaml")
+        )
+        monkeypatch.setenv("TS_RUNS_DIR", str(tmp_path / "runs"))
+
+        source = tmp_path / "EURUSD.csv"
+        write_minute_csv(source, bars=600)
+        imported = runner.invoke(
+            app,
+            ["data", "import", "--symbol", "EURUSD", "--tf", "M1", "--path", str(source)],
+        )
+        assert imported.exit_code == 0, imported.stdout
+
+        spec_path = tmp_path / "spec.json"
+        spec_path.write_text(
+            strategy(signal_tf=Timeframe.M1, invalidation=1.09).model_dump_json(),
+            encoding="utf-8",
+        )
+        config_path = tmp_path / "run.json"
+        config_path.write_text(
+            json.dumps({"symbol": "EURUSD", "timeframe": "M1", "risk_pct": 0.01}),
+            encoding="utf-8",
+        )
+        return spec_path, config_path
+
+    def test_it_runs_and_stores_what_it_produced(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec_path, config_path = self._prepare(tmp_path, monkeypatch)
+        result = runner.invoke(
+            app,
+            ["backtest", "--config", str(config_path), "--strategy", str(spec_path)],
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "trades:" in result.stdout
+        stored = list((tmp_path / "runs").iterdir())
+        assert len(stored) == 1
+        assert (stored[0] / "curve.parquet").exists()
+
+    def test_the_same_run_twice_lands_on_one_id(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The store's idempotence, reached through the command that fills it."""
+        spec_path, config_path = self._prepare(tmp_path, monkeypatch)
+        arguments = ["backtest", "--config", str(config_path), "--strategy", str(spec_path)]
+        first = runner.invoke(app, arguments)
+        second = runner.invoke(app, arguments)
+        assert first.exit_code == 0 and second.exit_code == 0, second.stdout
+        assert len(list((tmp_path / "runs").iterdir())) == 1
+
+    def test_a_period_with_no_bars_is_refused_rather_than_run_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        spec_path, config_path = self._prepare(tmp_path, monkeypatch)
+        result = runner.invoke(
+            app,
+            [
+                "backtest",
+                "--config",
+                str(config_path),
+                "--strategy",
+                str(spec_path),
+                "--start",
+                "2019-01-01",
+                "--end",
+                "2019-02-01",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "No data stored" in result.stdout
+
+    def test_a_walkforward_config_is_refused_by_name(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The two configs are not interchangeable, and say which field is extra.
+
+        ``max_drain_bars`` and ``min_trades_per_fold`` describe fold geometry a
+        flat run has none of. Accepting them silently would let a config be
+        edited for one command and run by the other.
+        """
+        spec_path, config_path = self._prepare(tmp_path, monkeypatch)
+        config_path.write_text(
+            json.dumps(
+                {
+                    "symbol": "EURUSD",
+                    "timeframe": "M1",
+                    "risk_pct": 0.01,
+                    "max_drain_bars": 200,
+                    "min_trades_per_fold": 10,
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = runner.invoke(
+            app,
+            ["backtest", "--config", str(config_path), "--strategy", str(spec_path)],
+        )
+        assert result.exit_code != 0
+        assert "max_drain_bars" in str(result.exception)
