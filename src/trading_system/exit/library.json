@@ -89,6 +89,145 @@
       "description": "No price-based exit beyond the original stop. Closed after twenty bars regardless of where price is — for setups whose thesis has a shelf life.",
       "protective_stop": { "kind": "PROTECTIVE_STOP" },
       "rules": [{ "kind": "TIME_EXIT", "mode": "MAX_BARS_HELD", "max_bars_held": 20 }]
+    },
+    {
+      "id": "rr_1r",
+      "name": "Fixed 1R",
+      "description": "Target at one times the initial risk. The shortest rung of the ladder: it wins often, and needs a win rate above one half to break even before costs — which is what a 1:1 system is actually claiming.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 1.0 }]
+    },
+    {
+      "id": "rr_1_2r",
+      "name": "Fixed 1.2R",
+      "description": "Target at 1.2 times the initial risk. Exists because published systems name this ratio, and rounding it up to 2R substitutes a different strategy rather than approximating this one.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 1.2 }]
+    },
+    {
+      "id": "rr_1_25r",
+      "name": "Fixed 1.25R",
+      "description": "Target at 1.25 times the initial risk. Same reason as 1.2R: a ratio named by source material, not a round number chosen here.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 1.25 }]
+    },
+    {
+      "id": "rr_1_5r",
+      "name": "Fixed 1.5R",
+      "description": "Target at one and a half times the initial risk. The ratio pattern and breakout systems ask for most often, wanting a target reachable inside the setup's own horizon.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 1.5 }]
+    },
+    {
+      "id": "rr_2_5r",
+      "name": "Fixed 2.5R",
+      "description": "Target at two and a half times the initial risk — between the conservative 2R and the trend-following 3R, for a thesis that extends slightly past the usual target.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 2.5 }]
+    },
+    {
+      "id": "rr_3r",
+      "name": "Fixed 3R",
+      "description": "Target at three times the initial risk. The lowest ratio at which a one-in-three win rate is profitable, which is roughly where trend entries sit.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 3.0 }]
+    },
+    {
+      "id": "rr_4r",
+      "name": "Fixed 4R",
+      "description": "Target at four times the initial risk. A swing target: it needs the move to continue well past the structure the entry was built on.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 4.0 }]
+    },
+    {
+      "id": "rr_5r",
+      "name": "Fixed 5R",
+      "description": "Target at five times the initial risk. Expect roughly one winner in five; running it asks whether the tail is fat enough to pay for the misses.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 5.0 }]
+    },
+    {
+      "id": "rr_6r",
+      "name": "Fixed 6R",
+      "description": "Target at six times the initial risk. Position-holding territory: most trades stop out and the distribution is decided by the few that do not.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 6.0 }]
+    },
+    {
+      "id": "rr_8r",
+      "name": "Fixed 8R",
+      "description": "Target at eight times the initial risk. Only meaningful on a timeframe where a move that size occurs at all; below that it measures how long the stop survives, not whether the target is reached.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 8.0 }]
+    },
+    {
+      "id": "rr_10r",
+      "name": "Fixed 10R",
+      "description": "Target at ten times the initial risk, the far end of the ladder. Unprotected on purpose: it gives back every trade that runs partway and reverses, which is the measurement rr_10r_breakeven exists to be compared against.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 10.0 }]
+    },
+    {
+      "id": "rr_3r_breakeven",
+      "name": "Fixed 3R, breakeven at 1R",
+      "description": "Target at three times the initial risk, with the stop moved to entry once the trade has covered its own risk once. The phrasing most source systems use when they say 'target 1:3'.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 3.0 }],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 }
+      ]
+    },
+    {
+      "id": "rr_5r_breakeven",
+      "name": "Fixed 5R, breakeven at 1R",
+      "description": "Target at five times the initial risk, protected at entry from 1R onward. A trade that reaches 1R can no longer lose, which is what makes a one-in-five target survivable.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 5.0 }],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 }
+      ]
+    },
+    {
+      "id": "rr_10r_breakeven",
+      "name": "Fixed 10R, breakeven at 1R",
+      "description": "Target at ten times the initial risk, protected at entry from 1R onward. Differs from rr_10r in exactly one modifier, so whatever separates the two results is attributable to the breakeven move and to nothing else.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [{ "kind": "FIXED_RR", "r_multiple": 10.0 }],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 }
+      ]
+    },
+    {
+      "id": "rr_ladder_1r_3r",
+      "name": "Half at 1R, rest to 3R",
+      "description": "Takes half the position off at one times the initial risk, moves the stop to entry, and carries the remainder to three times. The shape source systems describe when they say 'take partial profit and let the rest run'.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [
+        { "kind": "PARTIAL_CLOSE", "rungs": [{ "r_multiple": 1.0, "fraction": "0.5" }] },
+        { "kind": "FIXED_RR", "r_multiple": 3.0 }
+      ],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 }
+      ]
+    },
+    {
+      "id": "rr_ladder_1r_10r",
+      "name": "Half at 1R, quarter at 3R, rest to 10R",
+      "description": "Scales out half at one times the initial risk and a quarter at three, moves the stop to entry, and leaves the last quarter running to ten. The far end of the ladder made survivable: most of the position is realised before the target that rarely prints is asked for.",
+      "protective_stop": { "kind": "PROTECTIVE_STOP" },
+      "rules": [
+        {
+          "kind": "PARTIAL_CLOSE",
+          "rungs": [
+            { "r_multiple": 1.0, "fraction": "0.5" },
+            { "r_multiple": 3.0, "fraction": "0.25" }
+          ]
+        },
+        { "kind": "FIXED_RR", "r_multiple": 10.0 }
+      ],
+      "stop_modifiers": [
+        { "kind": "BREAKEVEN_MOVE", "activation_r": 1.0, "spread": 0.0002 }
+      ]
     }
   ]
 }

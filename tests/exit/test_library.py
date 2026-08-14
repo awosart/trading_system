@@ -1,10 +1,11 @@
-"""The Exit DB: preset specs, the loader, and the eight bundled presets.
+"""The Exit DB: preset specs, the loader, and the bundled presets.
 
-DoD items covered here: all eight presets load and validate; ``load_library``
+DoD items covered here: every bundled preset loads and validates; ``load_library``
 raises a clear, preset-naming error on a broken one; the smallest-fraction hooks
 answers correctly for every preset, ladder or not.
 """
 
+import json
 from decimal import Decimal
 from pathlib import Path
 
@@ -31,7 +32,8 @@ from trading_system.exit.rules import (
     ProtectiveStop,
 )
 
-BUNDLED_PRESET_IDS = frozenset(
+#: The eight presets the Exit DB opened with: one shape each, no family.
+SHAPE_PRESET_IDS = frozenset(
     {
         "conservative_2r",
         "atr_trail_aggressive",
@@ -43,6 +45,35 @@ BUNDLED_PRESET_IDS = frozenset(
         "time_boxed",
     }
 )
+
+#: The risk/reward ladder. Ids rather than a parameter because a strategy names
+#: its exit through ``exit_ref`` and has no way to pass a number to it, so a
+#: target of 3R can only exist as something with a name.
+LADDER_PRESET_IDS = frozenset(
+    {
+        "rr_1r",
+        "rr_1_2r",
+        "rr_1_25r",
+        "rr_1_5r",
+        "rr_2_5r",
+        "rr_3r",
+        "rr_4r",
+        "rr_5r",
+        "rr_6r",
+        "rr_8r",
+        "rr_10r",
+        "rr_3r_breakeven",
+        "rr_5r_breakeven",
+        "rr_10r_breakeven",
+        "rr_ladder_1r_3r",
+        "rr_ladder_1r_10r",
+    }
+)
+
+#: Presets that close part of the position before the final exit.
+PARTIAL_PRESET_IDS = frozenset({"swing_partial_ladder", "rr_ladder_1r_3r", "rr_ladder_1r_10r"})
+
+BUNDLED_PRESET_IDS = SHAPE_PRESET_IDS | LADDER_PRESET_IDS
 
 
 def minimal_preset(**overrides: object) -> dict[str, object]:
@@ -183,7 +214,7 @@ class TestLoadLibrary:
     def test_the_bundled_library_loads(self) -> None:
         library = load_library()
         assert isinstance(library, ExitLibrary)
-        assert len(library) == 8
+        assert len(library) == len(BUNDLED_PRESET_IDS) == 24
 
     def test_every_bundled_preset_id_is_present(self) -> None:
         assert set(load_library()) == BUNDLED_PRESET_IDS
@@ -252,7 +283,7 @@ class TestExitLibraryApi:
         library = load_library()
         assert "conservative_2r" in library
         assert "no_such_preset" not in library
-        assert len(library) == 8
+        assert len(library) == len(BUNDLED_PRESET_IDS)
         assert set(iter(library)) == BUNDLED_PRESET_IDS
         assert library["conservative_2r"].exit_id == "conservative_2r"
 
@@ -280,10 +311,7 @@ class TestSmallestFractionPerPreset:
     minimum lot.
     """
 
-    @pytest.mark.parametrize(
-        "exit_id",
-        sorted(BUNDLED_PRESET_IDS - {"swing_partial_ladder"}),
-    )
+    @pytest.mark.parametrize("exit_id", sorted(BUNDLED_PRESET_IDS - PARTIAL_PRESET_IDS))
     def test_presets_without_a_ladder_request_no_partials(self, exit_id: str) -> None:
         library = load_library()
         assert library[exit_id].smallest_partial_fraction() is None
@@ -298,6 +326,99 @@ class TestSmallestFractionPerPreset:
         # ladder is not the tail case -- but it is asserted rather than assumed.
         library = load_library()
         assert library["swing_partial_ladder"].smallest_closing_fraction() == Decimal("0.25")
+
+    def test_the_1r_3r_ladder_leaves_the_larger_half_to_run(self) -> None:
+        library = load_library()
+        plan = library["rr_ladder_1r_3r"]
+        assert plan.smallest_partial_fraction() == Decimal("0.5")
+        # One rung of a half leaves a half: the residual is the binding one only
+        # when it is smaller than every rung, which here it is not.
+        assert plan.smallest_closing_fraction() == Decimal("0.5")
+
+    def test_the_1r_10r_ladders_residual_is_the_binding_fraction(self) -> None:
+        # 0.5 + 0.25 leaves 0.25 -- the same size as the smallest rung, so this
+        # ladder needs a quarter-lot to be executable, not a half.
+        library = load_library()
+        plan = library["rr_ladder_1r_10r"]
+        assert plan.smallest_partial_fraction() == Decimal("0.25")
+        assert plan.smallest_closing_fraction() == Decimal("0.25")
+
+
+class TestRiskRewardLadder:
+    """The 1R..10R family, and the two things a family can get wrong.
+
+    A ladder of ids is how a fixed target gets expressed at all: ``exit_ref`` is
+    a name, so "take profit at 3R" has to *be* a preset. That makes two failure
+    modes possible which a library of one-off shapes did not have — a rung that
+    silently duplicates another preset, and a gap nobody meant to leave.
+    """
+
+    #: Every rung, and the target it must resolve to.
+    RUNGS = {
+        "rr_1r": 1.0,
+        "rr_1_2r": 1.2,
+        "rr_1_25r": 1.25,
+        "rr_1_5r": 1.5,
+        "conservative_2r": 2.0,
+        "rr_2_5r": 2.5,
+        "rr_3r": 3.0,
+        "rr_4r": 4.0,
+        "rr_5r": 5.0,
+        "rr_6r": 6.0,
+        "rr_8r": 8.0,
+        "rr_10r": 10.0,
+    }
+
+    @pytest.mark.parametrize(("exit_id", "r_multiple"), sorted(RUNGS.items()))
+    def test_each_rung_takes_profit_where_its_name_says(
+        self, exit_id: str, r_multiple: float
+    ) -> None:
+        plan = load_library()[exit_id]
+        targets = [rule for rule in plan.rules if isinstance(rule, FixedRR)]
+        assert [rule.r_multiple for rule in targets] == [r_multiple]
+
+    def test_the_ladder_has_no_2r_rung_of_its_own(self) -> None:
+        """2R is ``conservative_2r``, and a second id building it would be a duplicate.
+
+        Asserted rather than left as an absence, so the gap reads as a decision
+        instead of an oversight the next person "fixes" by adding ``rr_2r``.
+        """
+        assert "rr_2r" not in load_library().ids
+        assert "conservative_2r" in self.RUNGS
+
+    def test_no_two_bundled_presets_are_configured_alike(self) -> None:
+        """Ids are free; two ids that build the same plan are not.
+
+        Compared on the configuration rather than the built objects because that
+        is the thing an author edits, and the thing a copy-paste rung would
+        leave identical.
+        """
+        raw = json.loads(DEFAULT_LIBRARY_PATH.read_text(encoding="utf-8"))
+        seen: dict[str, str] = {}
+        for preset in raw["presets"]:
+            behaviour = json.dumps(
+                {k: v for k, v in preset.items() if k not in {"id", "name", "description"}},
+                sort_keys=True,
+            )
+            assert behaviour not in seen, f"{preset['id']} duplicates {seen.get(behaviour)}"
+            seen[behaviour] = preset["id"]
+
+    def test_the_breakeven_variants_differ_from_their_bare_rung_by_one_modifier(self) -> None:
+        """The pairing is what makes the comparison attributable.
+
+        ``rr_10r`` against ``rr_10r_breakeven`` isolates the breakeven move: if
+        anything else differed, the difference between their results would be
+        explained by more than one thing.
+        """
+        library = load_library()
+        for bare, protected in (("rr_3r", "rr_3r_breakeven"), ("rr_10r", "rr_10r_breakeven")):
+            bare_targets = [r.r_multiple for r in library[bare].rules if isinstance(r, FixedRR)]
+            protected_targets = [
+                r.r_multiple for r in library[protected].rules if isinstance(r, FixedRR)
+            ]
+            assert bare_targets == protected_targets
+            assert not library[bare].stop_modifiers
+            assert len(library[protected].stop_modifiers) == 1
 
 
 class TestKnownExitIds:

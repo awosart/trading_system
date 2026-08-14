@@ -1,4 +1,4 @@
-"""3 worked strategy examples × 8 bundled presets — the N×M promise, exercised.
+"""3 worked strategy examples × every bundled preset — the N×M promise, exercised.
 
 Entry and Exit stay decoupled even here: this does not run the Entry compiler
 against the example specs to produce a real signal (that pulls in the whole
@@ -6,9 +6,11 @@ feature pipeline and belongs to a full backtest-engine test, not P07). Instead
 each spec's own ``entries[0].direction`` and its declared risk profile are
 enough to open a plausible :class:`~trading_system.exit.position.ManagedPosition`
 by hand — what this test is actually proving is that any of the three real,
-schema-valid ``StrategySpec`` examples can pair with any of the eight real
-presets and run to completion without failing, which is exactly the promise
-``exit_ref`` composition makes.
+schema-valid ``StrategySpec`` examples can pair with any real preset and run to
+completion without failing, which is exactly the promise ``exit_ref``
+composition makes. The preset count is read from the library rather than
+written down here: adding a rung to the risk/reward ladder should widen this
+sweep, not fail it.
 """
 
 import math
@@ -125,10 +127,10 @@ COMBINATIONS = [(path, preset_id) for path in EXAMPLE_PATHS for preset_id in PRE
 
 
 class TestCombinatorial:
-    def test_exactly_three_examples_and_eight_presets(self) -> None:
+    def test_every_example_is_paired_with_every_preset(self) -> None:
         assert len(EXAMPLE_PATHS) == 3
-        assert len(PRESET_IDS) == 8
-        assert len(COMBINATIONS) == 24
+        assert len(PRESET_IDS) == 24
+        assert len(COMBINATIONS) == len(EXAMPLE_PATHS) * len(PRESET_IDS)
 
     @pytest.mark.parametrize(
         ("path", "preset_id"), COMBINATIONS, ids=[f"{p.stem}-{i}" for p, i in COMBINATIONS]
@@ -160,20 +162,40 @@ class TestCombinatorial:
         assert result.closed == (not position.is_open)
 
 
-class TestMostCombinationsActuallyResolve:
+#: Presets the synthetic series cannot resolve, and why. The series moves a few
+#: hundred pips against a 100-pip risk distance, so a bare target at 3R or
+#: beyond is simply never reached; ``structure_trail`` never tightens far enough
+#: to be hit either. Named rather than counted: a ratio would drift every time
+#: the risk/reward ladder grows a rung, and would stop meaning anything.
+NEVER_RESOLVED = frozenset(
+    {"structure_trail", "rr_3r", "rr_4r", "rr_5r", "rr_6r", "rr_8r", "rr_10r"}
+)
+
+
+class TestTheMatrixActuallyResolves:
     """A check that the synthetic series is doing its job.
 
-    Not a strict per-combo requirement, but a fixture where nothing ever
-    closes would let every assertion above pass vacuously.
+    A fixture where nothing ever closes would let every assertion above pass
+    vacuously, so which pairs close is pinned rather than assumed.
     """
 
-    def test_most_of_the_matrix_produces_at_least_one_fill(self) -> None:
-        produced_fills = 0
+    def test_exactly_the_out_of_reach_presets_produce_no_fill(self) -> None:
+        unresolved: set[str] = set()
         for path, preset_id in COMBINATIONS:
             spec = _load_example(path)
             position = _open_position(spec)
             series = _synthetic_series(spec.timeframes.signal_tf)
             result = LIBRARY[preset_id].run(position, exit_contexts(series))
-            if result.fills:
-                produced_fills += 1
-        assert produced_fills >= len(COMBINATIONS) * 0.8
+            if not result.fills:
+                unresolved.add(preset_id)
+        assert unresolved == NEVER_RESOLVED
+
+    def test_a_far_target_still_resolves_once_a_breakeven_protects_it(self) -> None:
+        """``rr_10r`` and ``rr_10r_breakeven`` differ by one modifier, and it shows.
+
+        The bare 10R target is out of the series' reach; the protected one still
+        closes, because the breakeven stop it gains is reachable. That is the
+        pairing doing exactly what it was added for.
+        """
+        assert "rr_10r" in NEVER_RESOLVED
+        assert "rr_10r_breakeven" not in NEVER_RESOLVED
