@@ -20,7 +20,7 @@ from trading_system.backtest.orchestrator import BacktestResult, SignalDrop, Str
 from trading_system.core.instruments import InstrumentRegistry
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
-from trading_system.exit.base import IntrabarPolicy
+from trading_system.exit.base import ExitDropReason, IntrabarPolicy
 from trading_system.exit.library import ExitLibrarySpec, ExitPresetSpec
 
 START = datetime(2024, 3, 4, 18, 0, tzinfo=UTC)
@@ -458,3 +458,73 @@ class TestAtrWarmupIsReportedNotAutoScaled:
             if entry["event"] == "backtest.atr_ratio_warmup_exceeds_threshold"
         ]
         assert warnings == []
+
+
+class TestARetiredPositionsDropsSurviveIt:
+    """An exit drop must outlive the position that suffered it.
+
+    ``ExitPlan.run()`` resets a plan's counters when the next position opens,
+    and a retired position is unreachable from the portfolio. So a run that
+    reported only the plans still open at the end reported drops for the
+    positions that happened not to close — a number with no relation to what
+    the run actually could not carry out. It surfaced as a run whose log
+    carried ``exit.drop`` warnings while its ``exit_drops`` counters were all
+    zero, which is exactly the "counted, not merely logged" contract P06
+    established for entry signals and this layer owes for exits.
+    """
+
+    #: One bar that reaches both the stop and the 2R target of ``conservative_2r``.
+    #: Under ``TICK_BASED`` with no ticks to order them by, the plan records
+    #: ``TICKS_UNAVAILABLE`` and falls back to pessimistic — and the position
+    #: closes on that same bar, which is what makes this the retiring case.
+    WIDE = 0.0060
+
+    def _run(self, registry: InstrumentRegistry, preset: ExitPresetSpec) -> BacktestResult:
+        frame = bars(
+            [1.1000, 1.1005, 1.1000, 1.1000],
+            first_open=1.0995,
+            spread=self.WIDE,
+        )
+        return run(
+            costless_registry(registry),
+            preset,
+            frame,
+            config=BacktestConfig(
+                atr_period=3,
+                atr_baseline_bars=5,
+                intrabar_policy=IntrabarPolicy.TICK_BASED,
+            ),
+            invalidation=1.0995,
+        )
+
+    def test_the_position_really_did_close(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        """Without this the assertion below could pass on an open position."""
+        result = self._run(registry, preset)
+        assert result.trades
+        assert result.open_at_end == 0
+
+    def test_its_drop_is_reported(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        result = self._run(registry, preset)
+        assert result.exit_drops[ExitDropReason.TICKS_UNAVAILABLE] > 0
+
+    def test_the_count_matches_what_was_logged(
+        self, registry: InstrumentRegistry, preset: ExitPresetSpec
+    ) -> None:
+        """The log and the counter are two views of one event, not two events.
+
+        Asserting only "> 0" would pass just as well if the harvest double
+        counted, which is the opposite defect and equally invisible in a total.
+        """
+        with capture_logs() as logs:
+            result = self._run(registry, preset)
+        logged = [
+            entry
+            for entry in logs
+            if entry["event"] == "exit.drop"
+            and entry["reason"] == ExitDropReason.TICKS_UNAVAILABLE.value
+        ]
+        assert result.exit_drops[ExitDropReason.TICKS_UNAVAILABLE] == len(logged)

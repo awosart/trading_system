@@ -1318,11 +1318,24 @@ class Orchestrator:
         if held.position.is_open:
             self._portfolio.restate_risk(held)
             return
+        # A plan's own counters live only as long as the position it managed:
+        # ExitPlan.run() resets them when the next position opens, and a retired
+        # position is no longer reachable from the portfolio. Harvest them here,
+        # at the single point a position is retired, or the run would report only
+        # what the positions still open at the end happened to have dropped.
+        for reason, count in held.plan.drops.items():
+            self._exit_drops[reason] += count
         last_leg = held.position.legs[-1] if held.position.legs else None
         self._portfolio.close_out(held, last_leg.ts if last_leg is not None else ts)
 
     def _exit_drops_total(self) -> dict[ExitDropReason, int]:
-        """This layer's drop counts plus every live plan's."""
+        """This layer's counts, including retired positions', plus every live plan's.
+
+        Positions retired during the run were folded into ``_exit_drops`` by
+        :meth:`_settle`; the ones still open have not been, so their plans are
+        added here. Each plan is built fresh per position, so no count is
+        reachable from both halves.
+        """
         total = dict(self._exit_drops)
         for held in self._portfolio.open_positions:
             for reason, count in held.plan.drops.items():
