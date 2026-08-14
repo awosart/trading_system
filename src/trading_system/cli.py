@@ -60,6 +60,8 @@ from trading_system.prop.simulator import (
 from trading_system.risk.engine import RiskEngineConfig
 from trading_system.risk.margin import load_prop_profiles
 from trading_system.risk.sizing.methods import FixedFractional
+from trading_system.strategies.ingest import load_cards, load_overrides, triage
+from trading_system.strategies.ingest import render as render_ingest
 from trading_system.strategies.repository import META_SUFFIX, Status, StrategyRepository
 from trading_system.strategies.results_link import (
     RUN_KIND_WALKFORWARD,
@@ -123,6 +125,10 @@ from trading_system.validation.walkforward import (
 #: relative default, because the library is version-controlled alongside the code.
 DEFAULT_STRATEGY_LIBRARY = Path("strategies")
 
+#: Where the scrape and the reviewer's answers to it live by default.
+DEFAULT_CARDS_DIR = Path("strategies/scraped_strategies_v3")
+DEFAULT_OVERRIDES_DIR = Path("strategies/ingest_overrides")
+
 #: Prop-firm profile a run config assumes when it names none. Swing rather than
 #: standard because every strategy in this repository holds through the weekend,
 #: which is the only plan type that permits it, and because it is the strictest
@@ -154,10 +160,12 @@ app = typer.Typer(help="Modular trading system.")
 data_app = typer.Typer(help="Market data management.")
 strategy_app = typer.Typer(help="Strategy spec management.")
 validate_app = typer.Typer(help="Out-of-sample validation.")
+ingest_app = typer.Typer(help="Scraped strategy cards: triage and conversion.")
 report_app = typer.Typer(help="HTML reports over stored runs.")
 prop_app = typer.Typer(help="Prop-firm account rules: would this survive one.")
 app.add_typer(data_app, name="data")
 app.add_typer(strategy_app, name="strategy")
+strategy_app.add_typer(ingest_app, name="ingest")
 app.add_typer(validate_app, name="validate")
 app.add_typer(report_app, name="report")
 app.add_typer(prop_app, name="prop")
@@ -652,6 +660,98 @@ def strategy_schema_export(
     """(Re-)generate the JSON Schema editors use to validate strategy files."""
     out.write_text(json.dumps(strategy_json_schema(), indent=2) + "\n", encoding="utf-8")
     typer.echo(f"Wrote schema to {out}")
+
+
+@ingest_app.command("report")
+def ingest_report(
+    cards: Path = typer.Option(DEFAULT_CARDS_DIR, "--cards", help="Directory of scraped cards."),
+    overrides: Path = typer.Option(
+        DEFAULT_OVERRIDES_DIR, "--overrides", help="Directory of reviewer overrides."
+    ),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH,
+        "--exit-library",
+        help="Exit preset library exit_ref is checked against.",
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Write the report here as well."),
+    examples: int = typer.Option(2, "--examples", help="Example cards shown per obstacle."),
+) -> None:
+    """Count what a scrape holds and what stops each card from converting.
+
+    Prints one line per obstacle: how many cards it stopped first, how many it
+    affects at all, and how many it is the *only* reason for — the last being
+    the number that says what removing it would buy.
+    """
+    if not cards.is_dir():
+        typer.echo(f"{cards} is not a directory of scraped cards.")
+        raise typer.Exit(code=1)
+    report = triage(
+        [card for _, card in load_cards(cards)],
+        known_exit_ids(exit_library),
+        load_overrides(overrides),
+    )
+    text = render_ingest(report, examples)
+    typer.echo(text)
+    if out is not None:
+        out.write_text(text + "\n", encoding="utf-8")
+        typer.echo(f"Wrote {out}")
+
+
+@ingest_app.command("convert")
+def ingest_convert(
+    out: Path = typer.Argument(..., help="Directory converted specs are written to."),
+    cards: Path = typer.Option(DEFAULT_CARDS_DIR, "--cards", help="Directory of scraped cards."),
+    overrides: Path = typer.Option(
+        DEFAULT_OVERRIDES_DIR, "--overrides", help="Directory of reviewer overrides."
+    ),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH,
+        "--exit-library",
+        help="Exit preset library exit_ref is checked against.",
+    ),
+    library: Path | None = typer.Option(
+        None, "--library", help="Also import each converted spec into this strategy repository."
+    ),
+    author: str = typer.Option("ingest", "--author", help="Author recorded on imported entries."),
+) -> None:
+    """Convert every card that converts, and say nothing about the ones that do not.
+
+    A spec is written only after it passes the same validation
+    ``ts strategy validate`` runs. With ``--library`` each one is also imported
+    as a ``DRAFT``, carrying the card's URL as its source and the conversion's
+    assumptions as its notes — so what the converter had to decide for itself
+    stays attached to the entry.
+    """
+    if not cards.is_dir():
+        typer.echo(f"{cards} is not a directory of scraped cards.")
+        raise typer.Exit(code=1)
+    report = triage(
+        [card for _, card in load_cards(cards)],
+        known_exit_ids(exit_library),
+        load_overrides(overrides),
+    )
+    out.mkdir(parents=True, exist_ok=True)
+    repository = StrategyRepository(library) if library is not None else None
+    for conversion in report.converted:
+        spec = conversion.spec
+        assert spec is not None
+        path = out / f"{spec.id}.json"
+        path.write_text(spec.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        typer.echo(f"{conversion.card_id} -> {path}")
+        if repository is not None:
+            record = repository.add(
+                spec,
+                name=conversion.title or conversion.card_id,
+                author=author,
+                source=conversion.source_url,
+                tags=("scraped",),
+                notes="\n".join(conversion.assumptions),
+            )
+            typer.echo(f"  imported as {record.id} [{record.status.value}] -> {record.path}")
+    typer.echo(
+        f"Converted {len(report.converted)} of {report.total}; "
+        f"{len(report.review_shortlist)} card(s) await review."
+    )
 
 
 @app.command()

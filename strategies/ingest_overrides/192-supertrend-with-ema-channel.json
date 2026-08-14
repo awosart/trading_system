@@ -1,0 +1,8 @@
+{
+  "card_id": "192-supertrend-with-ema-channel",
+  "reviewer": "Nikita Khokhlov",
+  "note": "Card https://www.forexstrategiesresources.com/trend-following-forex-strategies-ii/192-supertrend-with-ema-channel/ read line by line. Timeframe: the card says '10 min or higher.' and this system has no M10 bar, so the next size it does have inside the card's own range is M15. Exit: the card says 'Profit target ratio stop loss 1:1.3 or at opposite signal' — the exit library has no 1.3R preset and no reverse-signal preset, so 'conservative_2r' is MY pairing, not the card's target, and it must be treated as a free axis until measured. Section 'Trading Rules' is dismissed because it restates the Buy/Sell rules in prose ('Price above 200 EMA High = Up Trend') and adds no condition; its phrase 'Trading only in the direction of the Trend' is that same restatement, not a regime gate the card applies separately.",
+  "timeframe": "M15",
+  "exit_ref": "conservative_2r",
+  "dismiss_sections": ["Trading Rules"]
+}

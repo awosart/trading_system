@@ -1,0 +1,19 @@
+{
+  "id": "192-supertrend-with-ema-channel",
+  "name": "192-supertrend-with-ema-channel",
+  "author": "ingest (reviewed by Nikita Khokhlov)",
+  "source": "https://www.forexstrategiesresources.com/trend-following-forex-strategies-ii/192-supertrend-with-ema-channel/",
+  "tags": [
+    "scraped"
+  ],
+  "notes": "'ema' read as computed on the 'high' price\nparameters for 'supertrend' taken from the card's indicator list: {'period': 10, 'multiplier': 3.0}\nthe stop names both sides; the long leg took 'below'\n'ema' read as computed on the 'low' price\nthe stop names both sides; the short leg took 'above'\nthe card names no instrument; scoped to FX with no symbol allow-list\nholding-period class INTRADAY derived from timeframe M15 and page category 'trend-following-forex-strategies-ii'; the card does not state one\nstop_reference is the pipeline default ATR (14, 1.5); no card states one\nbase_quality is the flat default 0.5 with no modifiers; the card ranks no setup above another\nevery rule of a side became a trigger condition; cards do not separate a trigger from a confirmation window\nreviewer Nikita Khokhlov supplied: timeframe M15; exit_ref 'conservative_2r' (a pairing, not something the card said); dismissed sections ['Trading Rules'] as restating the rules\nreviewer's reasoning: Card https://www.forexstrategiesresources.com/trend-following-forex-strategies-ii/192-supertrend-with-ema-channel/ read line by line. Timeframe: the card says '10 min or higher.' and this system has no M10 bar, so the next size it does have inside the card's own range is M15. Exit: the card says 'Profit target ratio stop loss 1:1.3 or at opposite signal' — the exit library has no 1.3R preset and no reverse-signal preset, so 'conservative_2r' is MY pairing, not the card's target, and it must be treated as a free axis until measured. Section 'Trading Rules' is dismissed because it restates the Buy/Sell rules in prose ('Price above 200 EMA High = Up Trend') and adds no condition; its phrase 'Trading only in the direction of the Trend' is that same restatement, not a regime gate the card applies separately.",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "spec_digest": "8002a80343de814ae24642895d593c54",
+      "at": "2026-08-14T02:34:59.945479Z",
+      "note": "added"
+    }
+  ],
+  "lifecycle": []
+}
