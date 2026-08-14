@@ -30,13 +30,21 @@ from trading_system.analytics.report import (
     source_from_walkforward,
     write,
 )
+from trading_system.analytics.run_index import (
+    build_index,
+    filter_rows,
+    fold_run_ids,
+    run_directories,
+)
+from trading_system.analytics.run_index import write as write_index
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
+from trading_system.backtest.fx import build_converter
 from trading_system.backtest.orchestrator import StrategyBinding
-from trading_system.backtest.reproducibility import write_run
+from trading_system.backtest.reproducibility import read_run, write_run
 from trading_system.backtest.spec import RunInputs
 from trading_system.core.config import Settings
-from trading_system.core.exceptions import ValidationError
+from trading_system.core.exceptions import TradingSystemError, ValidationError
 from trading_system.core.instruments import InstrumentRegistry, load_instruments
 from trading_system.core.logging import get_logger, setup_logging
 from trading_system.core.types import Timeframe
@@ -88,6 +96,14 @@ from trading_system.validation.calibration import (
     POSITION_COUNT_DIVERGENCE_THRESHOLD,
     NullKind,
     run_calibration,
+)
+
+# Two different samplers share a name: prop.simulator's builds a prop episode,
+# this one builds the trade sample the resamplers replay. Aliased so neither
+# call site can pick up the other by accident.
+from trading_system.validation.monte_carlo import run_all as run_monte_carlo_all
+from trading_system.validation.monte_carlo import (
+    sample_from_walkforward as monte_carlo_sample,
 )
 from trading_system.validation.nulls.random_entry import (
     EntryTraceProfile,
@@ -227,6 +243,22 @@ def _unescape_separator(text: str) -> str:
     return resolved
 
 
+def _parse_columns(text: str | None) -> tuple[str | None, ...] | None:
+    """Read ``--columns`` into the schema's positional naming.
+
+    Args:
+        text: Comma-separated canonical names in file order, ``-`` for a field
+            that is present and not stored. ``None`` when the flag was omitted.
+
+    Returns:
+        One entry per field, or ``None`` to leave naming to the header.
+    """
+    if text is None:
+        return None
+    names = (name.strip().lower() for name in text.split(","))
+    return tuple(None if name in {"-", ""} else name for name in names)
+
+
 @data_app.command("import")
 def data_import(
     ctx: typer.Context,
@@ -247,6 +279,28 @@ def data_import(
             "than its header usually means --sep is wrong."
         ),
     ),
+    no_header: bool = typer.Option(
+        False, "--no-header", help="The first line is data, not column names."
+    ),
+    columns: str | None = typer.Option(
+        None,
+        "--columns",
+        help=(
+            "Canonical name of every field, in file order, comma-separated: "
+            "'timestamp,open,high,low,close,volume'. Write '-' for a field that is "
+            "present and not stored. Needed when the file names no columns, or "
+            "names one of them wrongly."
+        ),
+    ),
+    no_volume: bool = typer.Option(
+        False,
+        "--no-volume",
+        help=(
+            "The file carries no volume. It is stored as 0.0, which data quality "
+            "reports on every bar; a column that is not volume must never be "
+            "imported as one."
+        ),
+    ),
 ) -> None:
     """Import bars from a CSV file into the local store."""
     provider = CSVProvider(
@@ -257,7 +311,10 @@ def data_import(
             time_column=time_column,
             timestamp_format=timestamp_format,
             separator=_unescape_separator(separator),
+            has_header=not no_header,
             drop_unnamed_fields=drop_unnamed_fields,
+            positional_columns=_parse_columns(columns),
+            absent_volume=no_volume,
         ),
     )
     frame = provider.fetch(symbol, timeframe)
@@ -913,6 +970,8 @@ def _run_inputs(
         The run, not yet walked.
     """
     key = StreamKey(cli_config.symbol, cli_config.timeframe)
+    instruments = load_instruments(settings.instruments_path)
+    store = ParquetStore(settings.data_dir)
     return RunInputs(
         config=BacktestConfig(
             account_currency=cli_config.account_currency,
@@ -922,10 +981,16 @@ def _run_inputs(
         ),
         streams={key: frame},
         bindings=(StrategyBinding(spec=spec, exit_preset=preset, keys=(key,)),),
-        instruments=load_instruments(settings.instruments_path),
+        instruments=instruments,
         costs=CostConfig(run_seed=cli_config.run_seed),
         sizing=FixedFractional(risk_pct=cli_config.risk_pct),
         risk=_risk_config(settings, cli_config.prop_profile),
+        converter=build_converter(
+            (instruments[cli_config.symbol],),
+            account_currency=cli_config.account_currency,
+            timeframe=cli_config.timeframe,
+            load=store.get,
+        ),
     )
 
 
@@ -1548,6 +1613,13 @@ def validate_verdict(
     config: Path = typer.Option(..., "--config", help="The same run config the walk-forward used."),
     strategy: Path = typer.Option(..., "--strategy", help="The same strategy spec it used."),
     n_null: int = typer.Option(20, "--n", help="Iterations per null."),
+    mc_iterations: int = typer.Option(
+        10_000,
+        "--mc-iterations",
+        help="Draws per Monte Carlo family. Resampling replays trades that were already "
+        "computed, so ten thousand costs under a second; zero skips it and the verdict's "
+        "drawdown check then reports 'not run' rather than passing on a measurement.",
+    ),
     exit_library: Path = typer.Option(
         DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
     ),
@@ -1636,8 +1708,27 @@ def validate_verdict(
     )
     typer.echo(f"synthetic null: percentile {robustness.synthetic.real_percentile}")
 
+    monte_carlo = None
+    if mc_iterations > 0:
+        sample = monte_carlo_sample(
+            result, risk_pct=cli_config.risk_pct, starting_equity=cli_config.starting_balance
+        )
+        monte_carlo = run_monte_carlo_all(
+            sample, n_iterations=mc_iterations, seed=cli_config.run_seed
+        )
+        basis = monte_carlo.verdict_basis
+        typer.echo(
+            f"monte carlo: block permutation over {basis.n_trades} trades in "
+            f"{len(basis.fold_sizes)} fold(s), observed max drawdown at percentile "
+            f"{basis.max_drawdown.observed_percentile}"
+        )
+        (manifest_path.parent / "monte_carlo.json").write_text(
+            json.dumps(monte_carlo.to_dict(), indent=2) + "\n", encoding="utf-8"
+        )
+
     verdict = build_verdict(
         report,
+        monte_carlo=monte_carlo,
         robustness=robustness,
         permutation_percentile=permutation.percentile,
     )
@@ -1671,6 +1762,90 @@ def validate_verdict(
             f"(perm {graded.metric('permutation_percentile')}, "
             f"synth {graded.metric('synthetic_percentile')})"
         )
+
+
+@report_app.command("index")
+def report_index(
+    ctx: typer.Context,
+    out: Path = typer.Option(Path("reports/index.html"), "--out", help="Where to write the page."),
+    strategy: str | None = typer.Option(
+        None, "--strategy", help="Keep runs whose strategy id contains this."
+    ),
+    stream: str | None = typer.Option(
+        None, "--stream", help="Keep runs whose stream contains this, e.g. 'EURUSD' or '@H4'."
+    ),
+    with_details: bool = typer.Option(
+        False, "--with-details", help="Also render each run's own page next to the index."
+    ),
+    include_folds: bool = typer.Option(
+        False,
+        "--include-folds",
+        help="Also list walk-forward folds. Off by default: folds are stored as ordinary "
+        "runs and outnumber standalone runs many times over, and one fold's expectancy "
+        "is not a result.",
+    ),
+    limit: int = typer.Option(
+        40,
+        "--limit",
+        help="Refuse to render more detail pages than this. Each inlines plotly and runs "
+        "several megabytes; runs/ also holds every walk-forward fold, so an unfiltered "
+        "--with-details is gigabytes.",
+    ),
+) -> None:
+    """One page listing every stored run, linking into the per-run pages.
+
+    ``ts report run`` answers what one run did. This answers which of them is
+    worth opening — the rows are walked off disk rather than curated, so the
+    page cannot disagree with what is stored, and a run that will not read back
+    is listed with the reason instead of quietly missing.
+
+    Detail pages are heavy (plotly is inlined), so they are rendered only with
+    ``--with-details``; without it the index links only to pages already sitting
+    next to it.
+    """
+    settings: Settings = ctx.obj
+    exclude = frozenset() if include_folds else fold_run_ids(settings.runs_dir)
+    directories = filter_rows(
+        run_directories(settings.runs_dir, exclude=exclude), strategy=strategy, stream=stream
+    )
+    if not directories:
+        typer.echo(f"no runs under {settings.runs_dir} matching the filters")
+        raise typer.Exit(code=1)
+
+    detail_dir = out.parent
+    if with_details and len(directories) > limit:
+        typer.echo(
+            f"{len(directories)} runs match, over the --limit of {limit}. Detail pages inline "
+            "plotly and run to several megabytes each, and runs/ holds every walk-forward fold "
+            "as a run of its own. Narrow with --strategy/--stream, or raise --limit knowingly."
+        )
+        raise typer.Exit(code=1)
+    if with_details:
+        detail_dir.mkdir(parents=True, exist_ok=True)
+        for directory in directories:
+            page = detail_dir / f"{directory.name}.html"
+            if page.exists():
+                continue
+            try:
+                stored = read_run(directory)
+                symbol, _, timeframe = next(iter(stored.manifest.data), "@").partition("@")
+                streams = _report_streams(
+                    settings, symbol or None, Timeframe(timeframe) if timeframe else None
+                )
+                write(
+                    build(source_from_run(directory, streams=streams, label=directory.name)),
+                    page,
+                )
+            except (TradingSystemError, OSError, ValueError, KeyError) as error:
+                typer.echo(f"  skipped {directory.name}: {str(error).splitlines()[0]}")
+                continue
+
+    index = build_index(directories, root=settings.runs_dir, detail_dir=detail_dir)
+    write_index(index, out)
+    linked = sum(1 for row in index.rows if row.detail_href)
+    typer.echo(
+        f"indexed {index.total} run(s) -> {out} ({linked} linked, {len(index.broken)} unreadable)"
+    )
 
 
 def _report_streams(

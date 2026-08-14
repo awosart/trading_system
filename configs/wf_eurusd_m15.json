@@ -1,0 +1,14 @@
+{
+  "symbol": "EURUSD",
+  "timeframe": "M15",
+  "account_currency": "USD",
+  "starting_balance": "100000",
+  "risk_pct": 0.01,
+  "run_seed": 0,
+  "atr_period": 14,
+  "atr_baseline_bars": 500,
+  "max_drain_bars": 200,
+  "min_trades_per_fold": 10,
+  "parallel_threshold_seconds": 2.0,
+  "prop_profile": "ftmo_swing"
+}
