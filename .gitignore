@@ -36,3 +36,13 @@ build/
 # `ts strategy ingest convert`; the copy that matters is the one in
 # strategies/library/, which is under version control.
 /strategies/ingest_converted/
+
+# The scrape itself: raw input to `ts strategy ingest`, dropped in by hand and
+# replaceable at any time. These are pages about strategies, not strategies —
+# prose and screenshots someone else wrote, none of it validated, most of it
+# not even expressible as a spec (883 cards in, 1 out; see the P00 section of
+# CLAUDE.md). Untracked so that nothing here can be mistaken for a candidate:
+# a card becomes one only by converting into strategies/library/ and being
+# measured there. Not in git also because it is a third party's corpus, sizeable
+# and regenerable, with no bearing on what the code does.
+/strategies/scraped_strategies_v3/
