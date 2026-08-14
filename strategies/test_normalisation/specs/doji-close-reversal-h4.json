@@ -1,0 +1,141 @@
+{
+  "id": "doji-close-reversal-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "pattern_is",
+        "right": {
+          "labels": [
+            "DOJI"
+          ]
+        }
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": "price:close",
+          "right": "price:low@1"
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": {
+            "indicator": "macd",
+            "channel": "histogram"
+          },
+          "right": 0.0
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": "price:close",
+          "right": {
+            "indicator": "ema",
+            "params": {
+              "period": 25,
+              "source": "low"
+            }
+          }
+        }
+      ],
+      "invalidation": {
+        "price_level": "price:high"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 2
+    },
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "pattern_is",
+        "right": {
+          "labels": [
+            "DOJI"
+          ]
+        }
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": "price:close",
+          "right": "price:high@1"
+        },
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "macd",
+            "channel": "histogram"
+          },
+          "right": 0.0
+        },
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": "price:close",
+          "right": {
+            "indicator": "ema",
+            "params": {
+              "period": 25,
+              "source": "high"
+            }
+          }
+        }
+      ],
+      "invalidation": {
+        "price_level": "price:low"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 2
+    }
+  ],
+  "exit_ref": "structure_trail",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.0
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 0
+  }
+}

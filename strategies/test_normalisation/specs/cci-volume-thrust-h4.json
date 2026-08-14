@@ -1,0 +1,173 @@
+{
+  "id": "cci-volume-thrust-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": {
+              "indicator": "cci",
+              "params": {
+                "period": 21
+              }
+            },
+            "right": -100.0
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "middle"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.5
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": {
+              "indicator": "cci",
+              "params": {
+                "period": 21
+              }
+            },
+            "right": 100.0
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "middle"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.5
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "structure_trail",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "rvol",
+            "params": {
+              "period": 20
+            }
+          },
+          "right": 2.5
+        },
+        "delta": 0.15,
+        "reason": "The card asks for volume forming significantly higher peaks, not merely above average"
+      }
+    ],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 20,
+      "buffer_atr_multiple": 0.3
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 0
+  }
+}

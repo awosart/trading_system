@@ -1,0 +1,157 @@
+{
+  "id": "london-range-breakout-m15",
+  "version": "1.0.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "session_is",
+            "right": {
+              "labels": [
+                "LONDON",
+                "LONDON_NY_OVERLAP"
+              ]
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "donchian",
+              "params": {
+                "period": 8
+              },
+              "channel": "upper",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.2
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": {
+            "period": 8
+          },
+          "channel": "lower",
+          "shift": 1
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "session_is",
+            "right": {
+              "labels": [
+                "LONDON",
+                "LONDON_NY_OVERLAP"
+              ]
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "donchian",
+              "params": {
+                "period": 8
+              },
+              "channel": "lower",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              }
+            },
+            "right": 1.2
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": {
+            "period": 8
+          },
+          "channel": "upper",
+          "shift": 1
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "session_close",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 8,
+      "buffer_atr_multiple": 0.2
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 8
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "id": "turtle-pullback-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 200
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lte",
+            "left": "price:low",
+            "right": {
+              "indicator": "donchian",
+              "params": {
+                "period": 20
+              },
+              "channel": "lower",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 14,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "k"
+            },
+            "right": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 14,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "d"
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": {
+            "period": 55
+          },
+          "channel": "lower",
+          "shift": 1
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 200
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gte",
+            "left": "price:high",
+            "right": {
+              "indicator": "donchian",
+              "params": {
+                "period": 20
+              },
+              "channel": "upper",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 14,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "k"
+            },
+            "right": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 14,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "d"
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "donchian",
+          "params": {
+            "period": 55
+          },
+          "channel": "upper",
+          "shift": 1
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "rr_1r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 55,
+      "buffer_atr_multiple": 0.25
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

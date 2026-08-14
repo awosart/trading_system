@@ -1,0 +1,147 @@
+{
+  "id": "keltner-bb-reversal-m15",
+  "version": "1.0.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "keltner",
+              "params": {
+                "ema_period": 20,
+                "atr_period": 10,
+                "multiplier": 2.0
+              },
+              "channel": "lower"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close@1",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "lower",
+              "shift": 1
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "keltner",
+          "params": {
+            "ema_period": 20,
+            "atr_period": 10,
+            "multiplier": 2.0
+          },
+          "channel": "lower"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "keltner",
+              "params": {
+                "ema_period": 20,
+                "atr_period": 10,
+                "multiplier": 2.0
+              },
+              "channel": "upper"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close@1",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "upper",
+              "shift": 1
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "keltner",
+          "params": {
+            "ema_period": 20,
+            "atr_period": 10,
+            "multiplier": 2.0
+          },
+          "channel": "upper"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "rr_1r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 10,
+      "buffer_atr_multiple": 0.25
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

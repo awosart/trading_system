@@ -1,0 +1,125 @@
+{
+  "id": "hma-stoch-momentum-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 10,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "k"
+            },
+            "right": 40.0
+          },
+          {
+            "type": "leaf",
+            "op": "rising",
+            "left": {
+              "indicator": "hma",
+              "params": {
+                "period": 14
+              }
+            },
+            "right": 1.0
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": "price:low"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": {
+              "indicator": "stoch",
+              "params": {
+                "k_period": 10,
+                "k_smooth": 3,
+                "d_period": 3
+              },
+              "channel": "k"
+            },
+            "right": 60.0
+          },
+          {
+            "type": "leaf",
+            "op": "falling",
+            "left": {
+              "indicator": "hma",
+              "params": {
+                "period": 14
+              }
+            },
+            "right": 1.0
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": "price:high"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "rr_1r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 5,
+      "buffer_atr_multiple": 0.2
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 2
+  }
+}

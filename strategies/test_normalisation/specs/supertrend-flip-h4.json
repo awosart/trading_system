@@ -1,0 +1,135 @@
+{
+  "id": "supertrend-flip-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": {
+              "indicator": "supertrend",
+              "params": {
+                "period": 18,
+                "multiplier": 2.8
+              },
+              "channel": "direction"
+            },
+            "right": 0.0
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 18
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": {
+              "indicator": "supertrend",
+              "params": {
+                "period": 18,
+                "multiplier": 2.8
+              },
+              "channel": "direction"
+            },
+            "right": 0.0
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 18
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "rr_1_2r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 10,
+      "buffer_atr_multiple": 0.3
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 0
+  }
+}

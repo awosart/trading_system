@@ -1,0 +1,153 @@
+{
+  "id": "bb-trend-pullback-h1",
+  "version": "1.0.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "H1",
+    "entry_tf": "H1"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 100,
+                "source": "low"
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lte",
+            "left": "price:low@1",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 10,
+                "num_std": 2.3
+              },
+              "channel": "lower",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 10,
+                "num_std": 2.3
+              },
+              "channel": "lower"
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": "price:low"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 100,
+                "source": "high"
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gte",
+            "left": "price:high@1",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 10,
+                "num_std": 2.3
+              },
+              "channel": "upper",
+              "shift": 1
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 10,
+                "num_std": 2.3
+              },
+              "channel": "upper"
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": "price:high"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "conservative_2r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 20,
+      "buffer_atr_multiple": 0.25
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

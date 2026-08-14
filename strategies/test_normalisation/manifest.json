@@ -1,0 +1,1097 @@
+{
+  "generated": "2026-08-14",
+  "purpose": "20 scraped cards normalised by hand into StrategySpec, staged for a first backtest run. Not library records: nothing here has been measured, and none of it may be added to strategies/library until a walk-forward has graded it.",
+  "universe": {
+    "symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "excluded": {
+      "USDJPY": "quote currency is JPY and RunInputs defaults to SameCurrencyConverter; every signal would be refused as fx_rate_unavailable"
+    },
+    "coverage": {
+      "H4": "2010-07-30 .. 2026-08-14, 25 850 bars",
+      "H1": "2010-07-30 .. 2026-08-14, 100 008 bars",
+      "M15": "2018-08-06 .. 2026-08-14, 200 000 bars"
+    }
+  },
+  "strategies": [
+    {
+      "id": "bb-trend-pullback-h1",
+      "source_card": "29-bollinger-band-trading-in-trend-trading-system",
+      "source_url": "https://www.forexstrategiesresources.com/bollinger-bands-forex-strategies/29-bollinger-band-trading-in-trend-trading-system/",
+      "family": "trend pullback",
+      "signal_tf": "H1",
+      "exit_ref": "conservative_2r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 20,
+        "buffer_atr_multiple": 0.25
+      },
+      "card_says": "Only trade with the 100 EMA high/low channel; wait for price to touch or break the far Bollinger band (20 periods at 2.3 σ, MA 10) while staying on the trend side of the channel; enter when price retraces back into the band or at the next bar's open; stop at the previous swing; target 2:1.",
+      "analyst_substitutions": [
+        "The card's two-step (touch, then retrace back in) is written as one trigger: the previous bar's low at or below the band, and this bar's close crossing back above it. Written as a level test alone it held for runs of consecutive bars and opened 7 805 setups instead of 1 239 — a condition, not the event the card describes.",
+        "Invalidation is the trigger bar's low; the previous swing regularly sat above price on a band touch and was being refused as wrong-sided."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "conservative_2r — the card recommends 2:1 outright.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 100008,
+          "signals": 1239,
+          "long": 633,
+          "short": 606,
+          "drops": {
+            "wrong_sided_invalidation": 4
+          }
+        },
+        "GBPUSD": {
+          "bars": 100006,
+          "signals": 1300,
+          "long": 630,
+          "short": 670,
+          "drops": {
+            "wrong_sided_invalidation": 8
+          }
+        }
+      },
+      "source_title": "Bollinger Band Trading in Trend Trading System",
+      "source_timeframe_raw": "15 min or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h1.json",
+        "trades": 1129,
+        "expectancy_r": -0.1485,
+        "winrate": 0.302,
+        "profit_factor": 0.735,
+        "total_return_pct": -92.49,
+        "signal_drops": {
+          "position_limit": 76
+        }
+      }
+    },
+    {
+      "id": "ichimoku-kumo-breakout-h1",
+      "source_card": "205-ichimochu-aggressive-breakout",
+      "source_url": "https://www.forexstrategiesresources.com/trend-following-forex-strategies-ii/205-ichimochu-aggressive-breakout/",
+      "family": "breakout",
+      "signal_tf": "H1",
+      "exit_ref": "conservative_2r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 20,
+        "buffer_atr_multiple": 0.3
+      },
+      "card_says": "Price closes beyond both Kumo, which must agree, and beyond the bank levels; SMA 20 and 50 on the chart; stop beyond the previous swing; ratio 1:2 to 1:2.5.",
+      "analyst_substitutions": [
+        "'Both Kumo agree' is close beyond senkou_a *and* senkou_b, with senkou_a the crossing operand. The repo's Ichimoku publishes the leading spans at the bar they are plotted at, computed from data displacement bars earlier, so this is causal.",
+        "Tenkan/kijun alignment carries the quality modifier — the card's 'in agreement'."
+      ],
+      "dropped_from_card": [
+        "Bank levels and delta arrows — visual.",
+        "The second Ichimoku (1,1,25) — a repainted fast cloud with no counterpart."
+      ],
+      "exit_rationale": "conservative_2r — the card's 1:2.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 100008,
+          "signals": 2374,
+          "long": 1173,
+          "short": 1201,
+          "drops": {
+            "wrong_sided_invalidation": 22
+          }
+        },
+        "GBPUSD": {
+          "bars": 100006,
+          "signals": 2303,
+          "long": 1166,
+          "short": 1137,
+          "drops": {
+            "wrong_sided_invalidation": 21
+          }
+        }
+      },
+      "source_title": "205-ichimochu-aggressive-breakout",
+      "source_timeframe_raw": "15 min. 30 min, 60",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h1.json",
+        "trades": 747,
+        "expectancy_r": -0.0129,
+        "winrate": 0.335,
+        "profit_factor": 0.947,
+        "total_return_pct": -26.83,
+        "signal_drops": {
+          "position_limit": 1627
+        }
+      }
+    },
+    {
+      "id": "smma-macd-stoch-h1",
+      "source_card": "13-breakout-h1-method",
+      "source_url": "https://www.forexstrategiesresources.com/breakout-forex-strategies/13-breakout-h1-method/",
+      "family": "trend continuation",
+      "signal_tf": "H1",
+      "exit_ref": "structure_trail",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 20,
+        "buffer_atr_multiple": 0.3
+      },
+      "card_says": "Price closes beyond the 5 SMMA of the high (low for shorts); MACD(8,21,8) in buy mode; stochastic recently out of oversold and heading up; RSI(13) above its own Bollinger midline and above 50. Stop at the last obvious swing or 55–80 pips; target 50–70 pips.",
+      "analyst_substitutions": [
+        "SMMA(5) is EMA(9) by definition (SMMA(n) = EMA(2n−1)); written as ema(period=9, source=high/low), which the indicator registry supports directly.",
+        "'RSI above the middle Bollinger band drawn on RSI' is an indicator on an indicator; the card states the same requirement a second time as 'RSI above 50', which is what is kept.",
+        "'MACD in buy mode' read as histogram above zero."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "structure_trail — the card's exit is price crossing the opposite side of its own MA channel, i.e. a structure-following stop.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 100008,
+          "signals": 299,
+          "long": 144,
+          "short": 155,
+          "drops": {
+            "wrong_sided_invalidation": 11
+          }
+        },
+        "GBPUSD": {
+          "bars": 100006,
+          "signals": 308,
+          "long": 136,
+          "short": 172,
+          "drops": {
+            "wrong_sided_invalidation": 13
+          }
+        }
+      },
+      "source_title": "Breakout H1 Method  Trading System",
+      "source_timeframe_raw": "H1",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h1.json",
+        "trades": 278,
+        "expectancy_r": -0.1716,
+        "winrate": 0.237,
+        "profit_factor": 0.695,
+        "total_return_pct": -44.5,
+        "signal_drops": {
+          "position_limit": 21
+        }
+      }
+    },
+    {
+      "id": "cci-volume-thrust-h4",
+      "source_card": "30-bollinger-bands-and-cci-divergence-trading-system",
+      "source_url": "https://www.forexstrategiesresources.com/bollinger-bands-forex-strategies/30-bollinger-bands-and-cci-divergence-trading-system/",
+      "family": "volume / mean reversion",
+      "signal_tf": "H4",
+      "exit_ref": "structure_trail",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 20,
+        "buffer_atr_multiple": 0.3
+      },
+      "card_says": "Trend from the SMMA channel against the middle Bollinger band; wait for price at a support/resistance area; take divergence between price and CCI(21); require volume forming significantly higher peaks; stop beyond the recent swing; trail with the channel.",
+      "analyst_substitutions": [
+        "Divergence between price and an oscillator is not expressible (it needs a comparison of two slopes over a variable window). Replaced by CCI(21) crossing back out of ±100 — the momentum turn the divergence is a leading version of.",
+        "'High volume, significantly higher peaks' is rvol(20) > 1.5, with > 2.5 as the quality modifier. This is the real tick volume of the new vendor tape, not the constant the Forexite tape carried."
+      ],
+      "dropped_from_card": [
+        "Drawn support/resistance areas; the 30m/4H split (cross-timeframe is unsupported — both legs run on H4)."
+      ],
+      "exit_rationale": "structure_trail — the card trails with its channel.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 131,
+          "long": 70,
+          "short": 61,
+          "drops": {
+            "wrong_sided_invalidation": 2
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 148,
+          "long": 80,
+          "short": 68,
+          "drops": {
+            "wrong_sided_invalidation": 1
+          }
+        }
+      },
+      "source_title": "Bollinger Bands and CCI Divergence Trading System",
+      "source_timeframe_raw": "30 minute and 240 minute.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 120,
+        "expectancy_r": 0.0478,
+        "winrate": 0.342,
+        "profit_factor": 1.032,
+        "total_return_pct": 2.49,
+        "signal_drops": {
+          "position_limit": 11
+        }
+      }
+    },
+    {
+      "id": "doji-close-reversal-h4",
+      "source_card": "18-low-close-doji-and-high-close-doji",
+      "source_url": "https://www.forexstrategiesresources.com/candlestick-forex-strategies/18-low-close-doji-and-high-close-doji/",
+      "family": "pattern reversal",
+      "signal_tf": "H4",
+      "exit_ref": "structure_trail",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 14,
+        "multiple": 1.0
+      },
+      "card_says": "A doji after an extended move; sell once a new closing low is made below the doji's low (mirrored for the high-close doji); stop beyond the doji's extreme; MACD as a filter; 25 EMA high/low channel on the chart.",
+      "analyst_substitutions": [
+        "The doji is the trigger and the closing break is a confirmation inside a 2-bar window — pattern_is has no shift, so 'a doji on the previous bar' cannot be written as one leaf.",
+        "The invalidation is the *signal* bar's extreme, not the doji's: Invalidation reads the bar the signal fires on. On the bar after the doji these differ."
+      ],
+      "dropped_from_card": [
+        "'Stop-close-only' — the exit library has no close-only stop."
+      ],
+      "exit_rationale": "structure_trail — the card exits on the first bar that makes a higher closing high, which is a structure-following exit.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 69,
+          "long": 27,
+          "short": 42,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 69,
+          "long": 28,
+          "short": 41,
+          "drops": {}
+        }
+      },
+      "source_title": "Low close doji and High close doji",
+      "source_timeframe_raw": "4H or daily,",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 69,
+        "expectancy_r": -0.3697,
+        "winrate": 0.101,
+        "profit_factor": 0.514,
+        "total_return_pct": -24.92,
+        "signal_drops": {}
+      }
+    },
+    {
+      "id": "donchian-breakout-h4",
+      "source_card": "37-donchian-breakout",
+      "source_url": "https://www.forexstrategiesresources.com/breakout-forex-strategies/37-donchian-breakout/",
+      "family": "breakout",
+      "signal_tf": "H4",
+      "exit_ref": "structure_trail",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 20,
+        "multiple": 2.0
+      },
+      "card_says": "Long on the N-day high, short on the N-day low; hard stop 2×ATR; exit on the opposite shorter-period channel; MACD above zero permits longs, below zero permits shorts.",
+      "analyst_substitutions": [
+        "The channel is read with shift=1. A Donchian channel contains the bar being tested, so close cross_above upper can never fire without it — the exact case CLAUDE.md records FeatureRef.shift for.",
+        "Entry breakout 20 bars, exit breakout 10 bars — the card leaves N to the user; these are the Turtle defaults it is quoting."
+      ],
+      "dropped_from_card": [
+        "Entry/exit offsets in ATR — a tunable the card itself says may be zero."
+      ],
+      "exit_rationale": "structure_trail — the card's exit *is* a trailing channel.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 1788,
+          "long": 852,
+          "short": 936,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 1757,
+          "long": 876,
+          "short": 881,
+          "drops": {}
+        }
+      },
+      "source_title": "Donchian Breakout  Trading System",
+      "source_timeframe_raw": null,
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 578,
+        "expectancy_r": -0.0537,
+        "winrate": 0.349,
+        "profit_factor": 0.851,
+        "total_return_pct": -31.73,
+        "signal_drops": {
+          "position_limit": 1210
+        }
+      }
+    },
+    {
+      "id": "ema-macd-double-cross-h4",
+      "source_card": "67-macd-strategy",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/67-macd-strategy/",
+      "family": "trend / double confirmation",
+      "signal_tf": "H4",
+      "exit_ref": "breakeven_runner",
+      "stop_reference": {
+        "kind": "FIXED_PIPS",
+        "pips": 50
+      },
+      "card_says": "EMA5 crosses SMA15 and MACD lines cross, in either order, no more than 5 candles apart; never open within 25 pips of the 100/200 SMA; initial stop 50 pips; trail after 50 pips.",
+      "analyst_substitutions": [
+        "The 5-candle window is the schema's confirmation_window_bars = 6 (the trigger bar counts as one). Only the MA-cross-first ordering is expressible; a spec cannot make either of two events the trigger."
+      ],
+      "dropped_from_card": [
+        "'Never open within 25 pips of the 100/200 SMA' — this is |close − sma| < 0.0025, arithmetic over two operands, which CLAUDE.md already names as the missing DerivedOperand. This is the second such case; the first was the close-in-range-of-bar rule."
+      ],
+      "exit_rationale": "breakeven_runner — the card's 'trail after 50 pips in profit'.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 808,
+          "long": 390,
+          "short": 418,
+          "drops": {
+            "wrong_sided_invalidation": 7
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 826,
+          "long": 414,
+          "short": 412,
+          "drops": {
+            "wrong_sided_invalidation": 8
+          }
+        }
+      },
+      "source_title": "MACD Forex Trading System",
+      "source_timeframe_raw": "3 hours (preferred) or 4 hours.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 331,
+        "expectancy_r": 0.0528,
+        "winrate": 0.523,
+        "profit_factor": 1.068,
+        "total_return_pct": 11.82,
+        "signal_drops": {
+          "position_limit": 476
+        }
+      }
+    },
+    {
+      "id": "ema60-cci-thrust-h4",
+      "source_card": "63-smashing-forex-system-2",
+      "source_url": "https://www.forexstrategiesresources.com/trend-following-forex-strategies/63-smashing-forex-system-2/",
+      "family": "trend / momentum thrust",
+      "signal_tf": "H4",
+      "exit_ref": "swing_partial_ladder",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 14,
+        "multiple": 1.5
+      },
+      "card_says": "Close beyond EMA60 with CCI(14) past ±100; enter at market with two lots; take one off at +200 pips, move the rest to breakeven, then trail.",
+      "analyst_substitutions": [
+        "The buy rule as printed reads 'CCI value is lower than +100', which contradicts its own mirror sell rule and the worked example. Read as a typo for 'higher than +100'.",
+        "'Stop just beyond EMA60 or −200 pips, whichever is less risky' cannot be written: the Risk Engine takes the *farthest* of its stop candidates, so declaring FIXED_PIPS(200) would pin every stop at 200 pips. EMA60 stays as the invalidation, ATR(14,1.5) is the stop reference."
+      ],
+      "dropped_from_card": [
+        "Two-lot manual scale-out — the exit library's swing_partial_ladder is the same shape."
+      ],
+      "exit_rationale": "swing_partial_ladder — partial at 1R, breakeven, then a structure trail is the closest preset to 'one lot off, breakeven the rest, trail'.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 2257,
+          "long": 1109,
+          "short": 1148,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 2264,
+          "long": 1150,
+          "short": 1114,
+          "drops": {}
+        }
+      },
+      "source_title": "Smashing Forex System 2 Trading System",
+      "source_timeframe_raw": "4H and higher",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 906,
+        "expectancy_r": -0.0356,
+        "winrate": 0.502,
+        "profit_factor": 0.902,
+        "total_return_pct": -38.1,
+        "signal_drops": {
+          "position_limit": 1351
+        }
+      }
+    },
+    {
+      "id": "engulfing-rsi-reversal-h4",
+      "source_card": "10-bullish-engulfing-and-bearish-engulfing-pattern-with-rsi",
+      "source_url": "https://www.forexstrategiesresources.com/candlestick-forex-strategies/10-bullish-engulfing-and-bearish-engulfing-pattern-with-rsi/",
+      "family": "reversal / pattern",
+      "signal_tf": "H4",
+      "exit_ref": "breakeven_runner",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 10,
+        "buffer_atr_multiple": 0.2
+      },
+      "card_says": "Bullish engulfing confirmed by RSI below 30 on the last completed bar; mirrored for the bearish side; close the position when RSI crosses back through 70 or 30.",
+      "analyst_substitutions": [
+        "Pattern detection is the repo's own Pattern.BULLISH_ENGULFING / BEARISH_ENGULFING, not the card's MetaTrader recogniser."
+      ],
+      "dropped_from_card": [
+        "'Close when RSI crosses 70/30' — an oscillator exit is not in the exit library; a runner is the nearest behaviour."
+      ],
+      "exit_rationale": "breakeven_runner — the card wants the reversal to run until the opposite extreme.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 86,
+          "long": 43,
+          "short": 43,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 86,
+          "long": 42,
+          "short": 44,
+          "drops": {}
+        }
+      },
+      "source_title": "Bullish Engulfing\" and \"Bearish Engulfing pattern with RSITrading System",
+      "source_timeframe_raw": "H1 or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 82,
+        "expectancy_r": -0.1456,
+        "winrate": 0.463,
+        "profit_factor": 0.662,
+        "total_return_pct": -15.31,
+        "signal_drops": {
+          "position_limit": 1,
+          "filled_through_stop": 3
+        }
+      }
+    },
+    {
+      "id": "hma-stoch-momentum-h4",
+      "source_card": "133-hma-momentum-forex-strategy",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/133-hma-momentum-forex-strategy/",
+      "family": "reversal / momentum",
+      "signal_tf": "H4",
+      "exit_ref": "rr_1r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 5,
+        "buffer_atr_multiple": 0.2
+      },
+      "card_says": "Stochastic (10,3,3) crossing up out of 40 with HMA(14) turning; stop on the previous swing; target 1:1; three-step martingale money management.",
+      "analyst_substitutions": [
+        "'HMA black / white colour' is the HMA's slope; written as rising/falling over one bar.",
+        "'Crosses I-G-CCI 2' — a custom indicator with no counterpart; the crossing of the 40/60 band is the part of the rule the card also states in words.",
+        "Invalidation is the trigger bar's own low/high rather than the previous swing: on a counter-trend entry the last *confirmed* swing is regularly on the wrong side of price, and 15% of signals were being dropped as wrong_sided_invalidation. The structural stop still comes from STRUCTURE(5) in stop_reference."
+      ],
+      "dropped_from_card": [
+        "Martingale sizing — sizing is the Risk Engine's, and a spec cannot ask for it."
+      ],
+      "exit_rationale": "rr_1r — the card's 'fast profit predetermined with ratio stop loss 1:1'.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 1992,
+          "long": 1013,
+          "short": 979,
+          "drops": {
+            "wrong_sided_invalidation": 5
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 1999,
+          "long": 996,
+          "short": 1003,
+          "drops": {}
+        }
+      },
+      "source_title": "133-hma-momentum-forex-strategy",
+      "source_timeframe_raw": "H1, H4,",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 1623,
+        "expectancy_r": -0.0776,
+        "winrate": 0.477,
+        "profit_factor": 0.783,
+        "total_return_pct": -85.92,
+        "signal_drops": {
+          "position_limit": 708,
+          "filled_through_stop": 3
+        },
+        "expectancy_r_before_exit_change": -0.035
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "inside-bar-adx-h4",
+      "source_card": "10-inside-bar",
+      "source_url": "https://www.forexstrategiesresources.com/patterns-forex-strategies/10-inside-bar/",
+      "family": "breakout / pattern",
+      "signal_tf": "H4",
+      "exit_ref": "rr_1_5r",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 14,
+        "multiple": 1.0
+      },
+      "card_says": "Inside bar with ADX ≥ 25 and DI+ above DI− for longs; buy stop 5 pips above the preceding candle's high; stop 5 pips beyond the inside bar; target 1:1.5 or better.",
+      "analyst_substitutions": [
+        "The stop order's offset is measured from the reference price (the close of the inside bar), not from the preceding candle's high — EntryOrderSpec has no 'offset from a named level' form. 5 pips (0.0005) is kept as the offset; it is a slightly different level."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "rr_1_5r — the card's 'Target risk to reward 1/1.5 or better'; 1.5R is the ratio it names, and 'or better' is a licence, not a second preset.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 2262,
+          "long": 1077,
+          "short": 1185,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 2182,
+          "long": 1074,
+          "short": 1108,
+          "drops": {}
+        }
+      },
+      "source_title": "Inside Bar with ADX Forex Trading  System",
+      "source_timeframe_raw": "H1 or higher the best Daily",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 1187,
+        "expectancy_r": -0.1007,
+        "winrate": 0.369,
+        "profit_factor": 0.826,
+        "total_return_pct": -79.95,
+        "signal_drops": {
+          "position_limit": 877
+        },
+        "expectancy_r_before_exit_change": -0.1122,
+        "expired_orders": 305
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "rsi-cross-atr-stop-h4",
+      "source_card": "60-rsi-atr-and-sma",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/60-rsi-atr-and-sma/",
+      "family": "trend / momentum flip",
+      "signal_tf": "H4",
+      "exit_ref": "breakeven_runner",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 20,
+        "multiple": 0.75
+      },
+      "card_says": "RSI(8) crosses its own moving average; SMA(28) on the chart; stop = 75% of ATR(20); enter at the open of the next candle; no exit rule, ride it with a moving stop.",
+      "analyst_substitutions": [
+        "RSI crossing *its own* moving average is an indicator computed on an indicator, which no FeatureRef can express. Replaced by RSI(8) cross of the 50 midline — the same momentum flip the card's cross is a smoothed reading of.",
+        "SMA(28) is on the card's chart but no rule uses it; promoted to the trend gate (close above/below it), which is what a trader would do with it."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "breakeven_runner — the card's exit is 'let it run with a moving stop', which is breakeven at 1R then an ATR trail.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 2263,
+          "long": 1131,
+          "short": 1132,
+          "drops": {
+            "wrong_sided_invalidation": 1
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 2238,
+          "long": 1108,
+          "short": 1130,
+          "drops": {
+            "wrong_sided_invalidation": 6
+          }
+        }
+      },
+      "source_title": "60  RSI, ATR and SMA Trading System",
+      "source_timeframe_raw": "4 H or Higher",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 347,
+        "expectancy_r": 0.0176,
+        "winrate": 0.493,
+        "profit_factor": 0.993,
+        "total_return_pct": -0.43,
+        "signal_drops": {
+          "position_limit": 1915
+        }
+      }
+    },
+    {
+      "id": "supertrend-flip-h4",
+      "source_card": "100-supertrend-filtlered-by-price-action",
+      "source_url": "https://www.forexstrategiesresources.com/scalping-forex-strategies/100-supertrend-filtlered-by-price-action/",
+      "family": "trend flip",
+      "signal_tf": "H4",
+      "exit_ref": "rr_1_2r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 10,
+        "buffer_atr_multiple": 0.3
+      },
+      "card_says": "Supertrend (ATR 2.8, period 18) flips under the candles and the MA turns green; entry on the arrow at a support level; stop on the previous swing; ratio 1:1.2.",
+      "analyst_substitutions": [
+        "'MA green' read as price above the 18-period SMA — the colour is the MA's own slope/side rendering, and the side is the half of it a rule can state.",
+        "The Supertrend flip is direction cross_above/below zero (the indicator publishes ±1)."
+      ],
+      "dropped_from_card": [
+        "Zig Zag arrows and drawn support/resistance zones — visual, and the reason 145 cards in the P00 triage were refused."
+      ],
+      "exit_rationale": "rr_1_2r — the card's 'Ratio 1: 1.2' exactly, now that the ladder carries it.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 765,
+          "long": 384,
+          "short": 381,
+          "drops": {
+            "wrong_sided_invalidation": 9
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 744,
+          "long": 370,
+          "short": 374,
+          "drops": {
+            "wrong_sided_invalidation": 9
+          }
+        }
+      },
+      "source_title": "100-supertrend-filtlered-by-price-action",
+      "source_timeframe_raw": null,
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 289,
+        "expectancy_r": -0.0212,
+        "winrate": 0.45,
+        "profit_factor": 0.938,
+        "total_return_pct": -9.31,
+        "signal_drops": {
+          "position_limit": 567
+        },
+        "expectancy_r_before_exit_change": 0.1361
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "turtle-pullback-h4",
+      "source_card": "144-turtle-trading-system",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/144-turtle-trading-system/",
+      "family": "trend pullback",
+      "signal_tf": "H4",
+      "exit_ref": "rr_1r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 55,
+        "buffer_atr_multiple": 0.25
+      },
+      "card_says": "Trade only with the 200 SMA; buy when price retraces onto the lower Donchian channel and stochastic crosses up; initial stop beyond the 55-period channel; minimum 1:1.",
+      "analyst_substitutions": [
+        "'Retraces onto the lower channel' read as the bar's low touching the previous bar's 20-period lower channel (shift=1), with the stochastic %K/%D cross as the timing the card calls it."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "rr_1r — the card says 'minimum ratio stop loss 1:1' and the library now has that rung. Previously conservative_2r, which was 2R because nothing smaller existed.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 190,
+          "long": 84,
+          "short": 106,
+          "drops": {
+            "wrong_sided_invalidation": 9
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 189,
+          "long": 101,
+          "short": 88,
+          "drops": {
+            "wrong_sided_invalidation": 5
+          }
+        }
+      },
+      "source_title": "Turtle",
+      "source_timeframe_raw": "15 min or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 137,
+        "expectancy_r": -0.1507,
+        "winrate": 0.431,
+        "profit_factor": 0.719,
+        "total_return_pct": -20.33,
+        "signal_drops": {
+          "position_limit": 77
+        },
+        "expectancy_r_before_exit_change": -0.1556
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "willr-macd-reversal-h4",
+      "source_card": "82-william-s-r-and-real-macd",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/82-william-s-r-and-real-macd/",
+      "family": "reversal",
+      "signal_tf": "H4",
+      "exit_ref": "rr_1r",
+      "stop_reference": {
+        "kind": "FIXED_PIPS",
+        "pips": 50
+      },
+      "card_says": "Williams %R leaving oversold with MACD(3,8,1) above zero; stop 50–60 pips; target 50–65 pips.",
+      "analyst_substitutions": [
+        "The card's sell rule says '%R goes into oversold (0–20)' where it means overbought; the printed numbers are its own oversold band repeated. Read as %R crossing down through −20.",
+        "'Real MACD' is a custom smoothing; standard MACD with the card's (3,8,1) periods."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "rr_1r — SL 50-60 pips against TP 50-65 pips is 1:1 as printed.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 25850,
+          "signals": 242,
+          "long": 118,
+          "short": 124,
+          "drops": {
+            "wrong_sided_invalidation": 21
+          }
+        },
+        "GBPUSD": {
+          "bars": 25852,
+          "signals": 254,
+          "long": 134,
+          "short": 120,
+          "drops": {
+            "wrong_sided_invalidation": 18
+          }
+        }
+      },
+      "source_title": "William's%R and Real MACD Trading System",
+      "source_timeframe_raw": "Daily.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_h4.json",
+        "trades": 203,
+        "expectancy_r": 0.0844,
+        "winrate": 0.547,
+        "profit_factor": 1.158,
+        "total_return_pct": 15.09,
+        "signal_drops": {
+          "position_limit": 84
+        },
+        "expectancy_r_before_exit_change": 0.0991
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "bb-inside-bar-fade-m15",
+      "source_card": "32-inside-bar-with-bollinger-bands",
+      "source_url": "https://www.forexstrategiesresources.com/patterns-forex-strategies/32-inside-bar-with-bollinger-bands/",
+      "family": "mean reversion / pattern",
+      "signal_tf": "M15",
+      "exit_ref": "structure_trail",
+      "stop_reference": {
+        "kind": "ATR",
+        "period": 14,
+        "multiple": 1.0
+      },
+      "card_says": "Price hits or comes close to the lower Bollinger(20,2); the next candle is an inside bar; go long at the open of the third candle; stop a few pips beyond the previous candle's low; trail on a closing basis with the 20 SMA.",
+      "analyst_substitutions": [
+        "'Hits or comes very close to' is read strictly as touching — 'close to' has no number in the card and inventing one would be inventing the strategy."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "structure_trail — the card's closing-basis MA trail; the library has no close-only variant.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 200000,
+          "signals": 9962,
+          "long": 5008,
+          "short": 4954,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 200000,
+          "signals": 10195,
+          "long": 5180,
+          "short": 5015,
+          "drops": {}
+        }
+      },
+      "source_title": "Inside Bar and Bollinger Bands Forex Trading  System",
+      "source_timeframe_raw": "15 min or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_m15.json",
+        "trades": 2667,
+        "expectancy_r": -0.1773,
+        "winrate": 0.212,
+        "profit_factor": 0.553,
+        "total_return_pct": -99.96,
+        "signal_drops": {
+          "position_limit": 1019
+        }
+      }
+    },
+    {
+      "id": "keltner-bb-reversal-m15",
+      "source_card": "107-keltener-channel-and-bollinger-bands-reversal-trading-system",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/107-keltener-channel-and-bollinger-bands-reversal-trading-system/",
+      "family": "mean reversion",
+      "signal_tf": "M15",
+      "exit_ref": "rr_1r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 10,
+        "buffer_atr_multiple": 0.25
+      },
+      "card_says": "Price closes below both the lower Bollinger band and the lower Keltner channel, then retraces and closes back above the Keltner channel; buy at the open of the next bar; initial stop at the previous swing; target the middle band.",
+      "analyst_substitutions": [
+        "Invalidation is the Keltner channel itself rather than the previous swing: the trigger guarantees the close is above it, so the level is correctly sided by construction. With the swing, 3 658 of 4 352 signals were refused as wrong-sided — the failure mode is systematic on a falling-knife entry, not incidental."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "rr_1r — the card's 'ratio minimum 1:1 stop loss'; the middle band it also names is roughly that distance from a band-edge entry.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 200000,
+          "signals": 4352,
+          "long": 2161,
+          "short": 2191,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 200000,
+          "signals": 4260,
+          "long": 2142,
+          "short": 2118,
+          "drops": {}
+        }
+      },
+      "source_title": "Keltener Channel and Bollinger Bands Reversal Trading System",
+      "source_timeframe_raw": "30 min or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_m15.json",
+        "trades": 2019,
+        "expectancy_r": -0.2044,
+        "winrate": 0.446,
+        "profit_factor": 0.537,
+        "total_return_pct": -99.88,
+        "signal_drops": {
+          "position_limit": 132
+        },
+        "expectancy_r_before_exit_change": -0.1574
+      },
+      "exit_ref_previous": "conservative_2r"
+    },
+    {
+      "id": "london-range-breakout-m15",
+      "source_card": "4-breakout-with-market-structure-breaker",
+      "source_url": "https://www.forexstrategiesresources.com/breakout-forex-strategies/4-breakout-with-market-structure-breaker/",
+      "family": "session breakout",
+      "signal_tf": "M15",
+      "exit_ref": "session_close",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 8,
+        "buffer_atr_multiple": 0.2
+      },
+      "card_says": "Establish the range of an initial session period (the example uses 120 minutes around the London open); go long on a close above the range high, short below the low; the setup is closed for the rest of the session once taken; protective stop at the opposite end of the range.",
+      "analyst_substitutions": [
+        "The range is donchian(8) shifted one bar — a rolling two hours of M15 rather than a clock-anchored session box. A range anchored to a wall-clock time is not expressible; this is the closest rolling equivalent and it is not the same rule.",
+        "The session restriction is a session_is leaf inside the trigger, not a SessionFilter. StrategySpec.filters are read by nothing that gates a signal (see the report); a session_is condition is compiled and enforced. Measured: the leaf halves the signal count, 11 684 → 5 739 on EURUSD.",
+        "rvol(20) > 1.2 as the 'valid breakout' test the card gestures at."
+      ],
+      "dropped_from_card": [
+        "'One trade per session' — max_concurrent_positions=1 plus a cooldown is the nearest the risk profile can say."
+      ],
+      "exit_rationale": "session_close — the card is explicit that the setup dies with the session.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 200000,
+          "signals": 5739,
+          "long": 2824,
+          "short": 2915,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 200000,
+          "signals": 5433,
+          "long": 2671,
+          "short": 2762,
+          "drops": {}
+        }
+      },
+      "source_title": "Breakout with Market Structure Breaker  . TradingView Strategy",
+      "source_timeframe_raw": "15 min or higher.",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_m15.json",
+        "trades": 2651,
+        "expectancy_r": -0.067,
+        "winrate": 0.386,
+        "profit_factor": 0.771,
+        "total_return_pct": -94.38,
+        "signal_drops": {
+          "position_limit": 2735
+        }
+      }
+    },
+    {
+      "id": "mfi-bb-reversal-m15",
+      "source_card": "57-scalping-with-money-flow-index-and-bollinger-bands",
+      "source_url": "https://www.forexstrategiesresources.com/scalping-forex-strategies/57-scalping-with-money-flow-index-and-bollinger-bands/",
+      "family": "volume / mean reversion",
+      "signal_tf": "M15",
+      "exit_ref": "rr_1r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 10,
+        "buffer_atr_multiple": 0.2
+      },
+      "card_says": "Money Flow Index(8) in oversold while price touches or breaks the lower Bollinger(22, 2.0); wait for a bullish candle; stop at the previous swing or on the band; target the mid band or 1:1; profit target 8 pips on EUR/USD.",
+      "analyst_substitutions": [
+        "'Wait for a bullish candle' is a confirmation leaf, close above open, inside a 3-bar window.",
+        "Invalidation is the signal bar's own low — the previous swing was refusing 3 312 of 4 340 signals as wrong-sided, for the same reason as the Keltner card."
+      ],
+      "dropped_from_card": [
+        "The direction-arrow entry timing, QQE-MACD, BullsEye Forecast and Half Trend — all custom indicators with no counterpart.",
+        "Oscar Grind / Kelly / D'Alembert money management — sizing is not a spec's to name."
+      ],
+      "exit_rationale": "rr_1r — the card's 'at mid band or with minimum stop loss ratio 1:1'. Previously scalp_quick, whose four-bar time cap the card never asks for; that cap was mine, not the page's.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 200000,
+          "signals": 4340,
+          "long": 2257,
+          "short": 2083,
+          "drops": {}
+        },
+        "GBPUSD": {
+          "bars": 200000,
+          "signals": 4460,
+          "long": 2316,
+          "short": 2144,
+          "drops": {}
+        }
+      },
+      "source_title": "Money",
+      "source_timeframe_raw": "15 min or\n5min",
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_m15.json",
+        "trades": 2391,
+        "expectancy_r": -0.1888,
+        "winrate": 0.451,
+        "profit_factor": 0.53,
+        "total_return_pct": -99.93,
+        "signal_drops": {
+          "position_limit": 173
+        },
+        "expectancy_r_before_exit_change": -0.2154
+      },
+      "exit_ref_previous": "scalp_quick"
+    },
+    {
+      "id": "willr-ema-channel-m15",
+      "source_card": "94-williams-percente-range-trading-system",
+      "source_url": "https://www.forexstrategiesresources.com/forex-strategies-based-on-indicators/94-williams-percente-range-trading-system/",
+      "family": "trend continuation",
+      "signal_tf": "M15",
+      "exit_ref": "conservative_2r",
+      "stop_reference": {
+        "kind": "STRUCTURE",
+        "lookback_bars": 10,
+        "buffer_atr_multiple": 0.2
+      },
+      "card_says": "Price crosses above the 50 EMA of the high; Williams %R crosses above −20; stochastic above its signal line and above 60; stop a few pips below the recent swing low; target twice the stop.",
+      "analyst_substitutions": [
+        "The card's sell rule says '%R crosses above the −80 level' where its own logic requires below. Read as crossing down through −80.",
+        "The three conditions are a trigger (the EMA cross) plus a 3-bar confirmation window rather than three simultaneous crossings, which would almost never coincide."
+      ],
+      "dropped_from_card": [],
+      "exit_rationale": "conservative_2r — the card's 'twice the stop'.",
+      "recognised_signals": {
+        "EURUSD": {
+          "bars": 200000,
+          "signals": 9336,
+          "long": 4681,
+          "short": 4655,
+          "drops": {
+            "wrong_sided_invalidation": 35
+          }
+        },
+        "GBPUSD": {
+          "bars": 200000,
+          "signals": 9203,
+          "long": 4675,
+          "short": 4528,
+          "drops": {
+            "wrong_sided_invalidation": 16
+          }
+        }
+      },
+      "source_title": "William's Percente Range Forex Trading System",
+      "source_timeframe_raw": null,
+      "flat_run_eurusd": {
+        "caveat": "ts backtest on the spec's own parameters over the whole history: one period, no folds, no selection, nothing out of sample. Not evidence.",
+        "config": "configs/bt_eurusd_m15.json",
+        "trades": 1332,
+        "expectancy_r": -0.0545,
+        "winrate": 0.327,
+        "profit_factor": 0.846,
+        "total_return_pct": -74.67,
+        "signal_drops": {
+          "position_limit": 7596
+        }
+      }
+    }
+  ],
+  "exit_library_note": "The risk/reward ladder rr_1r..rr_10r was added to exit/library.json for this batch: nine specs had been given conservative_2r because the library carried no fixed target below 2R, which substituted a different strategy for the one the card described. Seven now name their card's own ratio; the three keeping conservative_2r do so because their cards ask for 2:1."
+}

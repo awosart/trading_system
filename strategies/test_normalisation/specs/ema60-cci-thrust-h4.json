@@ -1,0 +1,161 @@
+{
+  "id": "ema60-cci-thrust-h4",
+  "version": "1.0.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 60
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": {
+              "indicator": "cci",
+              "params": {
+                "period": 14
+              }
+            },
+            "right": 100.0
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "ema",
+          "params": {
+            "period": 60
+          }
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ema",
+              "params": {
+                "period": 60
+              }
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": {
+              "indicator": "cci",
+              "params": {
+                "period": 14
+              }
+            },
+            "right": -100.0
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "ema",
+          "params": {
+            "period": 60
+          }
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "swing_partial_ladder",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "any_of",
+          "conditions": [
+            {
+              "type": "leaf",
+              "op": "gt",
+              "left": {
+                "indicator": "cci",
+                "params": {
+                  "period": 14
+                }
+              },
+              "right": 200.0
+            },
+            {
+              "type": "leaf",
+              "op": "lt",
+              "left": {
+                "indicator": "cci",
+                "params": {
+                  "period": 14
+                }
+              },
+              "right": -200.0
+            }
+          ]
+        },
+        "delta": 0.15,
+        "reason": "A CCI beyond +/-200 is the extended-thrust reading the card's two-lot scale-out was written for"
+      }
+    ],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 0
+  }
+}

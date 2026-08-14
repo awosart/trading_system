@@ -1,0 +1,199 @@
+{
+  "id": "willr-ema-channel-m15",
+  "version": "1.0.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_above",
+        "left": "price:close",
+        "right": {
+          "indicator": "ema",
+          "params": {
+            "period": 50,
+            "source": "high"
+          }
+        }
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "willr",
+            "params": {
+              "period": 14
+            }
+          },
+          "right": -20.0
+        },
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "k"
+          },
+          "right": 60.0
+        },
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "k"
+          },
+          "right": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "d"
+          }
+        }
+      ],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 3
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_below",
+        "left": "price:close",
+        "right": {
+          "indicator": "ema",
+          "params": {
+            "period": 50,
+            "source": "low"
+          }
+        }
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": {
+            "indicator": "willr",
+            "params": {
+              "period": 14
+            }
+          },
+          "right": -80.0
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "k"
+          },
+          "right": 40.0
+        },
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "k"
+          },
+          "right": {
+            "indicator": "stoch",
+            "params": {
+              "k_period": 14,
+              "k_smooth": 3,
+              "d_period": 3
+            },
+            "channel": "d"
+          }
+        }
+      ],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 3
+    }
+  ],
+  "exit_ref": "conservative_2r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 10,
+      "buffer_atr_multiple": 0.2
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "id": "mfi-bb-reversal-m15",
+  "version": "1.0.0",
+  "type": "SCALP",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": {
+              "indicator": "mfi",
+              "params": {
+                "period": 8
+              }
+            },
+            "right": 20.0
+          },
+          {
+            "type": "leaf",
+            "op": "lte",
+            "left": "price:low",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 22,
+                "num_std": 2.0
+              },
+              "channel": "lower"
+            }
+          }
+        ]
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "gt",
+          "left": "price:close",
+          "right": "price:open"
+        }
+      ],
+      "invalidation": {
+        "price_level": "price:low"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 3
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "mfi",
+              "params": {
+                "period": 8
+              }
+            },
+            "right": 80.0
+          },
+          {
+            "type": "leaf",
+            "op": "gte",
+            "left": "price:high",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 22,
+                "num_std": 2.0
+              },
+              "channel": "upper"
+            }
+          }
+        ]
+      },
+      "confirmation": [
+        {
+          "type": "leaf",
+          "op": "lt",
+          "left": "price:close",
+          "right": "price:open"
+        }
+      ],
+      "invalidation": {
+        "price_level": "price:high"
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      },
+      "confirmation_window_bars": 3
+    }
+  ],
+  "exit_ref": "rr_1r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "any_of",
+          "conditions": [
+            {
+              "type": "leaf",
+              "op": "lt",
+              "left": {
+                "indicator": "mfi",
+                "params": {
+                  "period": 8
+                }
+              },
+              "right": 10.0
+            },
+            {
+              "type": "leaf",
+              "op": "gt",
+              "left": {
+                "indicator": "mfi",
+                "params": {
+                  "period": 8
+                }
+              },
+              "right": 90.0
+            }
+          ]
+        },
+        "delta": 0.15,
+        "reason": "The card trades the last overbought or oversold excursion; how extreme it was is the only ranking it offers"
+      }
+    ],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 10,
+      "buffer_atr_multiple": 0.2
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}

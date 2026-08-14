@@ -1,0 +1,257 @@
+{
+  "id": "ichimoku-kumo-breakout-h1",
+  "version": "1.0.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "H1",
+    "entry_tf": "H1"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "EURUSD",
+      "GBPUSD"
+    ],
+    "denied_symbols": []
+  },
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "ichimoku",
+              "params": {
+                "tenkan_period": 9,
+                "kijun_period": 26,
+                "senkou_b_period": 52
+              },
+              "channel": "senkou_a"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ichimoku",
+              "params": {
+                "tenkan_period": 9,
+                "kijun_period": 26,
+                "senkou_b_period": 52
+              },
+              "channel": "senkou_b"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 50
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "ichimoku",
+              "params": {
+                "tenkan_period": 9,
+                "kijun_period": 26,
+                "senkou_b_period": 52
+              },
+              "channel": "senkou_a"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "ichimoku",
+              "params": {
+                "tenkan_period": 9,
+                "kijun_period": 26,
+                "senkou_b_period": 52
+              },
+              "channel": "senkou_b"
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "lt",
+            "left": "price:close",
+            "right": {
+              "indicator": "sma",
+              "params": {
+                "period": 50
+              }
+            }
+          }
+        ]
+      },
+      "confirmation": [],
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high"
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "conservative_2r",
+  "filters": [
+    {
+      "kind": "spread_max",
+      "max_spread_pips": 2.0
+    }
+  ],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [
+      {
+        "condition": {
+          "type": "any_of",
+          "conditions": [
+            {
+              "type": "all_of",
+              "conditions": [
+                {
+                  "type": "leaf",
+                  "op": "gt",
+                  "left": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "tenkan"
+                  },
+                  "right": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "kijun"
+                  }
+                },
+                {
+                  "type": "leaf",
+                  "op": "gt",
+                  "left": "price:close",
+                  "right": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "tenkan"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "all_of",
+              "conditions": [
+                {
+                  "type": "leaf",
+                  "op": "lt",
+                  "left": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "tenkan"
+                  },
+                  "right": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "kijun"
+                  }
+                },
+                {
+                  "type": "leaf",
+                  "op": "lt",
+                  "left": "price:close",
+                  "right": {
+                    "indicator": "ichimoku",
+                    "params": {
+                      "tenkan_period": 9,
+                      "kijun_period": 26,
+                      "senkou_b_period": 52
+                    },
+                    "channel": "tenkan"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "delta": 0.15,
+        "reason": "A cloud break the conversion and base lines already agree with is the card's aligned case"
+      }
+    ],
+    "stop_reference": {
+      "kind": "STRUCTURE",
+      "lookback_bars": 20,
+      "buffer_atr_multiple": 0.3
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 4
+  }
+}
