@@ -46,6 +46,13 @@ class CSVSchema:
         time_column: Name of a separate time column, when date and time are split.
         separator: Field delimiter.
         has_header: Whether the first line names the columns.
+        drop_unnamed_fields: Whether rows may carry more fields than the header
+            names. ``False`` — the default — makes such a file an error, because
+            a row wider than its header usually means the separator is wrong and
+            every column is off by one. ``True`` states that the trailing fields
+            were looked at and are not OHLCV: they are discarded, not stored.
+            Some broker exports append a per-bar spread this way, and the frame
+            has nowhere to put it.
     """
 
     column_map: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_COLUMN_MAP))
@@ -55,6 +62,7 @@ class CSVSchema:
     time_column: str | None = None
     separator: str = ","
     has_header: bool = True
+    drop_unnamed_fields: bool = False
 
 
 class CSVProvider:
@@ -95,12 +103,20 @@ class CSVProvider:
             DataError: If the file is missing, or its columns cannot be mapped.
         """
         path = self._resolve(symbol)
-        raw = pl.read_csv(
-            path,
-            separator=self._schema.separator,
-            has_header=self._schema.has_header,
-            try_parse_dates=False,
-        )
+        try:
+            raw = pl.read_csv(
+                path,
+                separator=self._schema.separator,
+                has_header=self._schema.has_header,
+                try_parse_dates=False,
+                truncate_ragged_lines=self._schema.drop_unnamed_fields,
+            )
+        except pl.exceptions.ComputeError as error:
+            raise DataError(
+                f"{path}: could not be read as {self._schema.separator!r}-separated CSV "
+                f"({error}). If its rows carry trailing fields the header does not "
+                "name, say so with drop_unnamed_fields"
+            ) from error
         renamed = self._apply_column_map(raw, path)
         with_timestamp = self._build_timestamp(renamed, path)
         frame = OHLCVFrame.from_raw(

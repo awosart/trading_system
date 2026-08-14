@@ -35,6 +35,15 @@ SPLIT_DATETIME_CSV = """DATE,TIME,OPEN,HIGH,LOW,CLOSE,TICKVOL
 2024.01.01,00:01,1.10050,1.10150,1.10000,1.10100,120
 """
 
+#: Six names in the header, seven fields in every row: the last is a per-bar
+#: spread the export never named. Tab-separated, as those exports tend to be.
+RAGGED_TSV = (
+    "Time\tOpen\tHigh\tLow\tClose\tVolume\n"
+    "2024-01-01 00:00:00\t1.1000\t1.1010\t1.0990\t1.1005\t100\t3\n"
+    "2024-01-01 00:01:00\t1.1005\t1.1015\t1.1000\t1.1010\t120\t2\n"
+    "2024-01-01 00:02:00\t1.1010\t1.1020\t1.1005\t1.1015\t110\t4\n"
+)
+
 UNSORTED_CSV = """timestamp,open,high,low,close,volume
 2024-01-01T00:02:00,1.1010,1.1020,1.1005,1.1015,110
 2024-01-01T00:00:00,1.1000,1.1010,1.0990,1.1005,100
@@ -123,6 +132,63 @@ class TestCSVProvider:
         schema = CSVSchema(date_column="DATE")
         with pytest.raises(DataError, match="without time_column"):
             CSVProvider(csv_dir, schema).fetch("EURUSD", Timeframe.M1)
+
+
+class TestVendorFilesWithUnnamedTrailingFields:
+    """A six-name header over seven tab-separated fields.
+
+    The shape a broker export takes when it appends a per-bar spread without
+    naming it. The frame has nowhere to put that column, so the question is
+    only whether the file is read at all — and whether it is read *silently*,
+    which is the part that matters: a row wider than its header is the usual
+    symptom of the separator being wrong, in which case every column is off by
+    one and the bars are nonsense that a backtest will happily consume.
+    """
+
+    def write(self, tmp_path: Path) -> Path:
+        (tmp_path / "EURUSD.csv").write_text(RAGGED_TSV, encoding="utf-8")
+        return tmp_path
+
+    def test_by_default_the_file_is_refused(self, tmp_path: Path) -> None:
+        schema = CSVSchema(separator="\t", timestamp_format="%Y-%m-%d %H:%M:%S")
+        with pytest.raises(DataError, match="drop_unnamed_fields"):
+            CSVProvider(self.write(tmp_path), schema).fetch("EURUSD", Timeframe.M1)
+
+    def test_the_surplus_is_dropped_only_when_the_caller_says_so(self, tmp_path: Path) -> None:
+        schema = CSVSchema(
+            separator="\t",
+            timestamp_format="%Y-%m-%d %H:%M:%S",
+            drop_unnamed_fields=True,
+        )
+        frame = CSVProvider(self.write(tmp_path), schema).fetch("EURUSD", Timeframe.M1)
+        assert len(frame) == 3
+
+    def test_the_columns_do_not_shift_by_one(self, tmp_path: Path) -> None:
+        """The failure the refusal above exists to prevent, asserted positively.
+
+        Dropping the trailing field must not move volume into close: the whole
+        risk of accepting a ragged row is that the surplus is taken from the
+        wrong end.
+        """
+        schema = CSVSchema(
+            separator="\t",
+            timestamp_format="%Y-%m-%d %H:%M:%S",
+            drop_unnamed_fields=True,
+        )
+        frame = CSVProvider(self.write(tmp_path), schema).fetch("EURUSD", Timeframe.M1)
+        assert frame.df["close"].to_list() == [1.1005, 1.1010, 1.1015]
+        assert frame.df["volume"].to_list() == [100.0, 120.0, 110.0]
+
+    def test_the_wrong_separator_is_still_refused(self, tmp_path: Path) -> None:
+        """``drop_unnamed_fields`` opts into a known surplus, not into guessing.
+
+        Read with the default comma, every line is one field and no OHLCV
+        column maps. That has to stay an error even with the flag set, or the
+        flag would be a way to turn a mis-parsed file into a frame of nulls.
+        """
+        schema = CSVSchema(timestamp_format="%Y-%m-%d %H:%M:%S", drop_unnamed_fields=True)
+        with pytest.raises(DataError, match="could not map columns"):
+            CSVProvider(self.write(tmp_path), schema).fetch("EURUSD", Timeframe.M1)
 
 
 class TestParquetProvider:
