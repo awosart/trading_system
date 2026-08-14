@@ -209,19 +209,39 @@ class TestRegistryFile:
             "CHFJPY",
             "AUDJPY",
             "NZDJPY",
-            # FX, quoted in CHF / CAD / GBP
+            "CADJPY",
+            # FX, quoted in CHF / CAD / GBP / AUD / NZD
             "USDCHF",
             "USDCAD",
             "EURGBP",
             "EURCHF",
             "EURCAD",
             "GBPCHF",
-            # Metals, indices, crypto
+            "AUDCAD",
+            "AUDCHF",
+            "AUDNZD",
+            "CADCHF",
+            "EURAUD",
+            "EURNZD",
+            "GBPAUD",
+            "GBPCAD",
+            "GBPNZD",
+            "NZDCAD",
+            "NZDCHF",
+            # Metals and energy
             "XAUUSD",
             "XAGUSD",
+            "USOIL",
+            "UKOIL",
+            # Indices: two quoted in USD, two not
             "NAS100",
             "US30",
+            "SPX500",
+            "GER40",
+            "UK100",
+            # Crypto
             "BTCUSD",
+            "ETHUSD",
         }
 
     def test_every_non_usd_quote_has_its_conversion_pair_in_the_registry(self) -> None:

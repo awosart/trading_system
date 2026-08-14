@@ -452,3 +452,355 @@ instruments:
     swap_long: "-45.00"
     swap_short: "-45.00"
     min_stop_distance_points: 50.0
+
+  # --- FX crosses added for cross-instrument replication -----------------
+  # Swaps are NOT independent figures: every one is the file's own rule
+  #   swap_long = notional_usd * (r_base - r_quote - 0.90) / 100 / 365
+  # applied to the same eight policy rates declared at the top. The base
+  # currency's USD value is back-solved from the entries already here
+  # (EUR 1.150, GBP 1.341, AUD 0.648, NZD 0.599, CHF 1.249); CAD 0.730 is
+  # the one level no existing entry pins, so it is an assumption rather
+  # than a derivation and is the number to check first if a swap looks off.
+  # margin_rate follows the same ESMA reading as above: a pair is "major"
+  # only when BOTH its currencies are in {USD, EUR, JPY, GBP, CAD, CHF},
+  # so every AUD or NZD leg drops to 1:20.
+  # Spreads and minimum stop distances are representative retail figures
+  # scaled by how thin the cross is; they are the least evidenced numbers
+  # in this block and the first to reconcile against a broker table.
+  - symbol: AUDCAD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: AUD
+    quote_currency: CAD
+    margin_rate: 0.05
+    typical_spread_points: 2.0
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "0.36"
+    swap_short: "-3.55"
+    min_stop_distance_points: 2.5
+  - symbol: AUDCHF
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: AUD
+    quote_currency: CHF
+    margin_rate: 0.05
+    typical_spread_points: 2.2
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "4.35"
+    swap_short: "-7.55"
+    min_stop_distance_points: 2.5
+  - symbol: AUDNZD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: AUD
+    quote_currency: NZD
+    margin_rate: 0.05
+    typical_spread_points: 2.6
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-0.09"
+    swap_short: "-3.11"
+    min_stop_distance_points: 3.0
+  - symbol: CADCHF
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: CAD
+    quote_currency: CHF
+    margin_rate: 0.0333
+    typical_spread_points: 2.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "2.70"
+    swap_short: "-6.30"
+    min_stop_distance_points: 3.0
+  - symbol: CADJPY
+    asset_class: FX
+    tick_size: 0.001
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: CAD
+    quote_currency: JPY
+    margin_rate: 0.0333
+    typical_spread_points: 2.2
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "1.70"
+    swap_short: "-5.30"
+    min_stop_distance_points: 2.5
+  - symbol: EURAUD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: AUD
+    margin_rate: 0.05
+    typical_spread_points: 2.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-7.88"
+    swap_short: "2.21"
+    min_stop_distance_points: 3.0
+  - symbol: EURNZD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: EUR
+    quote_currency: NZD
+    margin_rate: 0.05
+    typical_spread_points: 3.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-5.20"
+    swap_short: "-0.47"
+    min_stop_distance_points: 4.0
+  - symbol: GBPAUD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: AUD
+    margin_rate: 0.05
+    typical_spread_points: 3.2
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-2.76"
+    swap_short: "-3.86"
+    min_stop_distance_points: 3.5
+  - symbol: GBPCAD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: CAD
+    margin_rate: 0.0333
+    typical_spread_points: 3.4
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "1.29"
+    swap_short: "-7.90"
+    min_stop_distance_points: 3.5
+  - symbol: GBPNZD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: GBP
+    quote_currency: NZD
+    margin_rate: 0.05
+    typical_spread_points: 4.8
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "0.37"
+    swap_short: "-6.98"
+    min_stop_distance_points: 5.0
+  - symbol: NZDCAD
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: NZD
+    quote_currency: CAD
+    margin_rate: 0.05
+    typical_spread_points: 2.8
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "-1.07"
+    swap_short: "-1.89"
+    min_stop_distance_points: 3.0
+  - symbol: NZDCHF
+    asset_class: FX
+    tick_size: 1e-05
+    point_size: 0.0001
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "100000"
+    base_currency: NZD
+    quote_currency: CHF
+    margin_rate: 0.05
+    typical_spread_points: 3.0
+    commission_per_lot: "7.00"
+    commission_basis: ROUND_TURN
+    swap_long: "2.63"
+    swap_short: "-5.58"
+    min_stop_distance_points: 3.0
+
+  # --- Indices, energy and a second crypto ------------------------------
+  # contract_size is the exchange contract's own point multiplier, which is
+  # what the two indices already in this file use: NAS100 20 is E-mini NQ at
+  # $20/point and US30 5 is E-mini YM at $5/point. Continuing that rule
+  # rather than a broker's lot convention keeps one definition in the file.
+  #   SPX500  E-mini ES, $50/point
+  #   GER40   FDAX,      EUR 25/point   <- first index NOT quoted in USD
+  #   UK100   ICE FTSE,  GBP 10/point   <- ditto
+  #   USOIL   NYMEX CL,  1000 barrels, so $10 per 0.01 point
+  # GER40 and UK100 are the reason the converter exists for non-FX: sizing
+  # them on a USD account reads EURUSD and GBPUSD like any JPY pair does.
+  #
+  # Swaps here are NOT from the FX rule above — index and commodity CFDs are
+  # financed on notional, not on a rate differential. Each is
+  #   notional * (policy_rate + 0.90 markup) / 365
+  # calibrated to reproduce the NAS100 pair already in the file, and like
+  # every figure in this file it is representative rather than a broker's
+  # table. ETHUSD copies BTCUSD's symmetric funding shape.
+  #
+  # USOIL is the entry that trips the COMMODITY class: it shares a class
+  # with gold and silver but not their margin or their contract shape. See
+  # CLAUDE.md, "Металлы и энергия сливаются в один COMMODITY" — energy in
+  # the registry is the named trigger for splitting the class or giving the
+  # prop profile a per-symbol mapping. Nothing is split here; the collision
+  # is now real rather than hypothetical.
+  - symbol: SPX500
+    asset_class: INDEX
+    tick_size: 0.1
+    point_size: 1.0
+    lot_step: "0.1"
+    min_lot: "0.1"
+    max_lot: "100"
+    contract_size: "50"
+    base_currency: USD
+    quote_currency: USD
+    margin_rate: 0.05
+    typical_spread_points: 0.5
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-33.60"
+    swap_short: "-8.20"
+    min_stop_distance_points: 3.0
+  - symbol: GER40
+    asset_class: INDEX
+    tick_size: 0.1
+    point_size: 1.0
+    lot_step: "0.1"
+    min_lot: "0.1"
+    max_lot: "100"
+    contract_size: "25"
+    base_currency: EUR
+    quote_currency: EUR
+    margin_rate: 0.05
+    typical_spread_points: 1.2
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-16.40"
+    swap_short: "-1.90"
+    min_stop_distance_points: 5.0
+  - symbol: UK100
+    asset_class: INDEX
+    tick_size: 0.1
+    point_size: 1.0
+    lot_step: "0.1"
+    min_lot: "0.1"
+    max_lot: "100"
+    contract_size: "10"
+    base_currency: GBP
+    quote_currency: GBP
+    margin_rate: 0.05
+    typical_spread_points: 1.0
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-8.90"
+    swap_short: "-2.30"
+    min_stop_distance_points: 4.0
+  - symbol: USOIL
+    asset_class: COMMODITY
+    tick_size: 0.01
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "1000"
+    base_currency: USD
+    quote_currency: USD
+    margin_rate: 0.1
+    typical_spread_points: 3.0
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-6.10"
+    swap_short: "-2.80"
+    min_stop_distance_points: 5.0
+  # UKOIL is Brent, and it is a separate symbol rather than a rename of USOIL
+  # because USOIL is WTI: the two are different grades with their own price,
+  # and filing a Brent tape under a WTI name would make the store say something
+  # untrue. The contract shape is ICE Brent's, which matches NYMEX CL's — 1000
+  # barrels a lot — so every number below is USOIL's, the spread apart.
+  - symbol: UKOIL
+    asset_class: COMMODITY
+    tick_size: 0.01
+    point_size: 0.01
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "50"
+    contract_size: "1000"
+    base_currency: USD
+    quote_currency: USD
+    margin_rate: 0.1
+    typical_spread_points: 4.0
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-6.10"
+    swap_short: "-2.80"
+    min_stop_distance_points: 5.0
+  - symbol: ETHUSD
+    asset_class: CRYPTO
+    tick_size: 0.01
+    point_size: 0.1
+    lot_step: "0.01"
+    min_lot: "0.01"
+    max_lot: "100"
+    contract_size: "1"
+    base_currency: ETH
+    quote_currency: USD
+    margin_rate: 0.5
+    typical_spread_points: 30.0
+    commission_per_lot: "0"
+    commission_basis: ROUND_TURN
+    swap_long: "-2.60"
+    swap_short: "-2.60"
+    min_stop_distance_points: 30.0
