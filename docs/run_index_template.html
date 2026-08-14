@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stored runs — trading_system index</title>
+<style>
+  :root {
+    --ink: #1c2128;
+    --muted: #5b6672;
+    --line: #e3e6ea;
+    --bg: #ffffff;
+    --panel: #f7f8f9;
+    --pos: #1b7f5e;
+    --neg: #b3402f;
+    --warn: #8a6d1f;
+    --warn-bg: #fdf6e3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 24px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 36px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .note {
+    background: var(--warn-bg); border-left: 3px solid var(--warn);
+    padding: 10px 14px; margin: 18px 0; font-size: 13px; color: #4a3d10;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child,
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  thead th {
+    border-bottom: 1px solid var(--ink); color: var(--muted);
+    font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;
+    cursor: pointer; user-select: none;
+  }
+  thead th:hover { color: var(--ink); }
+  tbody tr:hover { background: var(--panel); }
+  .pos { color: var(--pos); }
+  .neg { color: var(--neg); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .dim { color: var(--muted); }
+  a { color: #1a4f8a; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .scroll { overflow-x: auto; }
+  footer { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Stored runs</h1>
+  <div class="sub">
+    {{ index.total }} run(s) under <span class="mono">{{ index.root }}</span> ·
+    generated {{ index.generated.strftime('%Y-%m-%d %H:%M') }} UTC
+  </div>
+</header>
+
+<div class="note">
+  These are <strong>flat runs</strong>: one period, no folds, no parameter selection,
+  nothing out of sample. A good number here is a reason to run
+  <span class="mono">ts validate walkforward</span>, never a result. Sorted by
+  expectancy so the table opens on what is worth reading — not on what is worth trading.
+</div>
+
+<h2>Runs</h2>
+<div class="scroll">
+<table id="runs">
+  <thead>
+    <tr>
+      <th>Strategy</th>
+      <th>Stream</th>
+      <th>Trades</th>
+      <th>Expectancy R</th>
+      <th>Profit factor</th>
+      <th>Win rate</th>
+      <th>Sharpe</th>
+      <th>Max DD</th>
+      <th>P&amp;L</th>
+      <th>Run</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in index.rows %}
+    <tr>
+      <td>{{ row.strategy_id }}</td>
+      <td class="dim">{{ row.stream }}</td>
+      <td>{{ row.trades }}</td>
+      <td class="{{ 'pos' if (row.expectancy_r or 0) > 0 else 'neg' }}">
+        {{ '%+.4f'|format(row.expectancy_r) if row.expectancy_r is not none else '—' }}
+      </td>
+      <td>{{ '%.3f'|format(row.profit_factor) if row.profit_factor is not none else '—' }}</td>
+      <td>{{ '%.3f'|format(row.win_rate) if row.win_rate is not none else '—' }}</td>
+      <td class="{{ 'pos' if (row.sharpe or 0) > 0 else 'neg' }}">
+        {{ '%+.3f'|format(row.sharpe) if row.sharpe is not none else '—' }}
+      </td>
+      <td class="neg">
+        {{ '%.1f%%'|format(row.max_drawdown_pct * 100) if row.max_drawdown_pct is not none else '—' }}
+      </td>
+      <td class="{{ 'pos' if (row.pnl_pct or 0) > 0 else 'neg' }}">
+        {{ '%+.1f%%'|format(row.pnl_pct * 100) if row.pnl_pct is not none else '—' }}
+      </td>
+      <td class="mono">
+        {% if row.detail_href %}
+          <a href="{{ row.detail_href }}">{{ row.run_id[:12] }}</a>
+        {% else %}
+          <span class="dim" title="no detail page rendered next to this index">{{ row.run_id[:12] }}</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if index.broken %}
+<h2>Could not be read ({{ index.broken|length }})</h2>
+<div class="note">
+  Listed rather than skipped: absent from the index would mean both “never ran”
+  and “cannot be read”, which are opposite problems. A schema mismatch is fixed
+  by running it again; a digest mismatch means the stored tables disagree with
+  each other and neither can be trusted.
+</div>
+<div class="scroll">
+<table>
+  <thead><tr><th>Run</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for row in index.broken %}
+    <tr>
+      <td class="mono">{{ row.run_id[:12] }}</td>
+      <td style="text-align:left; white-space:normal">{{ row.error }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
+<footer>
+  Click a column heading to sort. Run ids link to the per-run page when one has
+  been rendered next to this file — use <span class="mono">--with-details</span>
+  to render them.
+</footer>
+
+</div>
+<script>
+// Sort on header click. Numeric when every cell in the column parses as a
+// number after stripping %, + and thousands separators; textual otherwise.
+document.querySelectorAll('#runs thead th').forEach(function (header, column) {
+  var ascending = false;
+  header.addEventListener('click', function () {
+    var body = document.querySelector('#runs tbody');
+    var rows = Array.prototype.slice.call(body.rows);
+    var value = function (row) {
+      var text = row.cells[column].innerText.trim().replace(/[%+,]/g, '');
+      var number = parseFloat(text);
+      return isNaN(number) ? text.toLowerCase() : number;
+    };
+    rows.sort(function (a, b) {
+      var x = value(a), y = value(b);
+      if (x === y) return 0;
+      return (x < y ? -1 : 1) * (ascending ? 1 : -1);
+    });
+    ascending = !ascending;
+    rows.forEach(function (row) { body.appendChild(row); });
+  });
+});
+</script>
+</body>
+</html>
