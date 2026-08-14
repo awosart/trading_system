@@ -68,17 +68,21 @@ import statistics
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from trading_system.analytics.metrics import daily_curve, simple_returns
 from trading_system.backtest.clock import StreamKey
+from trading_system.backtest.orchestrator import StrategyBinding
 from trading_system.backtest.spec import RunInputs
 from trading_system.core.logging import get_logger
 from trading_system.data.models import OHLCVFrame
+from trading_system.exit.library import ExitPresetSpec, build_plan
+from trading_system.risk.sizing.config import SizingConfig, build_sizing_method
 from trading_system.strategies.schema import StrategySpec
 from trading_system.validation.objective import (
     Objective,
@@ -98,7 +102,60 @@ SELECTION_FILE = "selection.json"
 #: Value type an axis can carry. ``int`` stays ``int`` through pydantic's smart
 #: union, which matters: an indicator ``period`` written back as ``50.0`` would
 #: be a different JSON document and, for a stricter field, a validation error.
-AxisValue = int | float
+#: ``str`` is what makes an axis *categorical* — see :class:`ParameterAxis`.
+AxisValue = int | float | str
+
+
+class AxisTarget(StrEnum):
+    """Which document an axis's pointers resolve in.
+
+    Three documents, because the three things worth varying live in three
+    places and no amount of pointer syntax merges them — and each is reachable
+    either wholesale, by naming it, or field by field, by pointing into it. The
+    strategy is a
+    :class:`~trading_system.strategies.schema.StrategySpec`, the exit is an
+    :class:`~trading_system.exit.library.ExitPresetSpec` reached through
+    :class:`~trading_system.backtest.orchestrator.StrategyBinding`, and the
+    sizing is a :class:`~trading_system.risk.sizing.config.SizingConfig` that
+    :class:`~trading_system.backtest.spec.RunInputs` has already turned into a
+    built method by the time a run exists.
+
+    Members:
+        SPEC: Pointer into the serialised strategy spec. The default, and what
+            every axis written before categorical axes existed means.
+        EXIT_PRESET: The *choice* of exit, by preset id. Carries no pointer:
+            it replaces the bound preset wholesale and writes the matching
+            ``exit_ref`` back into the spec, so the recorded strategy can never
+            name one exit while the run executed another.
+        EXIT_PARAM: Pointer into the serialised exit preset — a fixed target's
+            reward multiple, a ladder's fractions, a trail's ``k``.
+        SIZING_METHOD: The *choice* of sizing method, by name. Carries no
+            pointer, for the same reason :attr:`EXIT_PRESET` does not: the four
+            methods take different parameters, so a name is the only thing they
+            have in common to vary.
+        RUN: Pointer into the run-knobs document, ``{"sizing": ...}``. The one
+            place a trial can vary something that is not part of the strategy
+            at all — ``risk_pct`` within a fixed method, for instance.
+    """
+
+    SPEC = "spec"
+    EXIT_PRESET = "exit_preset"
+    EXIT_PARAM = "exit_param"
+    SIZING_METHOD = "sizing_method"
+    RUN = "run"
+
+
+#: Targets that replace a whole named document, paired with the target that
+#: points *inside* the document they replace. The two cannot be searched
+#: together: a pointer only resolves in the document that declares the field,
+#: so their product contains points describing no configuration at all.
+_INCOMPATIBLE_TARGETS: tuple[tuple[AxisTarget, AxisTarget], ...] = (
+    (AxisTarget.EXIT_PRESET, AxisTarget.EXIT_PARAM),
+    (AxisTarget.SIZING_METHOD, AxisTarget.RUN),
+)
+
+#: Targets naming a document by id rather than pointing into one.
+_CHOICE_TARGETS = frozenset({AxisTarget.EXIT_PRESET, AxisTarget.SIZING_METHOD})
 
 
 # ---------------------------------------------------------------------------
@@ -167,13 +224,28 @@ def _write_pointer(document: Any, pointer: str, value: AxisValue) -> None:
 class ParameterAxis(BaseModel):
     """One tunable parameter: where it lives in a strategy spec, and its values.
 
+    **An axis is categorical when its values are names rather than numbers, and
+    that distinction is load-bearing well beyond typing.** A numeric axis has an
+    order and a step, so "one index away" means something and the plateau
+    machinery in :mod:`trading_system.validation.objective` can measure a
+    neighbourhood along it. A categorical axis has neither: the only order its
+    values have is the order somebody typed them into a JSON file, so treating
+    index adjacency as adjacency would make a measured plateau width a function
+    of that typing. Categoricality is therefore derived from the values (all
+    strings, or all numbers — never a mix, which would leave the axis ordered
+    for some pairs and not others) rather than declared in a separate field that
+    could disagree with them.
+
     Attributes:
         name: How the axis is referred to in constraints and reports.
-        paths: Every JSON Pointer into a serialised
-            :class:`~trading_system.strategies.schema.StrategySpec` this
-            parameter occupies. More than one is normal, not exceptional — see
-            the module docstring on the slow EMA appearing twice in
-            ``ema_pullback``.
+        target: Which document :attr:`paths` resolve in. Defaults to
+            :attr:`AxisTarget.SPEC`, so every axis written before this field
+            existed keeps its meaning.
+        paths: Every JSON Pointer into the target document this parameter
+            occupies. More than one is normal, not exceptional — see the module
+            docstring on the slow EMA appearing twice in ``ema_pullback``. Empty
+            for :attr:`AxisTarget.EXIT_PRESET`, which replaces a whole document
+            rather than a field inside one.
         values: The ordered, discrete domain. Given directly, or expanded from
             ``low``/``high``/``step`` before validation.
         low: Inclusive lower bound, when expanding a range.
@@ -184,7 +256,8 @@ class ParameterAxis(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     name: str = Field(min_length=1)
-    paths: tuple[str, ...] = Field(min_length=1)
+    target: AxisTarget = AxisTarget.SPEC
+    paths: tuple[str, ...] = ()
     values: tuple[AxisValue, ...] = Field(min_length=1)
     low: AxisValue | None = None
     high: AxisValue | None = None
@@ -218,6 +291,11 @@ class ParameterAxis(BaseModel):
         low, high, step = bounds
         if low is None or high is None or step is None:
             raise ValueError("ParameterAxis range needs all of 'low', 'high' and 'step'")
+        if any(isinstance(bound, str) for bound in (low, high, step)):
+            raise ValueError(
+                "ParameterAxis range bounds must be numeric; a categorical axis has no step "
+                "to walk and must list its values explicitly"
+            )
         if step <= 0:
             raise ValueError(f"ParameterAxis.step must be positive, got {step}")
         if high < low:
@@ -232,16 +310,59 @@ class ParameterAxis(BaseModel):
 
     @model_validator(mode="after")
     def _check_values(self) -> "ParameterAxis":
-        """Reject a domain with repeats.
+        """Reject a domain with repeats, or one mixing names with numbers.
 
         Raises:
             ValueError: If ``values`` contains a duplicate — two grid indices
                 naming the same parameter value would make a plateau's measured
-                width depend on how many times a value was written down.
+                width depend on how many times a value was written down — or if
+                it mixes strings with numbers, which would leave the axis
+                ordered for some pairs of values and unordered for others.
         """
         if len(set(self.values)) != len(self.values):
             raise ValueError(f"ParameterAxis {self.name!r} has duplicate values: {self.values}")
+        named = sum(1 for value in self.values if isinstance(value, str))
+        if named not in (0, len(self.values)):
+            raise ValueError(
+                f"ParameterAxis {self.name!r} mixes names with numbers: {self.values}. An axis is "
+                "either categorical (all names, no order) or numeric (all numbers, ordered); "
+                "half of each has no neighbourhood."
+            )
         return self
+
+    @model_validator(mode="after")
+    def _check_paths_match_target(self) -> "ParameterAxis":
+        """Require pointers where they mean something and forbid them where they do not.
+
+        Raises:
+            ValueError: If a pointer-bearing target carries no pointer, or if
+                :attr:`AxisTarget.EXIT_PRESET` carries one. The latter would be
+                a pointer nothing reads, which is the same defect class as a
+                condition that silently never fires.
+        """
+        if self.target in _CHOICE_TARGETS:
+            if self.paths:
+                raise ValueError(
+                    f"ParameterAxis {self.name!r} targets {self.target.value} and must not carry "
+                    f"paths: it replaces the whole document, so a pointer would go unread. "
+                    f"Got {self.paths}"
+                )
+            if any(not isinstance(value, str) for value in self.values):
+                raise ValueError(
+                    f"ParameterAxis {self.name!r} targets {self.target.value}, so its values must "
+                    f"be ids naming entries of a library; got {self.values}"
+                )
+        elif not self.paths:
+            raise ValueError(
+                f"ParameterAxis {self.name!r} targets {self.target.value} and needs at least one "
+                "JSON Pointer saying where in that document the value goes"
+            )
+        return self
+
+    @property
+    def categorical(self) -> bool:
+        """Whether this axis names its values instead of ordering them."""
+        return self.target in _CHOICE_TARGETS or isinstance(self.values[0], str)
 
 
 class AxisOrdering(BaseModel):
@@ -251,6 +372,10 @@ class AxisOrdering(BaseModel):
     file, and a config file that carries Python to be evaluated is a config file
     that can do anything. The one relation this stage actually needs is
     ``fast period < slow period``.
+
+    Numeric axes only. On a categorical axis ``<`` would be a lexicographic
+    comparison of names, which is an answer to a question nobody asked;
+    :class:`SearchSpace` refuses such a constraint rather than evaluating it.
 
     Attributes:
         less: Name of the axis whose value must be smaller.
@@ -286,6 +411,45 @@ class ParamSet:
         return ", ".join(f"{name}={value}" for name, value in self.values)
 
 
+#: Validates and dumps a :data:`~trading_system.risk.sizing.config.SizingConfig`,
+#: which is an annotated union rather than a class and so has no ``.model_validate``.
+_SIZING_ADAPTER: TypeAdapter[SizingConfig] = TypeAdapter(SizingConfig)
+
+
+@dataclass(frozen=True)
+class VariationTargets:
+    """The three documents a trial varies, plus the libraries choices resolve against.
+
+    One object rather than three arguments because
+    :meth:`SearchSpace.apply_to` returns all of them and every caller needs
+    them together; splitting them would invite writing the varied spec while
+    keeping the template's exit, which is exactly the inconsistency
+    :attr:`AxisTarget.EXIT_PRESET` exists to prevent.
+
+    Attributes:
+        spec: The strategy.
+        exit_preset: The exit it is bound to.
+        sizing: The description the run's sizing method was built from, or
+            ``None`` when nothing varies it. Required as a *description*
+            because :class:`~trading_system.backtest.spec.RunInputs` holds the
+            built method, from which the description cannot be recovered.
+        exit_library: Presets by id, for an :attr:`AxisTarget.EXIT_PRESET`
+            axis to resolve against.
+        sizing_library: Sizing configs by name, for an
+            :attr:`AxisTarget.SIZING_METHOD` axis to resolve against.
+    """
+
+    spec: StrategySpec
+    exit_preset: ExitPresetSpec
+    sizing: SizingConfig | None = None
+    exit_library: Mapping[str, ExitPresetSpec] | None = None
+    sizing_library: Mapping[str, SizingConfig] | None = None
+
+    def binding(self, keys: tuple[StreamKey, ...]) -> StrategyBinding:
+        """The binding these targets describe, for the streams given."""
+        return StrategyBinding(spec=self.spec, exit_preset=self.exit_preset, keys=keys)
+
+
 class SearchSpace(BaseModel):
     """The parameters a search may vary, discrete on every axis.
 
@@ -294,32 +458,95 @@ class SearchSpace(BaseModel):
         constraints: Orderings that must hold between axes. A point violating
             one is not part of the space at all — it is never suggested,
             rather than suggested and then scored as a failure.
+        disabled_axes: Axes carried by the file but not searched. This is how
+            the generator proposes a categorical axis without switching it on:
+            an exit axis of eight values multiplies every numeric trial by
+            eight, so it is offered where the author will see it and turned on
+            by *moving the entry into* :attr:`axes` — a visible edit in a diff,
+            not a flag whose default someone has to remember. Nothing else
+            reads them: they are excluded from :attr:`grid_size`, from
+            coordinates, and from every applied value.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     axes: tuple[ParameterAxis, ...] = Field(min_length=1)
     constraints: tuple[AxisOrdering, ...] = ()
+    disabled_axes: tuple[ParameterAxis, ...] = ()
 
     @model_validator(mode="after")
     def _check_names(self) -> "SearchSpace":
-        """Reject duplicate axis names and constraints naming unknown axes.
+        """Reject duplicate axis names and constraints naming unknown or unordered axes.
 
         Raises:
-            ValueError: On either. A constraint naming a misspelled axis would
-                otherwise be a constraint that silently never binds.
+            ValueError: On a duplicate name (including one shared with a
+                disabled axis, which would make "enable it" ambiguous), on a
+                constraint naming a misspelled axis — which would otherwise be
+                a constraint that silently never binds — or on a constraint
+                naming a categorical axis, whose values have no order to
+                constrain.
         """
         names = [axis.name for axis in self.axes]
         if len(set(names)) != len(names):
             raise ValueError(f"SearchSpace has duplicate axis names: {names}")
-        known = set(names)
+        clash = sorted({axis.name for axis in self.disabled_axes} & set(names))
+        if clash:
+            raise ValueError(
+                f"SearchSpace has axes that are both enabled and disabled: {clash}. "
+                "Enabling an axis means moving it, not copying it."
+            )
+        by_name = {axis.name: axis for axis in self.axes}
         for constraint in self.constraints:
             for role, name in (("less", constraint.less), ("greater", constraint.greater)):
-                if name not in known:
+                axis = by_name.get(name)
+                if axis is None:
                     raise ValueError(
-                        f"constraint {role}={name!r} names no axis; known axes are {sorted(known)}"
+                        f"constraint {role}={name!r} names no axis; "
+                        f"known axes are {sorted(by_name)}"
+                    )
+                if axis.categorical:
+                    raise ValueError(
+                        f"constraint {role}={name!r} names a categorical axis; its values are "
+                        "names, and ordering names would compare them lexicographically — an "
+                        "answer to a question nobody asked"
                     )
         return self
+
+    @model_validator(mode="after")
+    def _check_choice_and_parameter_targets(self) -> "SearchSpace":
+        """Reject varying which document is used and that document's own fields at once.
+
+        Raises:
+            ValueError: If a choice axis and the pointer axis that reaches
+                inside what it chooses are both enabled. "Reward multiple 2.5"
+                is undefined when the chosen preset has no fixed target at all,
+                and ``risk_pct`` is undefined when the chosen sizing method is
+                ``FIXED_AMOUNT``, so the product of the two axes contains
+                points that are not configurations of anything. Pruning them
+                would make the trial count stop being the product of the axis
+                lengths and the plateau stop being a rectangle; refusing the
+                combination keeps both honest, and the same ground is covered
+                by one search per chosen document.
+        """
+        targets = {axis.target for axis in self.axes}
+        for choice, parameter in _INCOMPATIBLE_TARGETS:
+            if choice in targets and parameter in targets:
+                raise ValueError(
+                    f"a SearchSpace may vary {choice.value} or {parameter.value}, not both: a "
+                    "pointer only resolves inside the document that declares the field, so the "
+                    "product of the two axes contains points that describe no configuration. "
+                    "Run one search per choice instead."
+                )
+        return self
+
+    @property
+    def categorical_mask(self) -> tuple[bool, ...]:
+        """Per axis, in coordinate order, whether it is categorical.
+
+        What :func:`~trading_system.validation.objective.analyse_plateau` needs
+        in order not to treat "the next preset in the list" as a neighbour.
+        """
+        return tuple(axis.categorical for axis in self.axes)
 
     @property
     def grid_size(self) -> int:
@@ -352,7 +579,16 @@ class SearchSpace(BaseModel):
     def satisfies(self, params: ParamSet) -> bool:
         """Whether a point respects every :attr:`constraints` ordering."""
         values = params.as_dict()
-        return all(values[c.less] < values[c.greater] for c in self.constraints)
+        for constraint in self.constraints:
+            less, greater = values[constraint.less], values[constraint.greater]
+            # Unreachable: _check_names rejects a constraint on a categorical
+            # axis at construction. Kept as a narrowing guard rather than a
+            # cast so the impossible case cannot become a silent comparison.
+            if isinstance(less, str) or isinstance(greater, str):
+                raise TypeError(f"constraint {constraint} compares a categorical axis")
+            if not less < greater:
+                return False
+        return True
 
     def enumerate(self) -> Iterator[ParamSet]:
         """Every feasible point, in a fixed order: last axis varying fastest.
@@ -380,7 +616,7 @@ class SearchSpace(BaseModel):
         return sum(1 for _ in self.enumerate())
 
     def apply(self, spec: StrategySpec, params: ParamSet) -> StrategySpec:
-        """A copy of ``spec`` with every axis's pointers written to this point's values.
+        """A copy of ``spec`` with every spec-target axis written to this point's values.
 
         Round-tripped through the pydantic model rather than mutated in place,
         so a parameter combination that produces an invalid strategy fails here,
@@ -394,15 +630,130 @@ class SearchSpace(BaseModel):
             The varied strategy.
 
         Raises:
-            ValueError: If any pointer does not resolve, or the result is not a
-                valid :class:`~trading_system.strategies.schema.StrategySpec`.
+            ValueError: If any pointer does not resolve, if the result is not a
+                valid :class:`~trading_system.strategies.schema.StrategySpec`,
+                or if this space carries an axis that does not target the spec.
+                Refused rather than ignored: a space varying an exit through
+                this method would return a strategy the caller would reasonably
+                read as fully varied, and the exit axis would have done nothing.
         """
+        foreign = sorted({a.name for a in self.axes if a.target is not AxisTarget.SPEC})
+        if foreign:
+            raise ValueError(
+                f"apply() varies a strategy spec, but axes {foreign} target another document; "
+                "use apply_to(), which varies all three"
+            )
+        return self._apply_spec(spec, params)
+
+    def _apply_spec(self, spec: StrategySpec, params: ParamSet) -> StrategySpec:
+        """Write the spec-target axes into ``spec``."""
         document = spec.model_dump(mode="json")
         values = params.as_dict()
         for axis in self.axes:
+            if axis.target is not AxisTarget.SPEC:
+                continue
             for pointer in axis.paths:
                 _write_pointer(document, pointer, values[axis.name])
         return StrategySpec.model_validate(document)
+
+    def apply_to(self, targets: "VariationTargets", params: ParamSet) -> "VariationTargets":
+        """Everything one point varies, resolved together.
+
+        Each document is round-tripped through its own validator, and the exit
+        additionally through
+        :func:`~trading_system.exit.library.build_plan` — the same two-layer
+        split P07 stage 3 already uses, so a preset whose fields are each legal
+        but whose ladder sums past 100% fails here rather than at the first
+        position the backtest opens.
+
+        Args:
+            targets: What to vary, and the exit library to resolve preset ids
+                against.
+            params: The point to write.
+
+        Returns:
+            The varied targets. ``sizing`` is ``None`` in and ``None`` out when
+            no run-target axis exists.
+
+        Raises:
+            ValueError: If a pointer does not resolve, a document fails its own
+                validation, a named preset is not in the library, or a
+                run-target axis was declared without the sizing config it
+                varies.
+        """
+        values = params.as_dict()
+        spec = self._apply_spec(spec=targets.spec, params=params)
+        preset = targets.exit_preset
+        sizing = targets.sizing
+
+        for axis in self.axes:
+            if axis.target is AxisTarget.EXIT_PRESET:
+                preset_id = values[axis.name]
+                if targets.exit_library is None:
+                    raise ValueError(
+                        f"axis {axis.name!r} chooses an exit preset by id, but no exit library "
+                        "was supplied to resolve it against"
+                    )
+                chosen = targets.exit_library.get(str(preset_id))
+                if chosen is None:
+                    raise ValueError(
+                        f"axis {axis.name!r} names exit preset {preset_id!r}, which the library "
+                        f"does not hold; it has {sorted(targets.exit_library)}"
+                    )
+                preset = chosen
+                # The spec's own exit_ref follows the binding, always. A run
+                # whose recorded strategy names one exit while the engine
+                # executed another is a run nobody can reproduce from what was
+                # written down.
+                spec = StrategySpec.model_validate(
+                    {**spec.model_dump(mode="json"), "exit_ref": chosen.id}
+                )
+
+        param_axes = [axis for axis in self.axes if axis.target is AxisTarget.EXIT_PARAM]
+        if param_axes:
+            document = preset.model_dump(mode="json")
+            for axis in param_axes:
+                for pointer in axis.paths:
+                    _write_pointer(document, pointer, values[axis.name])
+            preset = ExitPresetSpec.model_validate(document)
+            build_plan(preset)
+
+        for axis in self.axes:
+            if axis.target is AxisTarget.SIZING_METHOD:
+                name = str(values[axis.name])
+                if targets.sizing_library is None:
+                    raise ValueError(
+                        f"axis {axis.name!r} chooses a sizing method by name, but no sizing "
+                        "library was supplied to resolve it against"
+                    )
+                picked = targets.sizing_library.get(name)
+                if picked is None:
+                    raise ValueError(
+                        f"axis {axis.name!r} names sizing method {name!r}, which the library does "
+                        f"not hold; it has {sorted(targets.sizing_library)}"
+                    )
+                sizing = picked
+
+        run_axes = [axis for axis in self.axes if axis.target is AxisTarget.RUN]
+        if run_axes:
+            if sizing is None:
+                raise ValueError(
+                    f"axes {sorted(a.name for a in run_axes)} target the run's own knobs, but no "
+                    "sizing config was supplied. RunInputs carries the built sizing method, not "
+                    "the description it came from, so the description has to be passed in."
+                )
+            document = {"sizing": _SIZING_ADAPTER.dump_python(sizing, mode="json")}
+            for axis in run_axes:
+                for pointer in axis.paths:
+                    _write_pointer(document, pointer, values[axis.name])
+            sizing = _SIZING_ADAPTER.validate_python(document["sizing"])
+
+        if sizing is not None and sizing is not targets.sizing:
+            # The semantic half, same split as build_plan above: field bounds
+            # cannot see that a maximum risk landed below its minimum.
+            build_sizing_method(sizing)
+
+        return replace(targets, spec=spec, exit_preset=preset, sizing=sizing)
 
 
 # ---------------------------------------------------------------------------
@@ -624,6 +975,11 @@ class TrialRunner:
         objective: How a walked run is scored.
         pieces: Cross-validation test pieces, or ``None`` to score over the
             whole in-sample window at once.
+        libraries: Where an :attr:`AxisTarget.EXIT_PRESET` or
+            :attr:`AxisTarget.SIZING_METHOD` axis resolves its names, and the
+            sizing description a run-target axis edits. ``None`` when the space
+            varies only the strategy spec, which is every space written before
+            categorical axes existed.
     """
 
     view: ISWindowView
@@ -631,13 +987,18 @@ class TrialRunner:
     space: SearchSpace
     objective: Objective
     pieces: tuple[tuple[datetime, datetime], ...] | None = None
+    libraries: VariationTargets | None = None
 
     def __post_init__(self) -> None:
-        """Validate the template against the view.
+        """Validate the template against the view and against what the space needs.
 
         Raises:
             ValueError: If the template's streams are not exactly the view's,
-                or it binds other than exactly one strategy.
+                if it binds other than exactly one strategy, or if the space
+                varies a document this runner was given no way to resolve.
+                The last is checked here rather than at the first trial so
+                that a misconfigured search fails before it spends a fold's
+                budget producing scores nobody can interpret.
         """
         if dict(self.template.streams) != dict(self.view.streams):
             raise ValueError(
@@ -651,6 +1012,19 @@ class TrialRunner:
                 "multi-strategy portfolio has no answer yet, and inventing one here would be "
                 "a rule for a case that does not exist."
             )
+        needs = {axis.target for axis in self.space.axes} - {AxisTarget.SPEC}
+        if needs and self.libraries is None:
+            raise ValueError(
+                f"space carries axes targeting {sorted(t.value for t in needs)}, but the runner "
+                "was given no libraries to resolve them against"
+            )
+
+    def _targets(self) -> VariationTargets:
+        """The template's own documents, carrying whatever libraries were supplied."""
+        binding = self.template.bindings[0]
+        if self.libraries is None:
+            return VariationTargets(spec=binding.spec, exit_preset=binding.exit_preset)
+        return replace(self.libraries, spec=binding.spec, exit_preset=binding.exit_preset)
 
     @property
     def runs_per_trial(self) -> int:
@@ -669,7 +1043,11 @@ class TrialRunner:
             and a mean would let that single piece decide the trial.
         """
         binding = self.template.bindings[0]
-        varied = replace(binding, spec=self.space.apply(binding.spec, params))
+        applied = self.space.apply_to(self._targets(), params)
+        varied = applied.binding(binding.keys)
+        sizing = (
+            self.template.sizing if applied.sizing is None else build_sizing_method(applied.sizing)
+        )
         scores: list[float | None] = []
         returns: list[float] = []
         trades = 0
@@ -678,7 +1056,7 @@ class TrialRunner:
             config = self.template.config.model_copy(
                 update={"evaluation_start": start, "evaluation_end": end}
             )
-            inputs = replace(self.template, config=config, bindings=(varied,))
+            inputs = replace(self.template, config=config, bindings=(varied,), sizing=sizing)
             result = inputs.run()
             trades += len(result.trades)
             try:
@@ -987,6 +1365,18 @@ class FoldOptimization:
         mean_abs_correlation: How alike the trials' daily returns were — the
             scalar a correlation-aware Deflated Sharpe would start from.
         correlation_trials: How many trials that mean covered.
+        selected_ranking_score: What selection actually ranked the chosen point
+            by. Equal to :attr:`selected_score` when nothing adjusted it, and
+            the excess over the point's own categorical null when something
+            did. Reported separately rather than in place of the raw score:
+            the raw score is what the run produced, the ranking score is what
+            it was judged on, and collapsing them would leave a reader unable
+            to tell a corrected comparison from an uncorrected one.
+        best_ranking_score: The same for the plain ``argmax`` point.
+        null_baselines: The fold's baseline calibration as plain data, or
+            ``None`` when nothing was calibrated. Carried as a mapping rather
+            than as the calibration object so that this module keeps no import
+            of the one that produces it.
         trials_path: Where the per-trial table was written.
         returns_path: Where the per-trial daily returns were written.
     """
@@ -1009,6 +1399,9 @@ class FoldOptimization:
     correlation_trials: int
     trials_path: Path
     returns_path: Path
+    selected_ranking_score: float | None = None
+    best_ranking_score: float | None = None
+    null_baselines: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to JSON-able data — scalars only, never the trial table."""
@@ -1047,6 +1440,9 @@ class FoldOptimization:
             "plateau": plateau,
             "mean_abs_correlation": self.mean_abs_correlation,
             "correlation_trials": self.correlation_trials,
+            "selected_ranking_score": self.selected_ranking_score,
+            "best_ranking_score": self.best_ranking_score,
+            "null_baselines": None if self.null_baselines is None else dict(self.null_baselines),
             "trials_path": str(self.trials_path),
             "returns_path": str(self.returns_path),
         }
@@ -1102,6 +1498,9 @@ def summarise(
     directory: Path,
     tolerance_sigmas: float,
     penalty_weight: float,
+    categorical: Sequence[bool] = (),
+    ranking_scores: Sequence[float | None] | None = None,
+    null_baselines: Mapping[str, Any] | None = None,
 ) -> FoldOptimization:
     """Turn a finished search into a selection plus its diagnostics.
 
@@ -1117,18 +1516,38 @@ def summarise(
         directory: Where the tables will be written.
         tolerance_sigmas: Plateau margin, in standard deviations.
         penalty_weight: Instability penalty weight.
+        categorical: Per axis, whether it is categorical —
+            :attr:`SearchSpace.categorical_mask`. Passed through to the plateau
+            analysis, which must not treat "the next value in the list" as a
+            neighbour.
+        ranking_scores: What to rank by, aligned with ``records``, or ``None``
+            to rank by each trial's own score. Supplied when a null-baseline
+            correction has been measured: the raw score stays on the record and
+            in the stored table, and only the ranking changes. A ``None`` entry
+            drops that trial from selection.
+        null_baselines: The calibration behind ``ranking_scores``, as plain
+            data, recorded on the outcome.
 
     Returns:
         The fold's outcome.
 
     Raises:
-        ValueError: If no trial produced a score — a fold where every parameter
-            set was unscoreable has no basis for a selection, and returning the
-            unchanged base parameters would report an optimisation that did not
-            happen.
+        ValueError: If no trial produced a rankable score — a fold where every
+            parameter set was unscoreable has no basis for a selection, and
+            returning the unchanged base parameters would report an
+            optimisation that did not happen — or if ``ranking_scores`` does
+            not align with ``records``.
     """
+    if ranking_scores is None:
+        ranks: Sequence[float | None] = [record.outcome.score for record in records]
+    else:
+        if len(ranking_scores) != len(records):
+            raise ValueError(
+                f"ranking_scores covers {len(ranking_scores)} trials but there are {len(records)}"
+            )
+        ranks = ranking_scores
     scored = [
-        (record, record.outcome.score) for record in records if record.outcome.score is not None
+        (record, value) for record, value in zip(records, ranks, strict=True) if value is not None
     ]
     if not scored:
         raise ValueError(
@@ -1139,7 +1558,10 @@ def summarise(
         ScoredPoint(coords=record.params.coords, score=float(score)) for record, score in scored
     ]
     plateau = analyse_plateau(
-        points, tolerance_sigmas=tolerance_sigmas, penalty_weight=penalty_weight
+        points,
+        tolerance_sigmas=tolerance_sigmas,
+        penalty_weight=penalty_weight,
+        categorical=categorical,
     )
     best_record = scored[plateau.best_index][0]
     selected_record = scored[plateau.selected_index][0]
@@ -1163,11 +1585,16 @@ def summarise(
         correlation_trials=covered,
         trials_path=directory / TRIALS_FILE,
         returns_path=directory / RETURNS_FILE,
+        selected_ranking_score=scored[plateau.selected_index][1],
+        best_ranking_score=scored[plateau.best_index][1],
+        null_baselines=null_baselines,
     )
 
 
 __all__ = [
     "AxisOrdering",
+    "AxisTarget",
+    "AxisValue",
     "Evaluate",
     "FoldOptimization",
     "GridSearch",
@@ -1182,6 +1609,7 @@ __all__ = [
     "TrialOutcome",
     "TrialRecord",
     "TrialRunner",
+    "VariationTargets",
     "read_fold_selection",
     "summarise",
     "write_fold_optimization",

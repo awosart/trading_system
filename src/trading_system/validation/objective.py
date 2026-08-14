@@ -181,26 +181,66 @@ class ScoredPoint:
     score: float
 
 
-def neighbours(points: Sequence[ScoredPoint], index: int) -> tuple[int, ...]:
+def _categorical_mask(width: int, categorical: Sequence[bool]) -> tuple[bool, ...]:
+    """Normalise a categorical mask, defaulting to "every axis is numeric".
+
+    Raises:
+        ValueError: If a mask was given whose length is not ``width``. A short
+            mask would silently make the axes it does not cover numeric, which
+            is the permissive direction and therefore the wrong one to guess in.
+    """
+    if not categorical:
+        return (False,) * width
+    if len(categorical) != width:
+        raise ValueError(
+            f"categorical mask covers {len(categorical)} axes but the points have {width}"
+        )
+    return tuple(categorical)
+
+
+def neighbours(
+    points: Sequence[ScoredPoint], index: int, categorical: Sequence[bool] = ()
+) -> tuple[int, ...]:
     """Indices of the points adjacent to ``points[index]``, itself excluded.
 
-    Adjacency is Chebyshev distance ``<= 1`` in grid-index space — see the
-    module docstring on why index space and not parameter units.
+    Adjacency is Chebyshev distance ``<= 1`` in grid-index space along the
+    *numeric* axes — see the module docstring on why index space and not
+    parameter units — and **equality** along the categorical ones.
+
+    The asymmetry is not a refinement, it is the only defensible reading. A
+    categorical axis's grid index is the position its value happened to occupy
+    in a list somebody typed: "the preset after ``conservative_2r``" is a fact
+    about a JSON file, not about exits. Treating that as adjacency would make a
+    measured plateau width — the number this stage exists to produce — a
+    function of the order the values were written down, and reordering the list
+    without changing a single run would change the selected parameters.
+
+    Requiring equality instead has a consequence worth stating, because
+    everything downstream leans on it: a connected region can never span two
+    values of a categorical axis. Plateaus are therefore measured *within* one
+    categorical cell, and which cell wins is decided by the penalised maximum
+    ranging over all of them.
 
     Args:
         points: The evaluated points. Every one must have the same number of
             coordinates.
         index: Which point's neighbours to find.
+        categorical: Per axis, whether it is categorical —
+            :attr:`~trading_system.validation.optimization.SearchSpace.categorical_mask`.
+            Empty means every axis is numeric, which is what every caller
+            written before categorical axes existed meant.
 
     Returns:
         Indices into ``points``, ascending.
 
     Raises:
         IndexError: If ``index`` is out of range.
-        ValueError: If the points do not all share a coordinate count.
+        ValueError: If the points do not all share a coordinate count, or the
+            mask does not cover it.
     """
     centre = points[index]
     width = len(centre.coords)
+    mask = _categorical_mask(width, categorical)
     result: list[int] = []
     for other_index, other in enumerate(points):
         if len(other.coords) != width:
@@ -210,12 +250,17 @@ def neighbours(points: Sequence[ScoredPoint], index: int) -> tuple[int, ...]:
             )
         if other_index == index:
             continue
-        if all(abs(a - b) <= 1 for a, b in zip(centre.coords, other.coords, strict=True)):
+        if all(
+            (a == b) if is_named else (abs(a - b) <= 1)
+            for a, b, is_named in zip(centre.coords, other.coords, mask, strict=True)
+        ):
             result.append(other_index)
     return tuple(result)
 
 
-def roughness(points: Sequence[ScoredPoint], index: int) -> float | None:
+def roughness(
+    points: Sequence[ScoredPoint], index: int, categorical: Sequence[bool] = ()
+) -> float | None:
     """How steeply the score falls off around ``points[index]``.
 
     The mean *drop* to an adjacent point, counting only neighbours that score
@@ -235,6 +280,8 @@ def roughness(points: Sequence[ScoredPoint], index: int) -> float | None:
     Args:
         points: The evaluated points.
         index: Which point to measure around.
+        categorical: Per axis, whether it is categorical. See
+            :func:`neighbours`.
 
     Returns:
         The mean drop, or ``None`` if the point has no neighbours at all — a
@@ -242,7 +289,7 @@ def roughness(points: Sequence[ScoredPoint], index: int) -> float | None:
         the absence it is rather than as a zero penalty that would make an
         unmeasured point look maximally stable.
     """
-    adjacent = neighbours(points, index)
+    adjacent = neighbours(points, index, categorical)
     if not adjacent:
         return None
     here = points[index].score
@@ -315,7 +362,9 @@ class PlateauAnalysis:
     n_without_neighbours: int
 
 
-def _connected_plateau(points: Sequence[ScoredPoint], seed: int, floor: float) -> set[int]:
+def _connected_plateau(
+    points: Sequence[ScoredPoint], seed: int, floor: float, categorical: Sequence[bool] = ()
+) -> set[int]:
     """Indices reachable from ``seed`` through points scoring at or above ``floor``.
 
     Connected rather than merely "every point above the floor": two separate
@@ -327,7 +376,7 @@ def _connected_plateau(points: Sequence[ScoredPoint], seed: int, floor: float) -
     frontier = [seed]
     while frontier:
         current = frontier.pop()
-        for candidate in neighbours(points, current):
+        for candidate in neighbours(points, current, categorical):
             if candidate not in region and points[candidate].score >= floor:
                 region.add(candidate)
                 frontier.append(candidate)
@@ -335,7 +384,11 @@ def _connected_plateau(points: Sequence[ScoredPoint], seed: int, floor: float) -
 
 
 def analyse_plateau(
-    points: Sequence[ScoredPoint], *, tolerance_sigmas: float = 1.0, penalty_weight: float = 0.5
+    points: Sequence[ScoredPoint],
+    *,
+    tolerance_sigmas: float = 1.0,
+    penalty_weight: float = 0.5,
+    categorical: Sequence[bool] = (),
 ) -> PlateauAnalysis:
     """Find the best plateau and the evaluated point at its centre.
 
@@ -344,6 +397,15 @@ def analyse_plateau(
     decides where within that peak the selection lands. Both steps are needed:
     the penalty alone would still return a single argmax, and the centring
     alone would still centre on whichever spike happened to be tallest.
+
+    **With a categorical axis present the two steps divide cleanly.** The
+    penalised maximum ranges over every categorical value, so the *choice* of
+    exit or sizing method is made by score. The plateau then lives inside the
+    winning value's cell, because :func:`neighbours` requires equality along a
+    categorical axis, so the centring only ever moves the numeric parameters.
+    Nothing here averages a categorical coordinate: the mean of preset indices
+    ``{0, 3, 7}`` is 3.33, which names no preset and would be a selection
+    nobody could run.
 
     Args:
         points: Every scoreable evaluated point. Order is the caller's; the
@@ -354,13 +416,18 @@ def analyse_plateau(
         penalty_weight: Multiplier on :func:`roughness` when ranking. Zero
             reproduces plain argmax selection, which is what the DoD's
             overfitted-configuration test compares against.
+        categorical: Per axis, whether it is categorical. See
+            :func:`neighbours`.
 
     Returns:
-        The analysis.
+        The analysis. :attr:`PlateauAnalysis.axis_extent` is ``1`` on every
+        categorical axis by construction, which is a true statement about the
+        region and not a degenerate measurement.
 
     Raises:
         ValueError: If ``points`` is empty, ``tolerance_sigmas`` is negative,
-            or ``penalty_weight`` is negative.
+            ``penalty_weight`` is negative, or the mask does not cover the
+            points' axes.
     """
     if not points:
         raise ValueError("cannot analyse a plateau over zero scored points")
@@ -369,7 +436,8 @@ def analyse_plateau(
     if penalty_weight < 0:
         raise ValueError(f"penalty_weight must be non-negative, got {penalty_weight}")
 
-    measured = [roughness(points, index) for index in range(len(points))]
+    mask = _categorical_mask(len(points[0].coords), categorical)
+    measured = [roughness(points, index, mask) for index in range(len(points))]
     # An unmeasurable roughness ranks as zero penalty rather than dropping the
     # point: a lone sample is not evidence of instability, and discarding it
     # would silently shrink the searched space. How many such points there were
@@ -388,23 +456,29 @@ def analyse_plateau(
         ScoredPoint(coords=point.coords, score=value)
         for point, value in zip(points, penalised, strict=True)
     ]
-    region = _connected_plateau(ranked, best_index, penalised[best_index] - tolerance)
+    region = _connected_plateau(ranked, best_index, penalised[best_index] - tolerance, mask)
 
     width = len(points[0].coords)
     axis_extent = tuple(
         len({points[index].coords[axis] for index in region}) for axis in range(width)
     )
-    centroid = [
-        statistics.fmean(float(points[index].coords[axis]) for index in region)
-        for axis in range(width)
-    ]
+    # Only the numeric axes have a centre. A categorical axis contributes
+    # nothing to the distance because every point of the region already shares
+    # its value there — see neighbours() — so averaging it would add a constant
+    # zero, and averaging it in a region that somehow spanned two values would
+    # be meaningless rather than harmless.
+    numeric = [axis for axis in range(width) if not mask[axis]]
+    centroid = {
+        axis: statistics.fmean(float(points[index].coords[axis]) for index in region)
+        for axis in numeric
+    }
     # Nearest by squared Euclidean distance to the centroid, ties broken by the
     # lowest index so that two equidistant candidates resolve identically on
     # every re-run — the determinism invariant this stage owes GridSearch.
     selected_index = min(
         sorted(region),
         key=lambda index: sum(
-            (float(points[index].coords[axis]) - centroid[axis]) ** 2 for axis in range(width)
+            (float(points[index].coords[axis]) - centroid[axis]) ** 2 for axis in numeric
         ),
     )
     shift = max(

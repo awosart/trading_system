@@ -4,11 +4,20 @@ import json
 from pathlib import Path
 
 import pytest
+import typer
 from jsonschema import Draft202012Validator
 from typer.testing import CliRunner
 
-from trading_system.cli import app
+from trading_system.cli import ObjectiveName, _build_objective, app
+from trading_system.prop.objective import PropObjective
+from trading_system.prop.rules import DEFAULT_RULES_PATH
 from trading_system.strategies import schema as strategy_schema_module
+from trading_system.validation.objective import SortinoTimesSqrtTrades
+from trading_system.validation.optimization import AxisTarget, ParameterAxis, SearchSpace
+from trading_system.validation.report import VerdictThresholds
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PROP_RULES = REPO_ROOT / DEFAULT_RULES_PATH
 
 runner = CliRunner()
 
@@ -316,3 +325,105 @@ def test_quality_without_data_exits_nonzero() -> None:
     result = runner.invoke(app, ["data", "quality", "--symbol", "EURUSD", "--tf", "M1"])
     assert result.exit_code == 1
     assert "No data stored" in result.stdout
+
+
+class TestTheObjectiveFlagHasSomethingBehindEveryValue:
+    """A flag value with no objective behind it would be an option that does nothing."""
+
+    def _space(self, *, sizing: bool) -> SearchSpace:
+        axes = [ParameterAxis(name="p", paths=("/risk_profile/base_quality",), values=(0.4, 0.5))]
+        if sizing:
+            axes.append(
+                ParameterAxis(
+                    name="risk",
+                    target=AxisTarget.RUN,
+                    paths=("/sizing/risk_pct",),
+                    values=(0.005, 0.01),
+                )
+            )
+        return SearchSpace(axes=tuple(axes))
+
+    def test_the_default_objective_needs_no_extra_configuration(self) -> None:
+        built = _build_objective(
+            ObjectiveName.SORTINO_SQRT_N,
+            rules_path=PROP_RULES,
+            space=self._space(sizing=False),
+            prop_rules=None,
+            risk_pct=0.01,
+            null_percentile=None,
+        )
+        assert isinstance(built, SortinoTimesSqrtTrades)
+
+    def test_prop_without_a_rule_set_is_refused(self) -> None:
+        with pytest.raises(typer.BadParameter, match="--prop-rules"):
+            _build_objective(
+                ObjectiveName.PROP,
+                rules_path=PROP_RULES,
+                space=self._space(sizing=False),
+                prop_rules=None,
+                risk_pct=0.01,
+                null_percentile=None,
+            )
+
+    def test_prop_over_a_space_that_varies_sizing_is_refused(self) -> None:
+        with pytest.raises(typer.BadParameter, match="varies sizing"):
+            _build_objective(
+                ObjectiveName.PROP,
+                rules_path=PROP_RULES,
+                space=self._space(sizing=True),
+                prop_rules="ftmo_normal",
+                risk_pct=0.01,
+                null_percentile=None,
+            )
+
+    def test_prop_refuses_an_unmeasured_edge_rather_than_ranking_an_all_ties_surface(
+        self,
+    ) -> None:
+        """The gate is per spec, so a failing spec scores every trial identically.
+
+        Left to run, that flat surface still produces a selection: zero
+        dispersion means the plateau swallows the space and the centroid
+        tie-breaks. Measured before this refusal existed: 96 trials all at
+        -1.95, eight folds of ordinary-looking selections, out-of-sample numbers
+        reported for parameters nothing chose.
+        """
+        with pytest.raises(typer.BadParameter, match="needs an edge percentile"):
+            _build_objective(
+                ObjectiveName.PROP,
+                rules_path=PROP_RULES,
+                space=self._space(sizing=False),
+                prop_rules="ftmo_normal",
+                risk_pct=0.01,
+                null_percentile=None,
+            )
+
+    def test_prop_refuses_a_percentile_below_its_own_threshold(self) -> None:
+        with pytest.raises(typer.BadParameter, match="is 60.0"):
+            _build_objective(
+                ObjectiveName.PROP,
+                rules_path=PROP_RULES,
+                space=self._space(sizing=False),
+                prop_rules="ftmo_normal",
+                risk_pct=0.01,
+                null_percentile=60.0,
+            )
+
+    def test_prop_builds_once_the_edge_clears_the_same_threshold_the_verdict_uses(self) -> None:
+        threshold = VerdictThresholds().null_percentile
+        built = _build_objective(
+            ObjectiveName.PROP,
+            rules_path=PROP_RULES,
+            space=self._space(sizing=False),
+            prop_rules="ftmo_normal",
+            risk_pct=0.01,
+            null_percentile=threshold,
+        )
+        assert isinstance(built, PropObjective)
+        assert built.edge_threshold == threshold, (
+            "the objective and the verdict must not hold two opinions on what an edge is"
+        )
+
+    def test_the_optimize_command_advertises_the_flag(self) -> None:
+        result = runner.invoke(app, ["validate", "optimize", "--help"])
+        assert result.exit_code == 0
+        assert "--objective" in result.stdout

@@ -50,6 +50,7 @@ touches fold 3's breaker instance. Nothing here has to reset anything; the
 independence is what building each fold as its own ``RunInputs`` already gives.
 """
 
+import itertools
 import json
 import time
 from collections.abc import Mapping
@@ -69,14 +70,29 @@ from trading_system.backtest.reproducibility import CodeVersion, code_version, d
 from trading_system.backtest.spec import RunInputs
 from trading_system.core.logging import get_logger
 from trading_system.data.models import OHLCVFrame
+from trading_system.risk.sizing.config import (
+    SizingConfig,
+    build_sizing_method,
+    declared_risk_fraction,
+)
+from trading_system.validation.null_baseline import (
+    BaselineRequest,
+    adjusted_scores,
+    calibrate_null_baselines,
+    sole_categorical_axis,
+    write_calibration,
+)
 from trading_system.validation.objective import Objective
 from trading_system.validation.optimization import (
+    AxisTarget,
     FoldOptimization,
     ISWindowView,
     ParameterSearch,
+    ParamSet,
     SearchSpace,
     TrialLedger,
     TrialRunner,
+    VariationTargets,
     read_fold_selection,
     summarise,
     write_fold_optimization,
@@ -224,6 +240,15 @@ class OptimizingSelector:
         penalty_weight: How hard neighbourhood instability is penalised when
             ranking. See
             :func:`~trading_system.validation.objective.analyse_plateau`.
+        libraries: Where a categorical axis resolves its names, and the sizing
+            description a run-target axis edits. Required whenever the space
+            varies anything but the strategy spec; ``None`` otherwise.
+        baseline_request: How precisely each categorical value's own null is
+            measured before the trials are ranked, or ``None`` to rank raw
+            scores. Not a default-on flag: a space with no categorical axis has
+            nothing to calibrate and pays nothing either way, and a space with
+            one is comparing values whose zeros differ — see
+            :mod:`trading_system.validation.null_baseline`.
         ledger: Trial and run counts per fold. Mutable, and written to disk with
             every fold's selection so that a crashed walk-forward resumes with
             its history rather than restarting a count.
@@ -239,6 +264,8 @@ class OptimizingSelector:
     min_cv_test_span: timedelta = timedelta(days=30)
     tolerance_sigmas: float = 1.0
     penalty_weight: float = 0.5
+    libraries: VariationTargets | None = None
+    baseline_request: BaselineRequest | None = None
     ledger: TrialLedger = field(default_factory=TrialLedger)
     _outcomes: dict[int, FoldOptimization] = field(default_factory=dict, repr=False)
     _key: list[str] = field(default_factory=list, repr=False)
@@ -251,6 +278,69 @@ class OptimizingSelector:
         """
         if self.trial_budget < 1:
             raise ValueError(f"trial_budget must be at least 1, got {self.trial_budget}")
+        # Raises here, before a fold is searched, if the space carries more than
+        # one categorical axis — the case null_baseline declines to calibrate.
+        sole_categorical_axis(self.space)
+        self._check_risk_against_cap()
+
+    def _check_risk_against_cap(self) -> None:
+        """Refuse a sizing axis whose values the engine's own cap would flatten.
+
+        ``RiskEngine`` trims every requested risk to
+        :attr:`~trading_system.risk.engine.RiskEngineConfig.max_risk_pct`, so an
+        axis reaching above it produces *identical* runs at every value past the
+        ceiling. Measured on ``channel-breakout-h4``: at 2%, 3% and 5% the whole
+        run comes out bit-identical, down to a final equity of 93 329. That is
+        not a harmless waste of trials — to the plateau analysis a stretch of
+        identical scores is a maximally broad plateau, so the axis would
+        manufacture the exact evidence of stability the analysis exists to
+        detect. Refused at construction rather than warned about, for the same
+        reason ``GridSearch`` refuses an under-budgeted grid: the run would
+        otherwise report a searched space that was not searched.
+
+        Raises:
+            ValueError: If any reachable sizing config declares a per-trade
+                equity fraction above the cap.
+        """
+        cap = self.base.risk.max_risk_pct
+        offenders = []
+        for config in self._sizing_variants():
+            fraction = declared_risk_fraction(config)
+            if fraction is not None and fraction > cap:
+                offenders.append(fraction)
+        if offenders:
+            raise ValueError(
+                f"sizing axis reaches {sorted(set(offenders))}, above the engine's "
+                f"max_risk_pct={cap}. Every value past the cap is trimmed to it, so those trials "
+                "would be identical runs — and identical scores read as a broad plateau. Lower "
+                "the axis, or raise max_risk_pct deliberately."
+            )
+
+    def _sizing_variants(self) -> list[SizingConfig]:
+        """Every sizing config this space can reach, other axes held at their first value."""
+        indices = [
+            index
+            for index, axis in enumerate(self.space.axes)
+            if axis.target in (AxisTarget.RUN, AxisTarget.SIZING_METHOD)
+        ]
+        if not indices or self.libraries is None:
+            return []
+        binding = self.base.bindings[0]
+        targets = replace(self.libraries, spec=binding.spec, exit_preset=binding.exit_preset)
+        variants: list[SizingConfig] = []
+        for combination in itertools.product(
+            *(range(len(self.space.axes[index].values)) for index in indices)
+        ):
+            coords = [0] * len(self.space.axes)
+            for index, value_index in zip(indices, combination, strict=True):
+                coords[index] = value_index
+            params = self.space.point(coords)
+            if not self.space.satisfies(params):
+                continue
+            applied = self.space.apply_to(targets, params)
+            if applied.sizing is not None:
+                variants.append(applied.sizing)
+        return variants
 
     @property
     def outcomes(self) -> Mapping[int, FoldOptimization]:
@@ -288,6 +378,27 @@ class OptimizingSelector:
                         "min_cv_test_span_s": self.min_cv_test_span.total_seconds(),
                         "tolerance_sigmas": self.tolerance_sigmas,
                         "penalty_weight": self.penalty_weight,
+                        # Both change which point is chosen, so both belong in
+                        # the identity — the same lesson stage 2 learned when a
+                        # selector missing from the digest let two different
+                        # walk-forwards share one wf_id.
+                        "libraries": None
+                        if self.libraries is None
+                        else {
+                            "exit": sorted(self.libraries.exit_library or ()),
+                            "sizing": sorted(self.libraries.sizing_library or ()),
+                            "sizing_base": None
+                            if self.libraries.sizing is None
+                            else self.libraries.sizing.model_dump(mode="json"),
+                        },
+                        "baseline_request": None
+                        if self.baseline_request is None
+                        else {
+                            "target_fraction": self.baseline_request.target_fraction,
+                            "min_seeds": self.baseline_request.min_seeds,
+                            "max_seeds": self.baseline_request.max_seeds,
+                            "seed_offset": self.baseline_request.seed_offset,
+                        },
                     }
                 )
             )
@@ -333,8 +444,11 @@ class OptimizingSelector:
         stored = read_fold_selection(directory)
         if stored is not None:
             params = self.space.point(stored["selected_coords"])
+            baselines = stored.get("null_baselines") or {}
             self.ledger.record(
-                fold.index, trials=int(stored["n_trials"]), runs=int(stored["n_runs"])
+                fold.index,
+                trials=int(stored["n_trials"]),
+                runs=int(stored["n_runs"]) + int(baselines.get("runs", 0)),
             )
             logger.info(
                 "optimize.fold_cached", fold=fold.index, selected=str(params), path=str(directory)
@@ -348,6 +462,17 @@ class OptimizingSelector:
             space=self.space,
             objective=self.objective,
             pieces=pieces,
+            libraries=self.libraries,
+        )
+        calibration = (
+            None
+            if self.baseline_request is None
+            else calibrate_null_baselines(
+                runner,
+                self.space,
+                day_origin=self.base.config.day_origin,
+                request=self.baseline_request,
+            )
         )
         records = self.search.run(self.space, runner.evaluate, self.trial_budget)
         outcome = summarise(
@@ -362,9 +487,22 @@ class OptimizingSelector:
             directory=directory,
             tolerance_sigmas=self.tolerance_sigmas,
             penalty_weight=self.penalty_weight,
+            categorical=self.space.categorical_mask,
+            ranking_scores=(None if calibration is None else adjusted_scores(records, calibration)),
+            null_baselines=None if calibration is None else calibration.to_dict(),
         )
         write_fold_optimization(directory, outcome, records)
-        self.ledger.record(fold.index, trials=outcome.n_trials, runs=outcome.n_runs)
+        if calibration is not None:
+            write_calibration(directory, calibration)
+        # One record per fold — TrialLedger refuses a second, which is what it
+        # is for. The calibration's backtests are added to the fold's run count
+        # rather than left in wall-clock: they are runs this fold spent, and on
+        # the measured library they outnumber the search's own.
+        self.ledger.record(
+            fold.index,
+            trials=outcome.n_trials,
+            runs=outcome.n_runs + (0 if calibration is None else calibration.runs),
+        )
         self._outcomes[fold.index] = outcome
         logger.info(
             "optimize.fold_done",
@@ -381,11 +519,27 @@ class OptimizingSelector:
         )
         return self._with_params(outcome.selected)
 
-    def _with_params(self, params: Any) -> RunInputs:
-        """:attr:`base` with ``params`` written into its single strategy binding."""
+    def _with_params(self, params: ParamSet) -> RunInputs:
+        """:attr:`base` with ``params`` written into everything the space varies.
+
+        All three documents, not just the spec: an exit chosen by a categorical
+        axis has to reach the out-of-sample run, and a sizing knob varied by a
+        run-target axis has to reach its risk engine. Writing only the spec here
+        would produce an OOS run that optimised one exit and traded another —
+        and it would look completely normal.
+        """
         binding = self.base.bindings[0]
-        varied = replace(binding, spec=self.space.apply(binding.spec, params))
-        return replace(self.base, bindings=(varied,))
+        targets = VariationTargets(spec=binding.spec, exit_preset=binding.exit_preset)
+        if self.libraries is not None:
+            targets = replace(self.libraries, spec=binding.spec, exit_preset=binding.exit_preset)
+        applied = self.space.apply_to(targets, params)
+        return replace(
+            self.base,
+            bindings=(applied.binding(binding.keys),),
+            sizing=(
+                self.base.sizing if applied.sizing is None else build_sizing_method(applied.sizing)
+            ),
+        )
 
 
 @dataclass(frozen=True)

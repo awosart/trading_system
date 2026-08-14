@@ -110,6 +110,22 @@ LADDER_POINTS = 5
 #: Said out loud when a parameter kind has no rule. Better than a bad guess.
 NO_LADDER = "no ladder proposed for this parameter kind — widen it by hand"
 
+#: Name the generated exit axis carries.
+EXIT_AXIS_NAME = "exit_preset"
+
+#: Printed beside the proposed exit axis, and the reason it arrives switched off.
+#: An exit axis of N presets multiplies every numeric trial by N — 8 presets over
+#: a 125-point grid is 1000 in-sample runs per fold instead of 125 — and it also
+#: turns on a per-preset null calibration, because presets do not share a zero
+#: (see :mod:`trading_system.validation.null_baseline`). Both costs are real and
+#: neither is visible in the axis itself, so the axis is offered where the author
+#: will read it and enabled by *moving* it into ``axes``.
+EXIT_AXIS_WARNING = (
+    "proposed but NOT enabled — move it from 'disabled_axes' into 'axes' deliberately: "
+    "it multiplies every numeric trial by the number of presets, and it turns on a "
+    "per-preset null calibration"
+)
+
 
 @dataclass(frozen=True)
 class RoleSignature:
@@ -492,6 +508,31 @@ def build_candidates(spec: StrategySpec) -> list[CandidateAxis]:
     return sorted(axes, key=lambda axis: axis.name)
 
 
+def exit_preset_axis(preset_ids: Sequence[str]) -> dict[str, Any]:
+    """The categorical axis over the exit library, as a document.
+
+    Args:
+        preset_ids: Every preset id the library holds, in file order.
+
+    Returns:
+        An axis document targeting
+        :attr:`~trading_system.validation.optimization.AxisTarget.EXIT_PRESET`.
+
+    Raises:
+        ValueError: If fewer than two ids are given — an axis with one value
+            varies nothing.
+    """
+    if len(preset_ids) < 2:
+        raise ValueError(
+            f"an exit axis needs at least two presets to choose between, got {list(preset_ids)}"
+        )
+    return {
+        "name": EXIT_AXIS_NAME,
+        "target": "exit_preset",
+        "values": list(preset_ids),
+    }
+
+
 def infer_constraints(axes: Sequence[CandidateAxis]) -> list[dict[str, str]]:
     """Order constraints implied by two axes on the same parameter.
 
@@ -525,7 +566,10 @@ def infer_constraints(axes: Sequence[CandidateAxis]) -> list[dict[str, str]]:
 
 
 def build_space_document(
-    spec: StrategySpec, *, keep: Sequence[str] | None = None
+    spec: StrategySpec,
+    *,
+    keep: Sequence[str] | None = None,
+    exit_preset_ids: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """The draft search space for ``spec``.
 
@@ -533,6 +577,10 @@ def build_space_document(
         spec: The strategy.
         keep: Axis names to include. ``None`` keeps every candidate — the draft
             is meant to be edited down, not guessed at.
+        exit_preset_ids: Ids of the exit library, if the exit is to be offered
+            as a categorical axis. Offered **disabled** — see
+            :data:`EXIT_AXIS_WARNING`. ``None`` omits the offer entirely, which
+            is what a caller with no library to resolve against means.
 
     Returns:
         A document a :class:`~trading_system.validation.optimization.SearchSpace`
@@ -546,6 +594,8 @@ def build_space_document(
     constraints = infer_constraints(axes)
     if constraints:
         document["constraints"] = constraints
+    if exit_preset_ids is not None and len(exit_preset_ids) >= 2:
+        document["disabled_axes"] = [exit_preset_axis(exit_preset_ids)]
     return document
 
 
@@ -652,7 +702,12 @@ def verify(spec: StrategySpec, document: Mapping[str, Any]) -> None:
                 ) from error
 
 
-def render(spec: StrategySpec, axes: Sequence[CandidateAxis]) -> str:
+def render(
+    spec: StrategySpec,
+    axes: Sequence[CandidateAxis],
+    *,
+    exit_preset_ids: Sequence[str] | None = None,
+) -> str:
     """A human-readable summary of the draft, rules included.
 
     The rule is printed rather than left in the source because an author who
@@ -662,6 +717,9 @@ def render(spec: StrategySpec, axes: Sequence[CandidateAxis]) -> str:
     Args:
         spec: The strategy.
         axes: The candidates.
+        exit_preset_ids: The exit axis's values, when one was proposed. Printed
+            with its warning rather than silently present in the file: an axis
+            nobody read is an axis nobody meant to enable.
 
     Returns:
         The text.
@@ -680,6 +738,15 @@ def render(spec: StrategySpec, axes: Sequence[CandidateAxis]) -> str:
         )
         lines.append(f"      values  {[_plain(value) for value in axis.values]}")
         lines.append(f"      rule    {axis.rule}")
+    if exit_preset_ids is not None and len(exit_preset_ids) >= 2:
+        lines.extend(
+            [
+                "",
+                f"  {EXIT_AXIS_NAME:<28} categorical, {len(exit_preset_ids)} exits    0 pointers",
+                f"      values  {list(exit_preset_ids)}",
+                f"      status  {EXIT_AXIS_WARNING}",
+            ]
+        )
     return "\n".join(lines)
 
 

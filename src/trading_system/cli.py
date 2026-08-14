@@ -47,6 +47,7 @@ from trading_system.data.sessions import AssetClass, TradingCalendar
 from trading_system.data.store import ParquetStore
 from trading_system.execution.config import CostConfig
 from trading_system.exit.library import DEFAULT_LIBRARY_PATH, ExitLibrarySpec, known_exit_ids
+from trading_system.prop.objective import PropObjective
 from trading_system.prop.rules import (
     DEFAULT_RULES_PATH,
     day_origin_divergence,
@@ -59,6 +60,11 @@ from trading_system.prop.simulator import (
 )
 from trading_system.risk.engine import RiskEngineConfig
 from trading_system.risk.margin import load_prop_profiles
+from trading_system.risk.sizing.config import (
+    DEFAULT_SIZING_METHODS_PATH,
+    FixedFractionalConfig,
+    load_sizing_methods,
+)
 from trading_system.risk.sizing.methods import FixedFractional
 from trading_system.strategies.repository import META_SUFFIX, Status, StrategyRepository
 from trading_system.strategies.results_link import (
@@ -80,22 +86,30 @@ from trading_system.validation.calibration import (
     NullKind,
     run_calibration,
 )
+from trading_system.validation.null_baseline import BaselineRequest
 from trading_system.validation.nulls.random_entry import (
     EntryTraceProfile,
     build_entry_trace_profile,
     real_signals,
 )
-from trading_system.validation.objective import ExpectancyR, SortinoTimesSqrtTrades
+from trading_system.validation.objective import (
+    ExpectancyR,
+    Objective,
+    SortinoTimesSqrtTrades,
+)
 from trading_system.validation.optimization import (
+    AxisTarget,
     GridSearch,
     OptunaSearch,
     ParameterSearch,
     RandomSearch,
     SearchSpace,
+    VariationTargets,
     read_fold_selection,
 )
 from trading_system.validation.report import (
     StrategyVerdict,
+    VerdictThresholds,
     WalkForwardReport,
     build_report,
     build_verdict,
@@ -595,6 +609,11 @@ def strategy_space(
     axis: list[str] = typer.Option(
         [], "--axis", help="Keep only these axes; repeatable. Omit to keep every candidate."
     ),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH,
+        "--exit-library",
+        help="Exit preset library, for the proposed (disabled) exit axis.",
+    ),
     force: bool = typer.Option(False, "--force", help="Overwrite an existing --out file."),
 ) -> None:
     """Derive a draft search space from a strategy, pointers included.
@@ -616,10 +635,16 @@ def strategy_space(
         raise typer.Exit(code=1) from error
 
     spec = record.spec
+    preset_ids: list[str] | None = None
+    if exit_library.exists():
+        preset_ids = [
+            item.id
+            for item in ExitLibrarySpec.model_validate_json(exit_library.read_text()).presets
+        ]
     candidates = build_candidates(spec)
-    typer.echo(render(spec, candidates))
+    typer.echo(render(spec, candidates, exit_preset_ids=preset_ids))
 
-    document = build_space_document(spec, keep=axis or None)
+    document = build_space_document(spec, keep=axis or None, exit_preset_ids=preset_ids)
     document, notes = prune(spec, document)
     for note in notes:
         typer.echo(f"  pruned: {note}")
@@ -860,12 +885,86 @@ class SearchMethod(StrEnum):
 class ObjectiveName(StrEnum):
     """Which objective scores a trial.
 
-    One member, because one objective exists. Adding a flag value here without
-    adding a :class:`~trading_system.validation.objective.Objective` behind it
-    would be a command-line option that silently does nothing.
+    Every member has an :class:`~trading_system.validation.objective.Objective`
+    behind it: a flag value without one would be a command-line option that
+    silently does nothing.
+
+    ``prop`` is expected to call every candidate infeasible on the current
+    library, and that is the correct behaviour rather than a broken flag.
+    :class:`~trading_system.prop.objective.PropObjective` gates on the null
+    percentile before it ranks anything, no strategy in the repository reaches
+    the threshold, and an objective that ranked them anyway would be ranking
+    configurations it had just established there is no evidence for.
     """
 
     SORTINO_SQRT_N = "sortino_sqrt_n"
+    PROP = "prop"
+
+
+def _build_objective(
+    name: ObjectiveName,
+    *,
+    rules_path: Path,
+    space: SearchSpace,
+    prop_rules: str | None,
+    risk_pct: float,
+    null_percentile: float | None,
+) -> Objective:
+    """The objective a ``--objective`` flag names.
+
+    Raises:
+        typer.BadParameter: If ``prop`` was asked for without a rule set, over a
+            space that varies sizing, or with an edge percentile that fails its
+            own gate. The first two are configuration errors; the third is the
+            gate doing its job at the only place it can be honest about it.
+
+            :class:`~trading_system.prop.objective.PropObjective` converts R
+            multiples into equity moves using one fixed ``risk_pct``, so a
+            search moving that number would have every trial simulated against
+            the template's risk instead of its own — and the simulation is more
+            sensitive to that number than to anything else it is given.
+
+            The percentile check exists because P11 made the edge gate a
+            property of the *spec*, constant across a fold's trials, so a spec
+            that fails it scores **every** candidate at the band floor. That is
+            the design working, but a flat surface still yields a selection: the
+            dispersion is zero, so the plateau swallows the whole space and the
+            centroid tie-breaks arbitrarily. The run then reports out-of-sample
+            numbers for parameters nothing chose. Measured, before this check
+            existed: 96 trials, all scoring -1.95, and eight folds of selections
+            that looked entirely ordinary. Refusing up front costs one message
+            instead of a fold sequence of backtests and a report that cannot be
+            read.
+    """
+    if name is ObjectiveName.SORTINO_SQRT_N:
+        return SortinoTimesSqrtTrades()
+    if prop_rules is None:
+        raise typer.BadParameter("--objective prop needs --prop-rules naming a rule set")
+    # Structural incompatibility first: a space that varies sizing stays
+    # unscoreable by this objective however good the edge turns out to be, so
+    # reporting the percentile instead would send someone to measure a number
+    # that cannot help them.
+    varies_sizing = {AxisTarget.RUN, AxisTarget.SIZING_METHOD} & {
+        axis.target for axis in space.axes
+    }
+    if varies_sizing:
+        raise typer.BadParameter(
+            "--objective prop cannot score a space that varies sizing: the challenge simulation "
+            "turns R into equity moves through one fixed risk_pct, so every trial would be "
+            "simulated at the template's risk rather than its own"
+        )
+    threshold = VerdictThresholds().null_percentile
+    if null_percentile is None or null_percentile < threshold:
+        measured = "not measured" if null_percentile is None else f"{null_percentile:.1f}"
+        raise typer.BadParameter(
+            f"--objective prop needs an edge percentile of at least {threshold:.0f} to rank "
+            f"anything; --null-percentile is {measured}. The gate is a property of the spec, not "
+            "of a trial, so every candidate would score at the band floor — an all-ties surface "
+            "the plateau analysis would tie-break into a selection nothing actually chose. "
+            "Measure it with 'validate verdict' first, or use --objective sortino_sqrt_n."
+        )
+    rules = load_prop_rules(rules_path).get(prop_rules)
+    return PropObjective(rules=rules, risk_pct=risk_pct, null_percentile=null_percentile)
 
 
 def _build_search(method: SearchMethod, seed: int, startup_trials: int) -> ParameterSearch:
@@ -920,6 +1019,38 @@ def validate_optimize(
     ),
     exit_library: Path = typer.Option(
         DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
+    ),
+    prop_rules_name: str | None = typer.Option(
+        None, "--prop-rules", help="Rule set for --objective prop."
+    ),
+    prop_rules_path: Path = typer.Option(
+        DEFAULT_RULES_PATH, "--prop-rules-file", help="Where the prop rule sets live."
+    ),
+    sizing_methods_path: Path = typer.Option(
+        DEFAULT_SIZING_METHODS_PATH,
+        "--sizing-methods",
+        help="Named sizing variants a sizing_method axis chooses between.",
+    ),
+    null_percentile: float | None = typer.Option(
+        None,
+        "--null-percentile",
+        help=(
+            "This spec's percentile against the permutation null, measured once by "
+            "'validate verdict'. Omitted means unmeasured, which --objective prop treats as "
+            "failing the edge gate rather than passing it."
+        ),
+    ),
+    baseline_target: float | None = typer.Option(
+        None,
+        "--baseline-target",
+        help=(
+            "Calibrate each categorical value's own null until its standard error is this "
+            "fraction of its excess. Only meaningful for a space with a categorical axis; "
+            "omitted leaves trials ranked on raw scores."
+        ),
+    ),
+    baseline_max_seeds: int = typer.Option(
+        512, "--baseline-max-seeds", help="Ceiling on shuffles drawn per categorical value."
     ),
     out: Path | None = typer.Option(
         None, "--out", help="Report path. Defaults next to the walk-forward's own manifest."
@@ -988,7 +1119,26 @@ def validate_optimize(
         base=base,
         space=search_space,
         search=_build_search(method, search_seed, startup_trials),
-        objective=SortinoTimesSqrtTrades(),
+        objective=_build_objective(
+            objective,
+            rules_path=prop_rules_path,
+            space=search_space,
+            prop_rules=prop_rules_name,
+            risk_pct=cli_config.risk_pct,
+            null_percentile=null_percentile,
+        ),
+        libraries=VariationTargets(
+            spec=spec,
+            exit_preset=preset,
+            sizing=FixedFractionalConfig(risk_pct=cli_config.risk_pct),
+            exit_library={item.id: item for item in library.presets},
+            sizing_library=load_sizing_methods(sizing_methods_path),
+        ),
+        baseline_request=(
+            None
+            if baseline_target is None
+            else BaselineRequest(target_fraction=baseline_target, max_seeds=baseline_max_seeds)
+        ),
         trial_budget=trial_budget,
         store_root=settings.runs_dir,
         cv=None

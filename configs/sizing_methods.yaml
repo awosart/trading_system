@@ -1,0 +1,50 @@
+# Named sizing variants a categorical search axis chooses between.
+#
+# This file exists for the same reason exit/library.json does: a categorical
+# axis names entries, and the entries have to be authored where a person can
+# read them side by side. It is NOT the place a run's default sizing comes
+# from — that stays in the run config, and a run with no sizing axis never
+# reads this file at all.
+#
+# Every fraction here must stay at or below RiskEngineConfig.max_risk_pct
+# (0.02 by default). The engine trims anything above it, so a higher value
+# would produce trials identical to the capped one — and a stretch of
+# identical scores reads to the plateau analysis as a maximally broad
+# plateau, which is the opposite of what it means.
+
+fixed_025:
+  method: FIXED_FRACTIONAL
+  risk_pct: 0.0025
+
+fixed_05:
+  method: FIXED_FRACTIONAL
+  risk_pct: 0.005
+
+fixed_1:
+  method: FIXED_FRACTIONAL
+  risk_pct: 0.01
+
+fixed_2:
+  method: FIXED_FRACTIONAL
+  risk_pct: 0.02
+
+# Money per trade rather than a share of equity: the one variant that does not
+# compound, and therefore the one whose R distribution is unaffected by where
+# in the run a trade lands. On a 100k account this is 0.5%.
+fixed_amount_500:
+  method: FIXED_AMOUNT
+  amount: "500"
+
+# One ATR of movement is worth this share of equity. Not comparable to the
+# fractions above without a stop distance — see declared_risk_fraction.
+vol_target_005:
+  method: VOLATILITY_TARGETING
+  target_pct: 0.005
+
+# Scales from min at the quality floor to max at quality 1.0. The floor is a
+# refusal threshold, not a scaling origin: below it the trade is declined.
+quality_05_to_15:
+  method: QUALITY_SCALED
+  min_risk_pct: 0.005
+  max_risk_pct: 0.015
+  quality_floor: 0.5
