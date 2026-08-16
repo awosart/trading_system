@@ -4,13 +4,25 @@ Four breakers, in the order a run is likely to hit them: a loss limit for the
 day, the week and the month, a pause after a run of consecutive losses, and a
 pause when fills come back far worse than they were priced at.
 
-**The period breakers hold no "blocked" flag.** Each recomputes from the trade
-ledger every time it is asked: "the P&L booked inside the current trading day is
-at or below minus the limit". A mutable flag would need clearing at the right
-instant, and a clear that is forgotten blocks the remainder of the run — the
-failure is silent and looks exactly like a strategy that stopped finding setups.
-Derived from the ledger, the reset is not an event anyone has to remember: it is
-a consequence of the day label changing.
+**The period breakers hold no "blocked" flag.** Each answers the same question
+every time it is asked: "the P&L booked inside the current trading day is at or
+below minus the limit". A mutable flag would need clearing at the right instant,
+and a clear that is forgotten blocks the remainder of the run — the failure is
+silent and looks exactly like a strategy that stopped finding setups. There is
+no reset anyone has to remember here either: the totals are held **per period
+label**, so a new day is a key that is not in the map yet rather than a counter
+somebody has to zero.
+
+That last point is what makes the totals safe to accumulate rather than re-sum.
+They used to be re-summed: each check walked the whole trade ledger once per
+period and re-derived every trade's day label while doing it, which is
+``O(bars × trades)`` and was measured at 58% of a real run — 20 million day-label
+computations on 20 000 bars. Trades are now folded in as they arrive
+(:meth:`CircuitBreakers._absorb`), which is only equivalent because the fold is
+keyed by exactly the label the filter compared against. The journal is
+append-only, and a journal that is *not* the one already being followed is
+rebuilt from scratch rather than added on top of a total describing a different
+history.
 
 **The trading day is configurable, and it is an IANA zone plus a local time.**
 Never UTC midnight by default and never a stored UTC offset. Prop firms each
@@ -195,11 +207,17 @@ class CircuitBreakers:
     """Evaluates whether trading is permitted at all, before anything is sized."""
 
     __slots__ = (
+        "_absorbed",
         "_config",
+        "_daily",
+        "_last_absorbed",
+        "_last_day",
+        "_monthly",
         "_pause_reason",
         "_paused_until_bar",
         "_slippage_events",
         "_streak_armed_after",
+        "_weekly",
     )
 
     def __init__(self, config: CircuitBreakerConfig | None = None) -> None:
@@ -215,6 +233,20 @@ class CircuitBreakers:
         self._pause_reason: RiskReason | None = None
         self._slippage_events: list[SlippageReport] = []
         self._streak_armed_after = 0
+        # Realised result per period, accumulated as trades arrive. Keyed by the
+        # period's own label — the day, the week's first day, the month's first
+        # day — so a lookup is exactly the filter it replaces rather than an
+        # approximation of it, and no reset-on-rollover exists to be forgotten:
+        # a new period is simply a key that is not there yet.
+        self._daily: dict[date, Decimal] = {}
+        self._weekly: dict[date, Decimal] = {}
+        self._monthly: dict[date, Decimal] = {}
+        # How much of the journal those totals already account for, and the last
+        # trade counted, so a journal that is not the one being followed is
+        # detected rather than double-counted.
+        self._absorbed = 0
+        self._last_absorbed: ClosedTrade | None = None
+        self._last_day: tuple[datetime, date] | None = None
 
     def __repr__(self) -> str:
         """Compact description naming the day boundary."""
@@ -235,10 +267,58 @@ class CircuitBreakers:
         ``today`` and every historical trade's own day go through it, so a
         boundary bar's signal and its eventual close are never counted into
         two different trading days by accident.
+
+        Memoised on the last instant asked about. One slot rather than a map:
+        the caller marches forward and asks the same instant once per signal on
+        that bar, so a single slot collects the repeats, and it cannot go stale
+        because a miss recomputes rather than returning a neighbour's answer.
         """
+        cached = self._last_day
+        if cached is not None and cached[0] == instant:
+            return cached[1]
         if self._config.calendar is not None:
-            return trading_day_of_close(instant, self._config.trading_day, self._config.calendar)
-        return trading_day(instant, self._config.trading_day)
+            day = trading_day_of_close(instant, self._config.trading_day, self._config.calendar)
+        else:
+            day = trading_day(instant, self._config.trading_day)
+        self._last_day = (instant, day)
+        return day
+
+    def _absorb(self, trades: Sequence[ClosedTrade]) -> None:
+        """Fold every trade not yet counted into the period totals.
+
+        The journal is append-only (``Portfolio`` exposes no way to shorten it),
+        so ordinarily this consumes the tail that has appeared since the last
+        call — nothing at all on most bars. A journal that is *not* the one
+        already followed — shorter than what was absorbed, or disagreeing at the
+        last absorbed position — is rebuilt from scratch rather than added on
+        top of a total that describes a different history.
+
+        Args:
+            trades: Realised trades, oldest first.
+        """
+        followed = self._absorbed <= len(trades) and (
+            self._absorbed == 0 or trades[self._absorbed - 1] == self._last_absorbed
+        )
+        if not followed:
+            self._daily.clear()
+            self._weekly.clear()
+            self._monthly.clear()
+            self._absorbed = 0
+            self._last_absorbed = None
+
+        starts_on = self._config.week_starts_on
+        zero = Decimal(0)
+        for index in range(self._absorbed, len(trades)):
+            trade = trades[index]
+            day = self._trading_day(trade.closed_at)
+            week = week_label(day, starts_on=starts_on)
+            month = day.replace(day=1)
+            self._daily[day] = self._daily.get(day, zero) + trade.pnl
+            self._weekly[week] = self._weekly.get(week, zero) + trade.pnl
+            self._monthly[month] = self._monthly.get(month, zero) + trade.pnl
+        if trades:
+            self._last_absorbed = trades[-1]
+        self._absorbed = len(trades)
 
     @property
     def slippage_events(self) -> tuple[SlippageReport, ...]:
@@ -246,11 +326,22 @@ class CircuitBreakers:
         return tuple(self._slippage_events)
 
     def reset(self) -> None:
-        """Clear the bar-counted pauses, for a new run or walk-forward fold."""
+        """Clear the bar-counted pauses and period totals, for a new run or fold.
+
+        The totals are part of what "since the last reset" means: a fold that
+        inherited the previous fold's realised loss would be measuring a limit
+        against a history it never traded.
+        """
         self._paused_until_bar = None
         self._pause_reason = None
         self._slippage_events.clear()
         self._streak_armed_after = 0
+        self._daily.clear()
+        self._weekly.clear()
+        self._monthly.clear()
+        self._absorbed = 0
+        self._last_absorbed = None
+        self._last_day = None
 
     def record_fill(self, report: SlippageReport) -> bool:
         """Take one execution report, and pause trading if it was abnormal.
@@ -325,37 +416,38 @@ class CircuitBreakers:
             return paused
 
         today = self._trading_day(moment)
+        self._absorb(trades)
+        # Computed once, not once per trade: the right-hand side of the old
+        # comparison never depended on the trade, and recomputing it inside the
+        # scan was 7.07 million redundant calls on a 20 000-bar run.
         periods = (
             (
                 self._config.max_daily_loss_pct,
                 RiskReason.DAILY_LOSS_LIMIT,
                 "trading day",
-                lambda day: day == today,
+                self._daily,
+                today,
             ),
             (
                 self._config.max_weekly_loss_pct,
                 RiskReason.WEEKLY_LOSS_LIMIT,
                 "trading week",
-                lambda day: (
-                    week_label(day, starts_on=self._config.week_starts_on)
-                    == week_label(today, starts_on=self._config.week_starts_on)
-                ),
+                self._weekly,
+                week_label(today, starts_on=self._config.week_starts_on),
             ),
             (
                 self._config.max_monthly_loss_pct,
                 RiskReason.MONTHLY_LOSS_LIMIT,
                 "month",
-                lambda day: (day.year, day.month) == (today.year, today.month),
+                self._monthly,
+                today.replace(day=1),
             ),
         )
 
-        for limit_pct, reason, label, in_period in periods:
+        for limit_pct, reason, label, totals, key in periods:
             if limit_pct is None:
                 continue
-            realised = sum(
-                (trade.pnl for trade in trades if in_period(self._trading_day(trade.closed_at))),
-                Decimal(0),
-            )
+            realised = totals.get(key, Decimal(0))
             allowance = equity * Decimal(str(limit_pct))
             if realised <= -allowance:
                 return BreakerTrip(

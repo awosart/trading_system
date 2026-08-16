@@ -283,6 +283,11 @@ class Portfolio:
         self._swap = Decimal(0)
         self._open: dict[str, OpenPosition] = {}
         self._trades: list[TradeRecord] = []
+        # The breakers' projection of the same journal, grown alongside it. Two
+        # lists rather than one derived on read, because the read is per bar and
+        # the derivation is per trade — see `closed_trades`.
+        self._closed: list[ClosedTrade] = []
+        self._closed_view: tuple[ClosedTrade, ...] | None = None
         self._curve: list[EquityPoint] = []
         self._unrealized = Decimal(0)
         self._fx_fallback_marks = 0
@@ -373,8 +378,18 @@ class Portfolio:
 
     @property
     def closed_trades(self) -> Sequence[ClosedTrade]:
-        """Completed trades as the circuit breakers read them."""
-        return [trade.as_closed_trade() for trade in self._trades]
+        """Completed trades as the circuit breakers read them.
+
+        Accumulated as trades close rather than rebuilt on read. The read
+        happens once a bar and the rebuild was ``O(trades)`` of dataclass
+        construction each time — measured at 7.98 million constructions on a
+        20 000-bar run, 15% of it, before any breaker had added a number up.
+        The projection is now made once per trade, and the tuple handed out is
+        rebuilt only when a trade has actually been added.
+        """
+        if self._closed_view is None:
+            self._closed_view = tuple(self._closed)
+        return self._closed_view
 
     @property
     def curve(self) -> Sequence[EquityPoint]:
@@ -506,6 +521,8 @@ class Portfolio:
             legs=len(held.position.legs),
         )
         self._trades.append(record)
+        self._closed.append(record.as_closed_trade())
+        self._closed_view = None
         return record
 
     def restate_risk(self, held: OpenPosition) -> Decimal:
