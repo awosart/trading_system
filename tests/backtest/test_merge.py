@@ -154,6 +154,38 @@ class TestMergeOrder:
         with pytest.raises(LookaheadError, match="no bar has closed yet"):
             store.context(d1_key)
 
+    def test_every_timeframe_that_exists_can_be_merged(self) -> None:
+        """The table of ranks may not be a second list of which timeframes exist.
+
+        It was one, and it went stale: ``M30`` was added to :class:`Timeframe`
+        with the third vendor import, and the rank table did not learn about it.
+        The store held M30 bars, the schema accepted an M30 spec, and the run
+        died on a ``KeyError`` inside the heap merge — a timeframe the rest of
+        the system considered real and the engine could not step through.
+        Enumerating the enum here means the next member added cannot repeat it,
+        and the failure is named rather than arriving from inside ``heapq``.
+        """
+        for timeframe in Timeframe:
+            key = StreamKey("EURUSD", timeframe)
+            handler = DataHandler(
+                {key: series(bars([1.10, 1.11], timeframe=timeframe, start=SUMMER_D1_OPEN))},
+                FX_DAY_ORIGIN,
+            )
+            assert [event.key for instant in handler.instants() for event in instant.bars] == [
+                key,
+                key,
+            ], f"{timeframe.value} cannot be merged"
+
+    def test_ranks_order_the_timeframes_finest_first(self) -> None:
+        """The rank exists to break ties deterministically, so only order matters.
+
+        Deriving it from ``duration`` rather than a written list is what makes
+        the previous test's guarantee automatic; this one states the property
+        that derivation has to preserve.
+        """
+        by_rank = sorted(Timeframe, key=lambda tf: StreamKey("EURUSD", tf).rank)
+        assert by_rank == sorted(Timeframe, key=lambda tf: tf.duration)
+
     def test_a_daily_close_off_the_hour_lands_between_two_h1_events(self) -> None:
         """The policy is a consequence of the close instants, not a branch.
 

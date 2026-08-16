@@ -51,18 +51,19 @@ from trading_system.data.resample import DayOrigin, trading_day
 #: Sort rank per timeframe, finest first. Fixes the order of several bars closing
 #: at one instant so a run is reproducible; correctness does not depend on it,
 #: because publication and evaluation are separate phases.
+#:
+#: Derived from ``Timeframe.duration`` rather than listing the members, because a
+#: hand-written list is a second authority on which timeframes exist and it went
+#: out of date the moment one was added: ``M30`` arrived with the third vendor
+#: import and this table did not learn about it, so every M30 stream died on a
+#: ``KeyError`` deep inside the heap merge — a timeframe the store held, the
+#: schema accepted and the engine could not run. Ordering by duration cannot
+#: drift that way, and it reproduces the previous order of the other six exactly.
+#: The rank is a tie-break only: it never leaves this module and never enters a
+#: digest, so the values themselves are free to shift when a member is added.
 TIMEFRAME_RANK: dict[Timeframe, int] = {
     timeframe: rank
-    for rank, timeframe in enumerate(
-        (
-            Timeframe.M1,
-            Timeframe.M5,
-            Timeframe.M15,
-            Timeframe.H1,
-            Timeframe.H4,
-            Timeframe.D1,
-        )
-    )
+    for rank, timeframe in enumerate(sorted(Timeframe, key=lambda tf: tf.duration))
 }
 
 #: How far either side of ``open + 24h`` the daily boundary may sit. One hour is
