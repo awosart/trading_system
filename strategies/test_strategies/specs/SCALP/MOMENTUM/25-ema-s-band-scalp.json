@@ -1,0 +1,102 @@
+{
+  "id": "25-ema-s-band-scalp",
+  "version": "0.1.0",
+  "type": "SCALP",
+  "timeframes": {
+    "signal_tf": "M1",
+    "entry_tf": "M1"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "INDEX",
+      "COMMODITY"
+    ],
+    "allowed_symbols": [
+      "NAS100",
+      "SPX500",
+      "US30",
+      "XAUUSD"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "gt",
+        "left": {
+          "indicator": "ema",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        },
+        "right": 100.0
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "ema",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "lt",
+        "left": {
+          "indicator": "ema",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        },
+        "right": 100.0
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "ema",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "scalp_quick",
+  "filters": [],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 6
+  }
+}

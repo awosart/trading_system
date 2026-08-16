@@ -1,0 +1,112 @@
+{
+  "id": "205-ichimochu-aggressive-breakout",
+  "version": "0.1.0",
+  "type": "INTRADAY",
+  "timeframes": {
+    "signal_tf": "M15",
+    "entry_tf": "M15"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX",
+      "INDEX",
+      "COMMODITY"
+    ],
+    "allowed_symbols": [
+      "AUDUSD",
+      "EURJPY",
+      "EURUSD",
+      "GBPUSD",
+      "NAS100",
+      "SPX500",
+      "UKOIL",
+      "US30",
+      "USDCAD",
+      "USDJPY",
+      "XAUUSD"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "gt",
+        "left": "price:close",
+        "right": {
+          "indicator": "sma",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "lt",
+        "left": "price:close",
+        "right": {
+          "indicator": "sma",
+          "params": {
+            "period": 50
+          },
+          "shift": 0
+        }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "conservative_2r",
+  "filters": [],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 2,
+    "cooldown_bars_after_loss": 4
+  }
+}

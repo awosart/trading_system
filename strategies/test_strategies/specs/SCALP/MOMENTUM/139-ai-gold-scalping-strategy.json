@@ -1,0 +1,117 @@
+{
+  "id": "139-ai-gold-scalping-strategy",
+  "version": "0.1.0",
+  "type": "SCALP",
+  "timeframes": {
+    "signal_tf": "M5",
+    "entry_tf": "M5"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX",
+      "INDEX",
+      "COMMODITY"
+    ],
+    "allowed_symbols": [
+      "EURJPY",
+      "GBPUSD",
+      "NAS100",
+      "SPX500",
+      "UKOIL",
+      "US30",
+      "USDJPY",
+      "XAUUSD"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_above",
+        "left": {
+          "indicator": "macd",
+          "params": {},
+          "channel": "macd",
+          "shift": 0
+        },
+        "right": {
+          "indicator": "macd",
+          "params": {},
+          "channel": "signal",
+          "shift": 0
+        }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_low",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "leaf",
+        "op": "cross_below",
+        "left": {
+          "indicator": "macd",
+          "params": {},
+          "channel": "macd",
+          "shift": 0
+        },
+        "right": {
+          "indicator": "macd",
+          "params": {},
+          "channel": "signal",
+          "shift": 0
+        }
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "swing",
+          "params": {
+            "lookback": 5
+          },
+          "channel": "swing_high",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "scalp_quick",
+  "filters": [],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 1,
+    "cooldown_bars_after_loss": 6
+  }
+}

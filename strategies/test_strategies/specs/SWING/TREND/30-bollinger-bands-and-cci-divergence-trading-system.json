@@ -1,0 +1,144 @@
+{
+  "id": "30-bollinger-bands-and-cci-divergence-trading-system",
+  "version": "0.1.0",
+  "type": "SWING",
+  "timeframes": {
+    "signal_tf": "H4",
+    "entry_tf": "H4"
+  },
+  "instruments": {
+    "allowed_classes": [
+      "FX"
+    ],
+    "allowed_symbols": [
+      "AUDUSD",
+      "EURUSD",
+      "GBPUSD",
+      "USDCAD",
+      "USDJPY"
+    ],
+    "denied_symbols": []
+  },
+  "market_regimes": [],
+  "entries": [
+    {
+      "direction": "LONG",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_above",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "upper",
+              "shift": 0
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              },
+              "shift": 0
+            },
+            "right": 1.5
+          }
+        ]
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "bbands",
+          "params": {
+            "period": 20,
+            "num_std": 2.0
+          },
+          "channel": "lower",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    },
+    {
+      "direction": "SHORT",
+      "trigger": {
+        "type": "all_of",
+        "conditions": [
+          {
+            "type": "leaf",
+            "op": "cross_below",
+            "left": "price:close",
+            "right": {
+              "indicator": "bbands",
+              "params": {
+                "period": 20,
+                "num_std": 2.0
+              },
+              "channel": "lower",
+              "shift": 0
+            }
+          },
+          {
+            "type": "leaf",
+            "op": "gt",
+            "left": {
+              "indicator": "rvol",
+              "params": {
+                "period": 20
+              },
+              "shift": 0
+            },
+            "right": 1.5
+          }
+        ]
+      },
+      "confirmation": [],
+      "confirmation_window_bars": 0,
+      "invalidation": {
+        "price_level": {
+          "indicator": "bbands",
+          "params": {
+            "period": 20,
+            "num_std": 2.0
+          },
+          "channel": "upper",
+          "shift": 0
+        }
+      },
+      "entry_order": {
+        "order": {
+          "type": "MARKET"
+        },
+        "expire_after_bars": 1
+      }
+    }
+  ],
+  "exit_ref": "structure_trail",
+  "filters": [],
+  "risk_profile": {
+    "base_quality": 0.5,
+    "quality_modifiers": [],
+    "stop_reference": {
+      "kind": "ATR",
+      "period": 14,
+      "multiple": 1.5
+    },
+    "max_concurrent_positions": 2,
+    "cooldown_bars_after_loss": 3
+  }
+}

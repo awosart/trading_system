@@ -1,0 +1,816 @@
+card_id,spec_id,type,family,fidelity,timeframe,legs,exit_ref,universe
+1-camarilla-equation,1-camarilla-equation,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-candlestick-trend,1-candlestick-trend,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-channel-breakout-with-pullback,1-channel-breakout-with-pullback,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-deviation-bands-system,1-deviation-bands-system,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-double-cci-and-rsioma,1-double-cci-and-rsioma,SCALP,MEAN_REVERSION,partial,M5,2,rr_10r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+1-fibonacci-retracement,1-fibonacci-retracement,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-forex-profit-system,1-forex-profit-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-high-momentum-low,1-high-momentum-low,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+1-parabolic-and-volumes,1-parabolic-and-volumes,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+1-pin-bar,1-pin-bar,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-asian-breakout,10-asian-breakout,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-bollinger-bands-breakout-with-awesome,10-bollinger-bands-breakout-with-awesome,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-bollinger-bands-rsi-and-adx,10-bollinger-bands-rsi-and-adx,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+10-bullish-engulfing-and-bearish-engulfing-pattern-with-rsi,10-bullish-engulfing-and-bearish-engulfing-pattern-with-rsi,INTRADAY,PATTERN,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-cci-stochastic-and-macd,10-cci-stochastic-and-macd,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-inside-bar,10-inside-bar,SWING,PATTERN,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-pivot-intraday,10-pivot-intraday,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-srdc-method-level-ii,10-srdc-method-level-ii,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-supertrend-breakout-zone-strategy,10-supertrend-breakout-zone-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+10-volatility-stretch-indicator-and-damiani-volameter-v-3-2,10-volatility-stretch-indicator-and-damiani-volameter-v-3-2,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+100-currency-ring,100-currency-ring,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+100-parabolic-sar-forex-trading-system,100-parabolic-sar-forex-trading-system,POSITION,TREND,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+100-supertrend-filtlered-by-price-action,100-supertrend-filtlered-by-price-action,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+101-5-min-trading-system,101-5-min-trading-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+101-chande-momentum-oscillator-cmo-trading-system,101-chande-momentum-oscillator-cmo-trading-system,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+101-sma-h1-trading-system,101-sma-h1-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+102-predator-scalping-trading-system,102-predator-scalping-trading-system,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+102-the-dance-trading-method,102-the-dance-trading-method,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+102-winner-trading-system,102-winner-trading-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+103-day-trading-gbp-jpy,103-day-trading-gbp-jpy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+103-force-index-indicator-trading-system,103-force-index-indicator-trading-system,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+103-system-500,103-system-500,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+104-accurate-trading-signals-dominate-the-market,104-accurate-trading-signals-dominate-the-market,SCALP,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+104-cci-indicator-with-two-moving-averages,104-cci-indicator-with-two-moving-averages,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+104-tom-de-mark-trend-line-strategy,104-tom-de-mark-trend-line-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+105-bollinger-bands-and-parabolic-sar-trading-system,105-bollinger-bands-and-parabolic-sar-trading-system,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+105-cobra-system,105-cobra-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+105-scalper-wave,105-scalper-wave,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+106-1-min-scalping-with-34-exponential-moving-average-channel,106-1-min-scalping-with-34-exponential-moving-average-channel,SCALP,MOMENTUM,partial,M1,1,scalp_quick,NAS100 SPX500 US30 XAUUSD
+106-the-boomerang,106-the-boomerang,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+107-cci-macd-zig-zag,107-cci-macd-zig-zag,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+107-keltener-channel-and-bollinger-bands-reversal-trading-system,107-keltener-channel-and-bollinger-bands-reversal-trading-system,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+107-trend-or-range,107-trend-or-range,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+108-donchian-channel-double-breakout-trading-system,108-donchian-channel-double-breakout-trading-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+108-ema-s-and-rsi,108-ema-s-and-rsi,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+108-half-trend-with-tma-scalping-strategy-tradingview,108-half-trend-with-tma-scalping-strategy-tradingview,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+109-etof-intraday-strategy,109-etof-intraday-strategy,SCALP,TREND,archetype,M15,2,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+109-forex-swing-system,109-forex-swing-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-bollinger-bands-breakout-and-rsi,11-bollinger-bands-breakout-and-rsi,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-cornflower,11-cornflower,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-daily-20-pips,11-daily-20-pips,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-daily-breakout,11-daily-breakout,POSITION,BREAKOUT,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-grid-action-forex-strategy,11-grid-action-forex-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-keltner-channels-and-ema,11-keltner-channels-and-ema,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+11-outside-bar,11-outside-bar,SWING,PATTERN,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-parabolic-and-macd,11-parabolic-and-macd,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+11-volatility-bands-filter,11-volatility-bands-filter,INTRADAY,VOLATILITY,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+110-double-cci-and-macd,110-double-cci-and-macd,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+110-sedinho-scalper,110-sedinho-scalper,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+110-stochasticrsi-accelerator-with-ema-channel-trading-system,110-stochasticrsi-accelerator-with-ema-channel-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+111-4h-rsi-trading-method-multitimeframe,111-4h-rsi-trading-method-multitimeframe,SWING,MEAN_REVERSION,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+111-kama-strategy,111-kama-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+112-adx-indicator-with-slow-macd,112-adx-indicator-with-slow-macd,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+112-adx-with-stochastic,112-adx-with-stochastic,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+112-sft,112-sft,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+113-accelerator-with-simple-moving-average-channel,113-accelerator-with-simple-moving-average-channel,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+113-koala-forex-system,113-koala-forex-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+113-win-gold-trading-system,113-win-gold-trading-system,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+114-30-min-strategy,114-30-min-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+114-awesome-and-bollinger-bands-scalping,114-awesome-and-bollinger-bands-scalping,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+114-the-force-index-with-adx-trading-system,114-the-force-index-with-adx-trading-system,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+115-aurora-fx-indicator-mt4,115-aurora-fx-indicator-mt4,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+115-heiken-ashi-technique,115-heiken-ashi-technique,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+115-trading-systen-with-rsi-and-roc,115-trading-systen-with-rsi-and-roc,POSITION,TREND,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+116-slingshot-scalping,116-slingshot-scalping,SCALP,MOMENTUM,archetype,M5,2,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+116-the-awesome-trading-system,116-the-awesome-trading-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+116-trendline-forex-entry-signal-two-high-probability-setups,116-trendline-forex-entry-signal-two-high-probability-setups,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+117-commodity-channel-index-system,117-commodity-channel-index-system,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+117-market-moon-scalping-strategy,117-market-moon-scalping-strategy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+117-trendline-system,117-trendline-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+118-rsi-divergence-with-i-gentor,118-rsi-divergence-with-i-gentor,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+118-simple-ma-macd,118-simple-ma-macd,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+118-ut-bot-alert-with-regression-candles,118-ut-bot-alert-with-regression-candles,SCALP,TREND,archetype,M5,2,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+119-dtosc-contrarian-trading-with-martingala,119-dtosc-contrarian-trading-with-martingala,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+119-sperandeo-victor-trendline-method,119-sperandeo-victor-trendline-method,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+119-ts-scalping-method,119-ts-scalping-method,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+12-balance-breakout-strategy,12-balance-breakout-strategy,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-bollinger-bands-and-fibonacci-retracement,12-bollinger-bands-and-fibonacci-retracement,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-candlestick-patterns-with-rainbow,12-candlestick-patterns-with-rainbow,SWING,PATTERN,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-ema-stochasticand-rsi,12-ema-stochasticand-rsi,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-grid-breakout-forex-strategy,12-grid-breakout-forex-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-murrey-mat-and-elliott-waves,12-murrey-mat-and-elliott-waves,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-parabolic-and-awesome,12-parabolic-and-awesome,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+12-scalping-with-machine-learning-and-ma-shift,12-scalping-with-machine-learning-and-ma-shift,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+12-system-17-with-atr-strategy,12-system-17-with-atr-strategy,INTRADAY,VOLATILITY,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+120-easy-profit,120-easy-profit,SCALP,TREND,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+120-trading-system-ema-rsi-trend,120-trading-system-ema-rsi-trend,SCALP,TREND,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+121-ichimoku-kinko-hyo-forex-strategy,121-ichimoku-kinko-hyo-forex-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+121-sbp-v-3-system,121-sbp-v-3-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+121-secret-weapon-in-precision-trading,121-secret-weapon-in-precision-trading,SCALP,TREND,archetype,M5,2,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+122-15-min-mtf,122-15-min-mtf,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+122-kernel-regression-scalping-strategy,122-kernel-regression-scalping-strategy,SCALP,MOMENTUM,partial,M5,2,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+123-adx-trading-system,123-adx-trading-system,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+123-free-style,123-free-style,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+123-stochastic-crossing-with-fxdd-strategy,123-stochastic-crossing-with-fxdd-strategy,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+124-bollinger-bands-5-min-scalping,124-bollinger-bands-5-min-scalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+124-braydensgrail,124-braydensgrail,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+124-rsi-lido-with-slow-stochastic,124-rsi-lido-with-slow-stochastic,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+125-5-min-momo-trade,125-5-min-momo-trade,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+125-the-gmma-bubble-trading-method,125-the-gmma-bubble-trading-method,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+126-200-ema-forex-strategy,126-200-ema-forex-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+126-5-min-trend-follower,126-5-min-trend-follower,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+127-cci-dema-and-rsx,127-cci-dema-and-rsx,INTRADAY,TREND,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+127-moving-averege-with-fractal,127-moving-averege-with-fractal,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+127-trend-bias-direction-forex-strategy,127-trend-bias-direction-forex-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+128-divergence-momentum-with-bollinger-bands,128-divergence-momentum-with-bollinger-bands,SCALP,TREND,archetype,M1,2,conservative_2r,NAS100 SPX500 US30 XAUUSD
+128-quadpips,128-quadpips,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+129-forex-catapult,129-forex-catapult,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+129-forex-mastery-strategy,129-forex-mastery-strategy,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+129-profit-scalping-system,129-profit-scalping-system,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+13-3-bar-pulback,13-3-bar-pulback,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+13-bollinger-bands-bounce,13-bollinger-bands-bounce,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+13-breaker-blocks-with-signals,13-breaker-blocks-with-signals,SCALP,MEAN_REVERSION,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+13-breakout-h1-method,13-breakout-h1-method,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+13-donchian-channels,13-donchian-channels,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+13-fibopivot-channel-strategy,13-fibopivot-channel-strategy,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+13-parabolic-sar-and-fibonacci,13-parabolic-sar-and-fibonacci,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+13-rsi-and-wma,13-rsi-and-wma,POSITION,MEAN_REVERSION,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+130-5-minute-scalping-with-machine-learning,130-5-minute-scalping-with-machine-learning,SCALP,MOMENTUM,partial,M5,2,structure_trail,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+130-colt-forex-system,130-colt-forex-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+130-keltner-trend-reversal,130-keltner-trend-reversal,INTRADAY,TREND,archetype,M15,2,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+131-5-min-keltner-system,131-5-min-keltner-system,SCALP,MEAN_REVERSION,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+131-super-stochastic-da-tt-mq4,131-super-stochastic-da-tt-mq4,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+131-trend-fx-strategy,131-trend-fx-strategy,INTRADAY,TREND,partial,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+132-analytic-sar-indicator-mq4,132-analytic-sar-indicator-mq4,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+132-tunnel-strategy,132-tunnel-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+133-1-min-contrarian-scalping,133-1-min-contrarian-scalping,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+133-hma-momentum-forex-strategy,133-hma-momentum-forex-strategy,INTRADAY,MEAN_REVERSION,partial,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+133-moving-average-trios,133-moving-average-trios,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+134-forex-divergence-h4-strategy,134-forex-divergence-h4-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+134-luna-fx-trading-system,134-luna-fx-trading-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+134-market-trajectory-mk1,134-market-trajectory-mk1,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+135-ewb-forex-strategy,135-ewb-forex-strategy,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+135-forex-aurum-trading-system,135-forex-aurum-trading-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+135-papaya-forex-strategy-mt4,135-papaya-forex-strategy-mt4,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+136-1-min-scalping-with-pivot-points,136-1-min-scalping-with-pivot-points,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+136-four-exponential-moving-averages-strategy,136-four-exponential-moving-averages-strategy,SWING,TREND,archetype,H4,2,rr_1_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+136-real-profit-strategy,136-real-profit-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+137-1-min-scalping-with-four-ema,137-1-min-scalping-with-four-ema,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+137-forex-indicators-trading-system,137-forex-indicators-trading-system,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+137-reversal-strategy-with-arithmetic-trader,137-reversal-strategy-with-arithmetic-trader,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+138-5-min-momo-trader,138-5-min-momo-trader,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+138-composite-index-strategy,138-composite-index-strategy,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+138-forex-profit-strategy,138-forex-profit-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+139-ai-gold-scalping-strategy,139-ai-gold-scalping-strategy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+139-channel-rsi-strategy,139-channel-rsi-strategy,INTRADAY,TREND,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+139-trendlines-forex-system,139-trendlines-forex-system,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-bollinger-bands-rsi-and-stochastic,14-bollinger-bands-rsi-and-stochastic,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-box-breakout-system,14-box-breakout-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-bullish-engulfing-and-bearish-engulfing-pattern-trading-system,14-bullish-engulfing-and-bearish-engulfing-pattern-trading-system,INTRADAY,PATTERN,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-dosr,14-dosr,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-learn-to-trade-the-vix,14-learn-to-trade-the-vix,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-pivots-levels-ema-channel-and-macd,14-pivots-levels-ema-channel-and-macd,INTRADAY,PIVOT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-precision-sr-trading-tradingview,14-precision-sr-trading-tradingview,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+14-rsi-and-two-ema,14-rsi-and-two-ema,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+140-nd10x-trading-strategy-mt4,140-nd10x-trading-strategy-mt4,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+140-scalping-with-200-sma,140-scalping-with-200-sma,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+140-three-exponential-moving-averages-trading-system,140-three-exponential-moving-averages-trading-system,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+141-drive-fx-trading-system,141-drive-fx-trading-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+141-fx-mantra,141-fx-mantra,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+142-alex-forex-strategy,142-alex-forex-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+142-the-wall-street-sniper-trading-strategy,142-the-wall-street-sniper-trading-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+142-trading-in-trending-with-retracement-trading-system-daily,142-trading-in-trending-with-retracement-trading-system-daily,POSITION,TREND,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+143-forex-zone-strategy,143-forex-zone-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+143-multitimeframe-trading-system-with-sma-and-bollinger-bands,143-multitimeframe-trading-system-with-sma-and-bollinger-bands,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+143-true-point,143-true-point,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+144-profitable-forex-trend-system,144-profitable-forex-trend-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+144-turtle-trading-system,144-turtle-trading-system,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+145-novinder-signal-scalping-strategy,145-novinder-signal-scalping-strategy,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+145-perfect-entry-strategy,145-perfect-entry-strategy,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+145-three-exponential-moving-averages-with-macd,145-three-exponential-moving-averages-with-macd,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+146-fibonacci-scalping,146-fibonacci-scalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+146-mean-reversion-indicator,146-mean-reversion-indicator,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+146-three-exponential-moving-averages-with-macd-and-rsi,146-three-exponential-moving-averages-with-macd-and-rsi,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+147-absolute-strenght-scalping,147-absolute-strenght-scalping,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+147-alcon-forex-strategy,147-alcon-forex-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD USDJPY
+147-trading-retracement-forex-trading-system,147-trading-retracement-forex-trading-system,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+148-ema-s-bands-with-rsi-filter,148-ema-s-bands-with-rsi-filter,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+148-machine-pips-with-momentum,148-machine-pips-with-momentum,INTRADAY,MOMENTUM,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+149-entropy-forex-indicator-with-alligator-indicator-trading-system,149-entropy-forex-indicator-with-alligator-indicator-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+149-pivots-strategy,149-pivots-strategy,SCALP,PIVOT,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+149-z-score-mean-reversion,149-z-score-mean-reversion,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-3-min-scalping-supertrend-with-ema,15-3-min-scalping-supertrend-with-ema,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+15-3b-pattern,15-3b-pattern,INTRADAY,PATTERN,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-ademola-forex,15-ademola-forex,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-bollinger-bands-and-adx,15-bollinger-bands-and-adx,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-hammer-trading-system,15-hammer-trading-system,SWING,PATTERN,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-lwma-with-exit-willy-alerts,15-lwma-with-exit-willy-alerts,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-machine-learning-rsi-tradingview,15-machine-learning-rsi-tradingview,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-pivot-point-method,15-pivot-point-method,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+15-trend-confirmed-breakout-strategy-mt5,15-trend-confirmed-breakout-strategy-mt5,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+150-15-min-contrarian-scalping,150-15-min-contrarian-scalping,SCALP,MOMENTUM,archetype,M15,2,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+150-combo-strategy-stochastic,150-combo-strategy-stochastic,INTRADAY,TREND,partial,H1,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+150-two-ma-s-moving-averages-smoothed-and-adx,150-two-ma-s-moving-averages-smoothed-and-adx,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+151-angle-attack-follow-line-indicator,151-angle-attack-follow-line-indicator,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+152-ma-candles-channel-trading,152-ma-candles-channel-trading,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+153-macd-forex-trading-system,153-macd-forex-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+154-day-trade-30-min-time-frame,154-day-trade-30-min-time-frame,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+155-fx-ultimate-profit,155-fx-ultimate-profit,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+156-simple-trend-strategy,156-simple-trend-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+157-heiken-ashi-pull-back-strategy,157-heiken-ashi-pull-back-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+158-trillion-fx-strategy,158-trillion-fx-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+159-forex-pro-strategy,159-forex-pro-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-bollinger-bands-scalp-gbp-jpy,16-bollinger-bands-scalp-gbp-jpy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+16-bollinger-bands-with-adx-rsi-and-two-ma,16-bollinger-bands-with-adx-rsi-and-two-ma,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-cci-system,16-cci-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-engulfing-pattern-trading-system,16-engulfing-pattern-trading-system,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-key-points,16-key-points,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-moving-average-channel-and-parabolic-sar,16-moving-average-channel-and-parabolic-sar,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-the-daily-5-trading-strategy,16-the-daily-5-trading-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+16-trade-forex-using-pivot-points,16-trade-forex-using-pivot-points,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+160-trend-booster-system,160-trend-booster-system,INTRADAY,TREND,archetype,M15,2,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+161-geo-crossover-signal,161-geo-crossover-signal,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+162-trend-signals-with-power-rangers,162-trend-signals-with-power-rangers,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+163-signal-line-with-stochastic,163-signal-line-with-stochastic,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+164-inverse-stochastic-strategy,164-inverse-stochastic-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+165-pivot-points-trend-strategy,165-pivot-points-trend-strategy,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+166-atr-trend-strategy,166-atr-trend-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+167-hedging-dynamic-forex-strategy,167-hedging-dynamic-forex-strategy,SWING,TREND,partial,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+168-geo-crossover-signal-v-2,168-geo-crossover-signal-v-2,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+169-advanced-parabolic-sar-v-2,169-advanced-parabolic-sar-v-2,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+17-bollinger-bands-and-equidistant-channel,17-bollinger-bands-and-equidistant-channel,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+17-delta-reaction-zones-complete-guide-tradingview,17-delta-reaction-zones-complete-guide-tradingview,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+17-gann-hilo-system,17-gann-hilo-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+17-pips-swing-fx-strategy,17-pips-swing-fx-strategy,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+17-range-breakout,17-range-breakout,INTRADAY,BREAKOUT,partial,M15,2,rr_5r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+17-sd-system,17-sd-system,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+17-stochastic-and-ems-cross,17-stochastic-and-ems-cross,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+170-daytrading-master,170-daytrading-master,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+171-3ma-trend-power,171-3ma-trend-power,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+172-swing-trading-with-heiken-ashi,172-swing-trading-with-heiken-ashi,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+173-the-best-heiken-ashi-system,173-the-best-heiken-ashi-system,SCALP,TREND,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+174-rapid-trade-finder-review,174-rapid-trade-finder-review,SWING,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+176-raven-forex-strategy,176-raven-forex-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+177-trend-navigator,177-trend-navigator,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+178-maringale-strategy-with-awesome,178-maringale-strategy-with-awesome,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+179-best-ichimoku-trend-strategy,179-best-ichimoku-trend-strategy,SCALP,TREND,partial,M5,2,structure_trail,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+18-95-pips-daily,18-95-pips-daily,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-bollinger-bands-and-rsi-divergence,18-bollinger-bands-and-rsi-divergence,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-day-breakout,18-day-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-double-inside-bar,18-double-inside-bar,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-emas-cross-and-adx,18-emas-cross-and-adx,POSITION,TREND,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-extreme-scalping-modified,18-extreme-scalping-modified,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+18-low-close-doji-and-high-close-doji,18-low-close-doji-and-high-close-doji,SWING,PATTERN,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-scalping-with-pivot-levels,18-scalping-with-pivot-levels,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+18-stochastic-and-awesome,18-stochastic-and-awesome,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+180-mega-pips-system,180-mega-pips-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+181-trend-force-strategy,181-trend-force-strategy,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+182-sky-forex-system,182-sky-forex-system,SWING,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+183-vr-forex-system,183-vr-forex-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+184-forex-invincible-signal-strategy,184-forex-invincible-signal-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+185-ichimoku-complex-strategy,185-ichimoku-complex-strategy,SWING,TREND,partial,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+186-power-trading-system,186-power-trading-system,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+187-step-ma-with-gann-ribbon,187-step-ma-with-gann-ribbon,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+188-dz-gold-strategy,188-dz-gold-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+189-cci-trend-reversal,189-cci-trend-reversal,SWING,TREND,partial,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-action-trade,19-action-trade,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+19-algo-divergence-with-magic-trend,19-algo-divergence-with-magic-trend,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-doji-star-system,19-doji-star-system,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-double-stochastic,19-double-stochastic,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-magic-breakout,19-magic-breakout,INTRADAY,BREAKOUT,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-pin-bar-with-support-and-resistance,19-pin-bar-with-support-and-resistance,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-pivot-scalping-with-candlestick-patterns,19-pivot-scalping-with-candlestick-patterns,INTRADAY,PIVOT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-power-bands,19-power-bands,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+19-set-and-forget,19-set-and-forget,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+190-trends-trigger-fx,190-trends-trigger-fx,SWING,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+191-allitrend-fx-non-repaint-strategy,191-allitrend-fx-non-repaint-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+192-supertrend-with-ema-channel,192-supertrend-with-ema-channel,SWING,TREND,read,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+193-ichimoku-with-alligator-forex-strategy,193-ichimoku-with-alligator-forex-strategy,SWING,TREND,archetype,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+194-90-win-forex-strategy,194-90-win-forex-strategy,SWING,TREND,archetype,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+195-multi-ma-with-regression-channel,195-multi-ma-with-regression-channel,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+196-trend-breakout-strategy,196-trend-breakout-strategy,INTRADAY,TREND,partial,M15,2,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+197-viper-trend-with-moving-averages,197-viper-trend-with-moving-averages,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+198-fx-master-trend-strategy,198-fx-master-trend-strategy,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+199-trend-arrow-strategy,199-trend-arrow-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-bitcoin-explosion,2-bitcoin-explosion,INTRADAY,VOLATILITY,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-candlestick-pattern-reversal-pivot,2-candlestick-pattern-reversal-pivot,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-cross-midlle-band,2-cross-midlle-band,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-grid-trading-pratical-tutorial,2-grid-trading-pratical-tutorial,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-mfx-pro-scalping-mt4,2-mfx-pro-scalping-mt4,SCALP,MOMENTUM,archetype,M5,2,structure_trail,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+2-precision-breakout-mt5,2-precision-breakout-mt5,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-pro-strategy-tradingview,2-pro-strategy-tradingview,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-stochastic-strategy,2-stochastic-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+2-trading-with-the-camarilla-equation,2-trading-with-the-camarilla-equation,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-bollinger-bands-and-stochastic,20-bollinger-bands-and-stochastic,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+20-dpo-system,20-dpo-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-pin-bar-system-iii,20-pin-bar-system-iii,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-pivot-trading-technique,20-pivot-trading-technique,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-polynomial-regression-with-ez-algo-and-ut-bot-alerts,20-polynomial-regression-with-ez-algo-and-ut-bot-alerts,INTRADAY,TREND,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-psych-level-scalping-system,20-psych-level-scalping-system,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+20-trap-for-the-price,20-trap-for-the-price,POSITION,MEAN_REVERSION,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+20-two-bar-breakout-system,20-two-bar-breakout-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+200-trend-perfect-stratgy,200-trend-perfect-stratgy,SWING,TREND,archetype,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+201-ichuimoku-cloud-filtered,201-ichuimoku-cloud-filtered,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+202-crypto-trend-strategy-mt4,202-crypto-trend-strategy-mt4,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+203-fx-trend-strategy,203-fx-trend-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+204-powerful-trend-strategy,204-powerful-trend-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+205-ichimochu-aggressive-breakout,205-ichimochu-aggressive-breakout,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+206-trend-forex-prox-system,206-trend-forex-prox-system,SCALP,TREND,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+207-pullbacks-trend-strategy,207-pullbacks-trend-strategy,SCALP,TREND,archetype,M1,2,rr_1_2r,NAS100 SPX500 US30 XAUUSD
+208-ribbon-with-rsi-strategy,208-ribbon-with-rsi-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+209-sai-scalper-pro-tradingview-indicator,209-sai-scalper-pro-tradingview-indicator,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-100-pips-daily,21-100-pips-daily,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-15-min-gbp-usd-range-breakout,21-15-min-gbp-usd-range-breakout,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-bollinger-stoch-reversal-strategy,21-bollinger-stoch-reversal-strategy,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-candlestick-with-momentum,21-candlestick-with-momentum,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-fractal-and-moxo-momentum-crossover,21-fractal-and-moxo-momentum-crossover,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-keltner-scalping,21-keltner-scalping,SCALP,MOMENTUM,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+21-pivot-points-levels-trend-trading-system,21-pivot-points-levels-trend-trading-system,INTRADAY,PIVOT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+21-slow-stochastic-mas-and-adx,21-slow-stochastic-mas-and-adx,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+210-multipositions-trading-with-ichimoku,210-multipositions-trading-with-ichimoku,SWING,TREND,archetype,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+211-1-minute-scalping-with-tradingview,211-1-minute-scalping-with-tradingview,SCALP,TREND,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+212-trend-123-breakout-strategy,212-trend-123-breakout-strategy,SWING,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+213-heikin-ashi-jackpot,213-heikin-ashi-jackpot,SWING,TREND,partial,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+214-precision-swing-strategy,214-precision-swing-strategy,SWING,TREND,partial,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+215-double-donchian-channel,215-double-donchian-channel,SCALP,TREND,archetype,M5,2,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+216-ichimoku-with-fibonacci,216-ichimoku-with-fibonacci,SWING,TREND,archetype,H4,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+217-viper-channel-trading,217-viper-channel-trading,SWING,TREND,archetype,H4,2,rr_1_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+218-digital-ma-cross,218-digital-ma-cross,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+219-aggressive-pullback-trading,219-aggressive-pullback-trading,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-asian-breakout-ii,22-asian-breakout-ii,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-bollinger-bands-macd-and-ma,22-bollinger-bands-macd-and-ma,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-dashboard-tradestation-entry-with-supertrend-averages,22-dashboard-tradestation-entry-with-supertrend-averages,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+22-fading-the-double-zero,22-fading-the-double-zero,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-gap-system,22-gap-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-levels-reversal-trading-system,22-levels-reversal-trading-system,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+22-swinger,22-swinger,INTRADAY,TREND,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+220-trade-with-the-trend-anthology,220-trade-with-the-trend-anthology,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+221-super-precision-long-trend,221-super-precision-long-trend,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+222-super-trend-following-strategy,222-super-trend-following-strategy,SWING,TREND,partial,H4,1,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-1-min-scalper,23-1-min-scalper,SCALP,MOMENTUM,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+23-bollinger-bands-and-cci-reversal-trading-system,23-bollinger-bands-and-cci-reversal-trading-system,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-breakout-sqaulou,23-breakout-sqaulou,INTRADAY,BREAKOUT,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-fibonacci-support-and-resistance,23-fibonacci-support-and-resistance,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-ma-master-pro-final-tradingview,23-ma-master-pro-final-tradingview,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-stress-free-trading-4x-trading-system,23-stress-free-trading-4x-trading-system,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+23-waiting-for-real-deal,23-waiting-for-real-deal,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+24-box-breakout-3,24-box-breakout-3,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+24-camarilla-exchange-trading-system,24-camarilla-exchange-trading-system,INTRADAY,PIVOT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+24-macd-pullback,24-macd-pullback,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+24-parabolic-sar-trend-scalper,24-parabolic-sar-trend-scalper,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+24-sniper-confluence-entry-exit-tradingview,24-sniper-confluence-entry-exit-tradingview,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+24-squeeze-breakout,24-squeeze-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+24-trading-scalping-on-the-daily-bar,24-trading-scalping-on-the-daily-bar,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-2-days-breakout,25-2-days-breakout,INTRADAY,BREAKOUT,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-adx-awesome-and-stochastic-histogramm,25-adx-awesome-and-stochastic-histogramm,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-bolllinger-bands-forex-swing-trading,25-bolllinger-bands-forex-swing-trading,INTRADAY,PATTERN,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-channel-strategy,25-channel-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-ema-s-band-scalp,25-ema-s-band-scalp,SCALP,MOMENTUM,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+25-murrey-math-harmonic-octave,25-murrey-math-harmonic-octave,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+25-pivots-points-levels-with-stochastic-cross-alert,25-pivots-points-levels-with-stochastic-cross-alert,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-bollinger-bands-scalping-system,26-bollinger-bands-scalping-system,INTRADAY,MOMENTUM,archetype,M15,2,rr_10r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-gpy-4h-strategy,26-gpy-4h-strategy,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-inside-bar-and-stochastic,26-inside-bar-and-stochastic,SWING,PATTERN,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-pivots-swing-system,26-pivots-swing-system,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-rsi-and-ma-cross-inside-bollinger-bands,26-rsi-and-ma-cross-inside-bollinger-bands,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+26-scalping-with-parabolic-sar-and-cci,26-scalping-with-parabolic-sar-and-cci,SCALP,MOMENTUM,partial,M5,2,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+26-session-volume-profile-trading-view,26-session-volume-profile-trading-view,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+26-the-retrotrader,26-the-retrotrader,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+27-asian-breakout-iii,27-asian-breakout-iii,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+27-bollinger-bands-divergence,27-bollinger-bands-divergence,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+27-inside-bar-pullback,27-inside-bar-pullback,INTRADAY,PATTERN,partial,M15,1,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+27-lindencourt-method-15-tf,27-lindencourt-method-15-tf,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+27-pivot-points-levels-with-the-blade-oscillator,27-pivot-points-levels-with-the-blade-oscillator,INTRADAY,PIVOT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-4h-strategy-rsx-and-murrey-math,28-4h-strategy-rsx-and-murrey-math,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-bollinger-bands-overbought-and-oversold,28-bollinger-bands-overbought-and-oversold,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-breakout-30-pips,28-breakout-30-pips,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-fox-pivot-trading-system,28-fox-pivot-trading-system,INTRADAY,PIVOT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-helacator-theta-forex-strategy,28-helacator-theta-forex-strategy,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-macd-trend,28-macd-trend,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+28-simple-scalper,28-simple-scalper,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+29-bollinger-band-trading-in-trend-trading-system,29-bollinger-band-trading-in-trend-trading-system,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-daily-fibo-intraday-strategy,29-daily-fibo-intraday-strategy,INTRADAY,PIVOT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-forex-breakout,29-forex-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-macd-retracement,29-macd-retracement,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-murrey-math,29-murrey-math,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-simple-strategy,29-simple-strategy,POSITION,TREND,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+29-williams-trade,29-williams-trade,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+3-bitcoin-scalping-with-keltner,3-bitcoin-scalping-with-keltner,INTRADAY,VOLATILITY,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-bollinger-bands-and-123,3-bollinger-bands-and-123,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-candlestick-reversal-i,3-candlestick-reversal-i,SWING,PATTERN,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-inside-day-breakout,3-inside-day-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-neptune-system,3-neptune-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+3-pin-bar-and-awesome,3-pin-bar-and-awesome,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-price-action-tool-with-rmi-sniper-trend,3-price-action-tool-with-rmi-sniper-trend,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-tma-overlay-arrows-with-tdi-rsi,3-tma-overlay-arrows-with-tdi-rsi,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-trading-breakouts-with-the-camarilla-equation,3-trading-breakouts-with-the-camarilla-equation,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+3-zone-hunter-the-ultimate-multi-indicator-tradingview,3-zone-hunter-the-ultimate-multi-indicator-tradingview,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+30-2-cross-and-macd,30-2-cross-and-macd,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+30-bollinger-bands-and-cci-divergence-trading-system,30-bollinger-bands-and-cci-divergence-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+30-fx-superscalping,30-fx-superscalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+30-murrey-math-system,30-murrey-math-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+30-pivot-buy-sell,30-pivot-buy-sell,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+30-stoch-awesome-and-ema,30-stoch-awesome-and-ema,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+30-verbtheory-s,30-verbtheory-s,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-4h-breakout,31-4h-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-adx-and-moving-average-channel,31-adx-and-moving-average-channel,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-bollinger-bands-squeeze-reversal-system,31-bollinger-bands-squeeze-reversal-system,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-mc-method,31-mc-method,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-pivot-davits-with-kiosotto,31-pivot-davits-with-kiosotto,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+31-winning-pips,31-winning-pips,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-4-ema-and-channel,32-4-ema-and-channel,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-ac-ao-and-stochastic,32-ac-ao-and-stochastic,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-adr-strategy,32-adr-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-counter-strike,32-counter-strike,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-inside-bar-with-bollinger-bands,32-inside-bar-with-bollinger-bands,INTRADAY,PATTERN,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-ma-bollinger-bands-trading,32-ma-bollinger-bands-trading,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+32-the-secret-method,32-the-secret-method,SCALP,MOMENTUM,partial,M5,1,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+33-3-candle-scalping,33-3-candle-scalping,SCALP,MOMENTUM,archetype,M15,2,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-bollinger-bands-with-grid-martingale,33-bollinger-bands-with-grid-martingale,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-channel-breakouts,33-channel-breakouts,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-commodity-channel-index-average-system,33-commodity-channel-index-average-system,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-pin-bar-bollinger-bands-and-jma-starlight,33-pin-bar-bollinger-bands-and-jma-starlight,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-psar-macd-cci-moving-averages,33-psar-macd-cci-moving-averages,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+33-set-and-forget-ii,33-set-and-forget-ii,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+34-better-bollinger-bands,34-better-bollinger-bands,SCALP,BREAKOUT,partial,M5,2,rr_10r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+34-breakout-trading-in-all-market-condition,34-breakout-trading-in-all-market-condition,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+34-hoover-method,34-hoover-method,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+34-moving-average-crossover,34-moving-average-crossover,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+34-precision-scalping,34-precision-scalping,SCALP,MOMENTUM,partial,M5,1,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+34-quasimodo-pattern-indicator-with-qqe,34-quasimodo-pattern-indicator-with-qqe,SCALP,PATTERN,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+34-scalping-killer-forex-strategy,34-scalping-killer-forex-strategy,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+35-100-ema-multitimeframe,35-100-ema-multitimeframe,SWING,TREND,read,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+35-london-breakout,35-london-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+35-parabolic-stochastic-and-macd,35-parabolic-stochastic-and-macd,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+35-price-action-fractal-scalping,35-price-action-fractal-scalping,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+35-studio-market-structure-sms-tradingview,35-studio-market-structure-sms-tradingview,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-bollinger-bands-with-nonlinear-ma,36-bollinger-bands-with-nonlinear-ma,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-early-bird,36-early-bird,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-hells-angels,36-hells-angels,SCALP,TREND,archetype,M15,2,rr_1_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-inside-bar-with-macd,36-inside-bar-with-macd,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-smart-trading-system,36-smart-trading-system,INTRADAY,MEAN_REVERSION,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-trend-follow,36-trend-follow,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+36-tutorial-support-and-resistance,36-tutorial-support-and-resistance,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-adx-and-ema,37-adx-and-ema,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-bollinger-bands-with-fast-rsi,37-bollinger-bands-with-fast-rsi,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-bollinger-bands-with-patterns-indicators,37-bollinger-bands-with-patterns-indicators,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-cycle-explorer-with-hma,37-cycle-explorer-with-hma,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+37-donchian-breakout,37-donchian-breakout,INTRADAY,BREAKOUT,archetype,H1,2,atr_trail_aggressive,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-dynamic-zone-rsi,37-dynamic-zone-rsi,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+37-trade-zone-tutorial,37-trade-zone-tutorial,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+38-algo-combined-tradingview,38-algo-combined-tradingview,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+38-kevinator-retracement,38-kevinator-retracement,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+38-macd-strategy-with-pattern-macd,38-macd-strategy-with-pattern-macd,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+38-price-action-strategy,38-price-action-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+38-trendline-breakout,38-trendline-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+38-wilder-s-rsi-band-breakout,38-wilder-s-rsi-band-breakout,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+39-4h-trend,39-4h-trend,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+39-breakout-weekly-strategy,39-breakout-weekly-strategy,SWING,BREAKOUT,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+39-cci-with-bollinger-bands-bounce,39-cci-with-bollinger-bands-bounce,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+39-fibonacci-retracements-fibonacci-extensions-fibonacci-levels-tutorial,39-fibonacci-retracements-fibonacci-extensions-fibonacci-levels-tutorial,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+39-the-magic-channel,39-the-magic-channel,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-ai-double-entry-tradingview,4-ai-double-entry-tradingview,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-bollinger-bands-and-cci,4-bollinger-bands-and-cci,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-breakout-with-market-structure-breaker,4-breakout-with-market-structure-breaker,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-candlestick-reversal-ii,4-candlestick-reversal-ii,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-ict-with-fvg-tradingview-system,4-ict-with-fvg-tradingview-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-key-reversl-bar,4-key-reversl-bar,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-pivot,4-pivot,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+4-without-volatility,4-without-volatility,INTRADAY,VOLATILITY,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+40-bollinger-bands-with-supertrend,40-bollinger-bands-with-supertrend,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+40-gbp-jpy-daily-strategy,40-gbp-jpy-daily-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+40-german-sniper-filtered,40-german-sniper-filtered,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+40-hans123-breakout,40-hans123-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+40-macd-rsi-50-ema-and-pivot-points,40-macd-rsi-50-ema-and-pivot-points,INTRADAY,PIVOT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+40-smart-algo-ha-renko-trend-trading-strategy,40-smart-algo-ha-renko-trend-trading-strategy,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-adaptive-snr-with-bollinger-stop,41-adaptive-snr-with-bollinger-stop,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-breakout-targets-indicator-tradingview,41-breakout-targets-indicator-tradingview,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-dz-tdi-rsi-with-bollinger-bands,41-dz-tdi-rsi-with-bollinger-bands,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-escalator-to-pips-methodology,41-escalator-to-pips-methodology,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-pin-bar-trading-price-action,41-pin-bar-trading-price-action,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+41-proactive-order,41-proactive-order,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+41-scalping-panther,41-scalping-panther,SCALP,MOMENTUM,partial,M5,2,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+42-bollinger-bands-montecarlo,42-bollinger-bands-montecarlo,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+42-engulfing-pattern-with-macd,42-engulfing-pattern-with-macd,INTRADAY,PATTERN,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+42-fibonacci-retracement-how-to-use,42-fibonacci-retracement-how-to-use,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+42-king-cobra-breakout,42-king-cobra-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+42-reactive-trading,42-reactive-trading,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+42-scalping-velocity-market,42-scalping-velocity-market,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+42-stochastic-trading-method-i-basic-momentum,42-stochastic-trading-method-i-basic-momentum,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+43-bollinger-bands-scientific-trading,43-bollinger-bands-scientific-trading,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+43-fx-milion,43-fx-milion,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+43-proative-and-reactive-trading,43-proative-and-reactive-trading,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+43-scalping-with-nsdt-hama-candles-and-pivot-supertrend,43-scalping-with-nsdt-hama-candles-and-pivot-supertrend,SCALP,MOMENTUM,archetype,M5,2,structure_trail,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+43-stochastic-trading-method-ii-escalator-ii,43-stochastic-trading-method-ii-escalator-ii,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+43-trades-bankers,43-trades-bankers,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+44-4h-system,44-4h-system,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+44-bollinger-bands-ma-macd-reversal,44-bollinger-bands-ma-macd-reversal,INTRADAY,TREND,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+44-breakout-scalping-trading-session,44-breakout-scalping-trading-session,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+44-c5,44-c5,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+44-murrey-math-intraday-trading-system,44-murrey-math-intraday-trading-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+44-stochastic-trading-method-iii-mtf-scalp,44-stochastic-trading-method-iii-mtf-scalp,INTRADAY,MOMENTUM,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+45-b-o-s-s-breakout-method,45-b-o-s-s-breakout-method,SCALP,BREAKOUT,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+45-cci-and-ema,45-cci-and-ema,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+45-fibonacci-abcd-pattern-trading-system,45-fibonacci-abcd-pattern-trading-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+45-illuminated-bands-forex-strategy,45-illuminated-bands-forex-strategy,INTRADAY,TREND,archetype,M15,2,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+45-pin-bar-with-two-macd-trading-system,45-pin-bar-with-two-macd-trading-system,SCALP,PATTERN,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+45-sdx-breakout,45-sdx-breakout,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+45-stochastic-trading-method-iv-spud-s-mtf-fib-breakout-system,45-stochastic-trading-method-iv-spud-s-mtf-fib-breakout-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+46-bollinger-bands-mtf-alerts,46-bollinger-bands-mtf-alerts,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+46-box-breakout-and-ema-channel,46-box-breakout-and-ema-channel,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+46-dynamic-zone-step-ehlers,46-dynamic-zone-step-ehlers,SCALP,TREND,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+46-fakey-pattern-trading-system,46-fakey-pattern-trading-system,SCALP,PATTERN,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+46-fractal-strategy,46-fractal-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+46-level-trading,46-level-trading,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+46-stochastic-trading-method-v-spudfyre,46-stochastic-trading-method-v-spudfyre,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+47-5min-method,47-5min-method,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+47-ashfx-v-2,47-ashfx-v-2,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+47-bbma-forex-strategy,47-bbma-forex-strategy,INTRADAY,TREND,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+47-joker-breakout,47-joker-breakout,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+47-schaff-trend-cycle-strategy,47-schaff-trend-cycle-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+47-set-and-forget-10-pips-a-day,47-set-and-forget-10-pips-a-day,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-10-pips-after-open,48-10-pips-after-open,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-15-minute-opening-range-breakout-strategy,48-15-minute-opening-range-breakout-strategy,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-d2d,48-d2d,INTRADAY,MOMENTUM,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-double-bollinger-bands-price-action-with-macd,48-double-bollinger-bands-price-action-with-macd,INTRADAY,MEAN_REVERSION,partial,M15,2,rr_1r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-ema-laguerre-system,48-ema-laguerre-system,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+48-neptune-3-1min-scalping,48-neptune-3-1min-scalping,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+49-bollinger-bands-with-rsi-ob-ov,49-bollinger-bands-with-rsi-ob-ov,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+49-cci-and-stochastic-retracement,49-cci-and-stochastic-retracement,POSITION,TREND,partial,D1,1,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+49-london-breakout-iii,49-london-breakout-iii,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+49-macd-scalping-1-min,49-macd-scalping-1-min,SCALP,MOMENTUM,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+49-monday-trading,49-monday-trading,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+49-on-trend,49-on-trend,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+49-ptl-inside-bar-trading,49-ptl-inside-bar-trading,SWING,PATTERN,archetype,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-bollinger-bands-pin-bar-and-real-macd,5-bollinger-bands-pin-bar-and-real-macd,INTRADAY,PATTERN,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-channel-breakout-and-moving-average,5-channel-breakout-and-moving-average,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-engulfing-noise-scalping,5-engulfing-noise-scalping,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-extreme-volatility,5-extreme-volatility,INTRADAY,VOLATILITY,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-how-to-trade-with-dynamic-chop-zones-tradingview-indicator,5-how-to-trade-with-dynamic-chop-zones-tradingview-indicator,SCALP,TREND,partial,M5,1,rr_1_2r,EURJPY GBPUSD USDJPY
+5-pvot-points-filtered-by-gmma,5-pvot-points-filtered-by-gmma,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-simple-macd-and-ema,5-simple-macd-and-ema,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-support-and-resistance-important-or-psycho-level,5-support-and-resistance-important-or-psycho-level,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+5-trend-reversal-strategy-with-keltner-channel-and-harsi,5-trend-reversal-strategy-with-keltner-channel-and-harsi,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+50-ai-signal-trading-strategy,50-ai-signal-trading-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+50-best-bollinger-bands-reversal,50-best-bollinger-bands-reversal,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+50-jurik-scalp-net,50-jurik-scalp-net,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+50-trend-dynamic-breakout,50-trend-dynamic-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+50-watl-wave-autotrend-lines-wati,50-watl-wave-autotrend-lines-wati,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+50-williams-r-stochastic-and-ema,50-williams-r-stochastic-and-ema,SCALP,MEAN_REVERSION,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+51-10-pips-a-day,51-10-pips-a-day,SCALP,MEAN_REVERSION,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+51-5min-breakout,51-5min-breakout,SCALP,BREAKOUT,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+51-channel-ema,51-channel-ema,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+51-exponential-moving-average-fractal-system,51-exponential-moving-average-fractal-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+51-pin-bar-with-moving-average,51-pin-bar-with-moving-average,INTRADAY,PATTERN,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+51-three-bollinger-bands-strategy-for-cryptocurrencies,51-three-bollinger-bands-strategy-for-cryptocurrencies,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+51-trendline-price-action-forex-system,51-trendline-price-action-forex-system,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+52-60-minute-breakout-system,52-60-minute-breakout-system,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+52-daily-fx,52-daily-fx,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+52-gbp-jpy-edge-forex-strategy,52-gbp-jpy-edge-forex-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+52-n-bars-strategy,52-n-bars-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+52-zup-pattern-with-gann-angles,52-zup-pattern-with-gann-angles,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+53-isakas-sekelper,53-isakas-sekelper,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+53-ma-channel-with-1-2-3-pattern,53-ma-channel-with-1-2-3-pattern,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+53-ma-crossing-and-cci-slow,53-ma-crossing-and-cci-slow,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+53-smart-money-concepts-smc-indicator,53-smart-money-concepts-smc-indicator,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+53-true-breakout-system-basic,53-true-breakout-system-basic,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+53-zez-system,53-zez-system,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+54-dynamic-channel-of-support-and-resistance,54-dynamic-channel-of-support-and-resistance,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+54-london-open-box-breakout-4-trading-system,54-london-open-box-breakout-4-trading-system,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+54-ma-envelopes,54-ma-envelopes,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+54-trend-strategy-dequex-algo-filtering-by-hull,54-trend-strategy-dequex-algo-filtering-by-hull,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+55-adx-filtered-sma-21,55-adx-filtered-sma-21,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+55-atr-with-scalper-c-trading-system,55-atr-with-scalper-c-trading-system,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+55-stochastic-macd-sma,55-stochastic-macd-sma,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+55-the-fade-the-break-forex-strategy,55-the-fade-the-break-forex-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+55-tunnel-with-box-breakout-v-5-trading-system,55-tunnel-with-box-breakout-v-5-trading-system,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-breakout-secret-revelead-trading-system,56-breakout-secret-revelead-trading-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-double-rsi,56-double-rsi,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-dynamicrs-c-forex-scalping-system,56-dynamicrs-c-forex-scalping-system,SCALP,MOMENTUM,archetype,M15,2,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-forex-trend-strategy-with-fibonacci-retracement-trading-system,56-forex-trend-strategy-with-fibonacci-retracement-trading-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-how-to-trade-with-bheurekso-pattern,56-how-to-trade-with-bheurekso-pattern,SWING,PATTERN,archetype,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+56-tm-ifo-pro-plus-tradingview,56-tm-ifo-pro-plus-tradingview,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+57-breakout-zones,57-breakout-zones,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+57-kas37,57-kas37,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+57-open-tomorrow,57-open-tomorrow,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+57-price-action-with-21-sma,57-price-action-with-21-sma,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+57-scalping-with-money-flow-index-and-bollinger-bands,57-scalping-with-money-flow-index-and-bollinger-bands,SCALP,MEAN_REVERSION,partial,M5,2,scalp_quick,EURJPY GBPUSD USDJPY
+58-atr-channel-breakout-swing-strategy,58-atr-channel-breakout-swing-strategy,SWING,BREAKOUT,archetype,H4,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+58-cci-floor-forex,58-cci-floor-forex,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+58-irobot-v3-for-crypto-tradingview-strategy,58-irobot-v3-for-crypto-tradingview-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+58-support-and-resistance-reversal-system,58-support-and-resistance-reversal-system,SWING,MEAN_REVERSION,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+59-3-breakout-box,59-3-breakout-box,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+59-intermarket-strategy,59-intermarket-strategy,POSITION,TREND,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+59-scalping-with-i-regression,59-scalping-with-i-regression,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+59-volume-delta-chandelier-exit-breakout-trendline-strategy,59-volume-delta-chandelier-exit-breakout-trendline-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-ai-trading-method-with-tradingview,6-ai-trading-method-with-tradingview,SCALP,TREND,archetype,M15,2,rr_1_5r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-atr-channel-breakout,6-atr-channel-breakout,INTRADAY,VOLATILITY,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-bollinger-bands-reversal,6-bollinger-bands-reversal,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-brahmos-confluence-strategy-tradingview,6-brahmos-confluence-strategy-tradingview,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-bullish-engulfing-pattern,6-bullish-engulfing-pattern,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-london-breakout,6-london-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-pivot-and-rsi-divergence,6-pivot-and-rsi-divergence,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-stochastic-and-ema,6-stochastic-and-ema,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+6-trend-line-breakout-and-fibonacci,6-trend-line-breakout-and-fibonacci,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+60-mathematical-fx-forecast,60-mathematical-fx-forecast,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+60-rsi-atr-and-sma,60-rsi-atr-and-sma,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+60-tor-signal-filtered-by-currency-strength-indicator,60-tor-signal-filtered-by-currency-strength-indicator,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+60-trendline-demark-breakout-system,60-trendline-demark-breakout-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+60-two-ema-and-laguerre,60-two-ema-and-laguerre,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+61-breakout-the-phases-zone,61-breakout-the-phases-zone,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+61-fractal-breakout,61-fractal-breakout,SCALP,MEAN_REVERSION,partial,M5,2,rr_1r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+61-momentum-and-demark-trend-line,61-momentum-and-demark-trend-line,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+61-scalping-with-price-trigger-signal,61-scalping-with-price-trigger-signal,SCALP,MOMENTUM,partial,M5,2,structure_trail,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+61-the-retracement-market-method,61-the-retracement-market-method,SWING,TREND,archetype,H4,2,rr_3r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+62-box-breakout-early-bird-system,62-box-breakout-early-bird-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+62-ema-s-crossover-filtered-by-rsi-with-flat-zone,62-ema-s-crossover-filtered-by-rsi-with-flat-zone,SCALP,TREND,partial,M5,2,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+62-grid-trading,62-grid-trading,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+62-market-strength,62-market-strength,POSITION,TREND,archetype,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+62-smashing-forex-system,62-smashing-forex-system,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+63-1-min-scalping,63-1-min-scalping,SCALP,MOMENTUM,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+63-forex-breakout-of-the-morning,63-forex-breakout-of-the-morning,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+63-fx-stochastic-range-trader,63-fx-stochastic-range-trader,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+63-power-dynamite-areas,63-power-dynamite-areas,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+63-smashing-forex-system-2,63-smashing-forex-system-2,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+64-channel-breakout-atr,64-channel-breakout-atr,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+64-currency-bonds-dollar-index-strategy,64-currency-bonds-dollar-index-strategy,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+64-macd-divergence-trading-system,64-macd-divergence-trading-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+64-reversal-arrow-indicator-system,64-reversal-arrow-indicator-system,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+64-support-and-resistance-srt,64-support-and-resistance-srt,SCALP,MEAN_REVERSION,partial,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+65-100-ema-and-macd-4h-strategy,65-100-ema-and-macd-4h-strategy,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+65-best-intraday-breakout,65-best-intraday-breakout,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+65-bollinger-bands-spike-scalping,65-bollinger-bands-spike-scalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+65-high-proability-low-risk-trading,65-high-proability-low-risk-trading,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+65-stochastic-divergence-advanced-strategy,65-stochastic-divergence-advanced-strategy,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+66-breakout-directional-intraday,66-breakout-directional-intraday,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+66-chandelier-exit-damiani-volameter-scalping-using-diy-stragegy-builder-scalping-example,66-chandelier-exit-damiani-volameter-scalping-using-diy-stragegy-builder-scalping-example,INTRADAY,MOMENTUM,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+66-daniela-forex-indicator-with-atr,66-daniela-forex-indicator-with-atr,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+66-envelope-reversal,66-envelope-reversal,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+66-xxlm1-scalping,66-xxlm1-scalping,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+67-correlation-breakout,67-correlation-breakout,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+67-macd-strategy,67-macd-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+67-power-trend,67-power-trend,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+67-profit-levels,67-profit-levels,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+67-quattro-cash-envelopes,67-quattro-cash-envelopes,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+68-fx-breakout,68-fx-breakout,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+68-fx-trend-scalping-strategy,68-fx-trend-scalping-strategy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+68-kobasfx-strategy,68-kobasfx-strategy,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+68-stochastic-strategy,68-stochastic-strategy,POSITION,MEAN_REVERSION,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+68-supply-demand-index-with-tools,68-supply-demand-index-with-tools,INTRADAY,MEAN_REVERSION,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+69-adx-parabolic-sar-and-three-ema,69-adx-parabolic-sar-and-three-ema,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+69-gann-hilo-activator-cci-and-macd,69-gann-hilo-activator-cci-and-macd,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+69-lsfa-bs-banking-system,69-lsfa-bs-banking-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+69-morning-flat,69-morning-flat,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+69-trend-machine-for-day-trading,69-trend-machine-for-day-trading,SCALP,TREND,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+7-atr-breakout,7-atr-breakout,INTRADAY,VOLATILITY,partial,H1,2,rr_3r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-bearish-engulfing-pattern,7-bearish-engulfing-pattern,SWING,PATTERN,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-bollinger-bands-trend,7-bollinger-bands-trend,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-flag-pattern,7-flag-pattern,INTRADAY,PATTERN,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-hedging-strategy-sure-fire,7-hedging-strategy-sure-fire,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-optimus-channel,7-optimus-channel,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-scalp-pattern,7-scalp-pattern,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+7-stochastic-oversold-overbought,7-stochastic-oversold-overbought,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-stratoblaster,7-stratoblaster,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+7-trading-strategy-using-cci-stochastic-and-gmma,7-trading-strategy-using-cci-stochastic-and-gmma,INTRADAY,TREND,partial,M15,2,rr_1_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+70-3ema-s,70-3ema-s,INTRADAY,TREND,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+70-5-min-scalping-with-5msm-vishnu-indicator-tradingview,70-5-min-scalping-with-5msm-vishnu-indicator-tradingview,SCALP,BREAKOUT,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+70-fbs-breakout-forex-system,70-fbs-breakout-forex-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+70-murrey-math-reversal,70-murrey-math-reversal,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+70-simple-h1-forex-system,70-simple-h1-forex-system,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+71-3-duck-s,71-3-duck-s,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+71-5m-the-force,71-5m-the-force,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+71-channel-breakout-for-day-trading,71-channel-breakout-for-day-trading,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+71-levels-for-intraday-trading,71-levels-for-intraday-trading,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+72-breakout-moving-average-mt4,72-breakout-moving-average-mt4,INTRADAY,BREAKOUT,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+72-cci-explosion,72-cci-explosion,SCALP,TREND,partial,M15,2,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+72-ema-s-rsi-and-stochastic,72-ema-s-rsi-and-stochastic,INTRADAY,TREND,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+72-stochastic-forex-strategy,72-stochastic-forex-strategy,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+72-support-and-resistence-with-ribbon,72-support-and-resistence-with-ribbon,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+73-envelopes-breakout-strategy,73-envelopes-breakout-strategy,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+73-fibonacci-scalping-forex-strategy,73-fibonacci-scalping-forex-strategy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+73-momentum-trend,73-momentum-trend,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+73-sidus-method,73-sidus-method,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+73-u-turn-support-and-resistance-strategy,73-u-turn-support-and-resistance-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+74-4h-scalping,74-4h-scalping,SCALP,MOMENTUM,archetype,H4,2,scalp_quick,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+74-forex-entry-system,74-forex-entry-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+74-kumo-breakout-for-intraday-trading,74-kumo-breakout-for-intraday-trading,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+74-rsi-sma-and-atr,74-rsi-sma-and-atr,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+74-sidus-method-v-2,74-sidus-method-v-2,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+75-1-min-scalping-gbp-usd,75-1-min-scalping-gbp-usd,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+75-awesome-stochastic-and-adx,75-awesome-stochastic-and-adx,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+75-murrey-math-with-vsa,75-murrey-math-with-vsa,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+75-profit-system,75-profit-system,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+75-s-p-trading-system,75-s-p-trading-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+76-barros-swing-strategy,76-barros-swing-strategy,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+76-ema-s-retracement,76-ema-s-retracement,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+76-kforex-scalping,76-kforex-scalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+76-levels-breakout,76-levels-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+76-rsi-flat,76-rsi-flat,POSITION,MEAN_REVERSION,partial,D1,2,rr_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+77-autofib-trading-zone,77-autofib-trading-zone,SCALP,MEAN_REVERSION,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+77-mbfx-breakout,77-mbfx-breakout,INTRADAY,BREAKOUT,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+77-stochastic-ma-and-macd-scalping,77-stochastic-ma-and-macd-scalping,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+77-stochastic-with-fast-ema-s,77-stochastic-with-fast-ema-s,POSITION,MEAN_REVERSION,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+77-two-ma-channel,77-two-ma-channel,SWING,TREND,partial,H4,1,rr_1_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+78-advanced-trendline-scalping-strategy,78-advanced-trendline-scalping-strategy,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+78-support-and-resistance-breakout,78-support-and-resistance-breakout,INTRADAY,BREAKOUT,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+78-trenline-manual-system,78-trenline-manual-system,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+79-breakout-and-reversal-breakout,79-breakout-and-reversal-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+79-disparity-system,79-disparity-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+79-forex-professional-engineering,79-forex-professional-engineering,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+79-the-big-ben-strategy,79-the-big-ben-strategy,SCALP,TREND,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+8-breakouts-system,8-breakouts-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-double-bollinger-bands-scalping-strategy,8-double-bollinger-bands-scalping-strategy,INTRADAY,MOMENTUM,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-fibonacci-fan,8-fibonacci-fan,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-intraday-gold-levels,8-intraday-gold-levels,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-range-market,8-range-market,INTRADAY,VOLATILITY,archetype,H1,2,rr_1_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-rsi-and-stochastic,8-rsi-and-stochastic,INTRADAY,MEAN_REVERSION,partial,H1,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+8-simple-moving-averege-and-macd,8-simple-moving-averege-and-macd,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+80-adx-with-macd-ii,80-adx-with-macd-ii,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+80-chuvashov-breakout-system,80-chuvashov-breakout-system,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+80-new-york-scalping-strategy,80-new-york-scalping-strategy,SCALP,MOMENTUM,partial,M15,1,scalp_quick,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+80-starc-bands-with-bollinger-bands,80-starc-bands-with-bollinger-bands,SCALP,MEAN_REVERSION,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+80-tts-trend-and-s-r-trading,80-tts-trend-and-s-r-trading,INTRADAY,MEAN_REVERSION,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+81-box-breakout-martingale-trading-method,81-box-breakout-martingale-trading-method,INTRADAY,BREAKOUT,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+81-daily-box-with-obos-zone,81-daily-box-with-obos-zone,INTRADAY,MEAN_REVERSION,partial,H1,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+81-envelope-trading,81-envelope-trading,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+81-nano-trader-scalper-signal,81-nano-trader-scalper-signal,SCALP,MOMENTUM,archetype,M5,2,conservative_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+81-rsi-trend-following-strategy,81-rsi-trend-following-strategy,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+82-1min-eur-usd-scalping,82-1min-eur-usd-scalping,SCALP,MOMENTUM,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+82-autotrendline-breakout,82-autotrendline-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+82-ema-s-and-macd,82-ema-s-and-macd,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+82-red-day-week-level-strategy,82-red-day-week-level-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+82-william-s-r-and-real-macd,82-william-s-r-and-real-macd,POSITION,MEAN_REVERSION,partial,D1,2,swing_partial_ladder,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+83-awesome-and-macd,83-awesome-and-macd,SWING,MOMENTUM,partial,H4,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+83-fibonacci-trend-strategy,83-fibonacci-trend-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+83-new-yms-scalper-template,83-new-yms-scalper-template,SCALP,MOMENTUM,archetype,M5,2,rr_1_2r,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+83-parabolic-sar-marsi-with-ssl-channel-filter,83-parabolic-sar-marsi-with-ssl-channel-filter,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+83-sq-dynamic-breakout-box-mq4,83-sq-dynamic-breakout-box-mq4,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+84-1-min-scalping-price-action,84-1-min-scalping-price-action,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+84-5-ema-and-13-ema-fibonacci-numbers,84-5-ema-and-13-ema-fibonacci-numbers,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+84-channel-surfer-strategy,84-channel-surfer-strategy,INTRADAY,MEAN_REVERSION,partial,H1,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+84-darvas-box-breakout-mq4,84-darvas-box-breakout-mq4,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+85-1-min-scalping-with-double-cci,85-1-min-scalping-with-double-cci,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+85-ema-s-with-trading-range,85-ema-s-with-trading-range,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+85-fibonacci-box-breakout,85-fibonacci-box-breakout,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+85-the-key-of-the-market,85-the-key-of-the-market,INTRADAY,MEAN_REVERSION,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+85-trend-momentum,85-trend-momentum,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+86-1-min-scalping-with-bollinger-bands-and-rsi,86-1-min-scalping-with-bollinger-bands-and-rsi,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+86-directional-channel-trading,86-directional-channel-trading,INTRADAY,MEAN_REVERSION,archetype,H1,2,rr_1_5r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+86-major-news,86-major-news,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+86-rsi-cci-and-macd,86-rsi-cci-and-macd,INTRADAY,MOMENTUM,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+86-trend-plus-breakout,86-trend-plus-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD USDCAD USDJPY
+87-action-zones,87-action-zones,INTRADAY,MEAN_REVERSION,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+87-double-channel-breakout,87-double-channel-breakout,INTRADAY,BREAKOUT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+87-hlhb-system,87-hlhb-system,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+87-polygon-scalper-modified,87-polygon-scalper-modified,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+87-stochastic-and-macd-trading-system,87-stochastic-and-macd-trading-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+88-bollinger-bands-and-rsi-scalping,88-bollinger-bands-and-rsi-scalping,SCALP,MOMENTUM,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+88-forex-winning-solution,88-forex-winning-solution,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+88-fx5-divergence-trading-system,88-fx5-divergence-trading-system,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+88-riding-the-trend-after-retracement,88-riding-the-trend-after-retracement,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+88-starc-bands-breakout,88-starc-bands-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+89-cci-nuf-with-price-action,89-cci-nuf-with-price-action,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+89-cowabunga,89-cowabunga,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+89-db-dss-breakout,89-db-dss-breakout,INTRADAY,BREAKOUT,archetype,H1,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+89-the-outsider-method,89-the-outsider-method,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+89-trendline-kill-trading-system,89-trendline-kill-trading-system,INTRADAY,MEAN_REVERSION,partial,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-bollinger-bands-and-the-gimmees-bar,9-bollinger-bands-and-the-gimmees-bar,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-breakout-with-cci,9-breakout-with-cci,INTRADAY,BREAKOUT,partial,M15,1,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-key-levels-a-clear-guide-to-structure,9-key-levels-a-clear-guide-to-structure,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-parabolic-sar-and-adx,9-parabolic-sar-and-adx,INTRADAY,TREND,partial,H1,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-pivot-strategy,9-pivot-strategy,INTRADAY,PIVOT,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-supertrend-take-profit-dimensions,9-supertrend-take-profit-dimensions,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+9-the-anti,9-the-anti,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+90-4h-kiss,90-4h-kiss,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+90-fx-reversal-breakout,90-fx-reversal-breakout,INTRADAY,BREAKOUT,archetype,H1,2,rr_1_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+90-levels-trading-with-arrows,90-levels-trading-with-arrows,SCALP,TREND,partial,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+90-mogalef-bands-trading-system,90-mogalef-bands-trading-system,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+90-static-confluence,90-static-confluence,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+91-earn-money-with-support-and-resistance,91-earn-money-with-support-and-resistance,INTRADAY,MEAN_REVERSION,partial,H1,1,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+91-larry-williams-formula,91-larry-williams-formula,INTRADAY,TREND,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+91-money-makers-pro,91-money-makers-pro,INTRADAY,BREAKOUT,archetype,M15,2,rr_1_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+91-parabolic-sar-with-ema,91-parabolic-sar-with-ema,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+91-trend-scalp-indicator,91-trend-scalp-indicator,SCALP,BREAKOUT,partial,M5,1,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+92-30-min-day-trading-forex-system,92-30-min-day-trading-forex-system,INTRADAY,MEAN_REVERSION,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+92-bank-level-with-super-trend,92-bank-level-with-super-trend,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+92-forex-news-trading-system,92-forex-news-trading-system,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+92-forex-volcano-scalping,92-forex-volcano-scalping,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+92-tma-1-min-breakout-strategy,92-tma-1-min-breakout-strategy,SCALP,BREAKOUT,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+93-cci-trend-strategy,93-cci-trend-strategy,SWING,TREND,partial,H4,2,rr_3r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+93-force-and-price-action-forex-strategy,93-force-and-price-action-forex-strategy,INTRADAY,MEAN_REVERSION,archetype,H1,2,rr_1_25r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+93-force-index-trading-system,93-force-index-trading-system,INTRADAY,TREND,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+93-waddah-attar-breakout,93-waddah-attar-breakout,INTRADAY,BREAKOUT,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+94-atlas-trading-system,94-atlas-trading-system,INTRADAY,MEAN_REVERSION,archetype,M15,2,rr_1_5r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+94-forex-soloist-method,94-forex-soloist-method,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+94-scalping-breakout-scalping-strategy,94-scalping-breakout-scalping-strategy,SCALP,BREAKOUT,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+94-williams-percente-range-trading-system,94-williams-percente-range-trading-system,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+95-genesis-scalper-trading-system,95-genesis-scalper-trading-system,SCALP,MOMENTUM,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+95-price-action-with-momentum-filter,95-price-action-with-momentum-filter,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+95-trend-and-range-markets,95-trend-and-range-markets,SWING,TREND,archetype,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+96-catching-the-key-zone,96-catching-the-key-zone,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+96-filtered-triangle-strategy-forex,96-filtered-triangle-strategy-forex,SWING,TREND,partial,H4,1,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+96-fx-eagle-dashboard,96-fx-eagle-dashboard,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+97-laguerre-scalping,97-laguerre-scalping,SCALP,MOMENTUM,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+97-macd-awesome-and-dss,97-macd-awesome-and-dss,INTRADAY,TREND,partial,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+97-simple-way-to-make-money,97-simple-way-to-make-money,INTRADAY,MEAN_REVERSION,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+97-sma-crossover,97-sma-crossover,SWING,TREND,archetype,H4,2,rr_1r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+98-afx-trader,98-afx-trader,SCALP,MOMENTUM,archetype,M5,2,atr_trail_aggressive,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+98-bouncing-ema-and-kg-analysis,98-bouncing-ema-and-kg-analysis,INTRADAY,TREND,archetype,M15,2,conservative_2r,AUDUSD EURJPY EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+98-macd-histogram-with-full-stochastic,98-macd-histogram-with-full-stochastic,INTRADAY,MOMENTUM,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+98-tdi-with-murrey-math-levels,98-tdi-with-murrey-math-levels,INTRADAY,MEAN_REVERSION,archetype,H1,2,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+99-double-ema-channel-with-rsi-and-stochastic,99-double-ema-channel-with-rsi-and-stochastic,INTRADAY,MEAN_REVERSION,partial,H1,1,conservative_2r,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
+99-quantum-with-key-levels,99-quantum-with-key-levels,SCALP,MEAN_REVERSION,archetype,M1,2,scalp_quick,NAS100 SPX500 US30 XAUUSD
+99-trend-follower-arrow-strategy-mt4,99-trend-follower-arrow-strategy-mt4,SCALP,TREND,archetype,M5,2,scalp_quick,EURJPY GBPUSD NAS100 SPX500 UKOIL US30 USDJPY XAUUSD
+99-vidya,99-vidya,SWING,TREND,partial,H4,2,structure_trail,AUDUSD EURUSD GBPUSD NAS100 SPX500 UKOIL US30 USDCAD USDJPY XAUUSD
