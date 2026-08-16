@@ -185,6 +185,9 @@ class SearchSummary:
         method: ``"grid"``, ``"random"`` or ``"optuna"``.
         objective: What a trial was scored by.
         trial_budget: Trials each fold was allowed.
+        feasible_size_exact: Whether ``feasible_size`` was counted or is the
+            unconstrained upper bound, which is all that is affordable for a
+            large constrained space.
         feasible_size: Points in the search space after constraints — the
             whole space a grid search over this space could visit.
         truncated: Whether ``trial_budget`` was below ``feasible_size``,
@@ -207,6 +210,7 @@ class SearchSummary:
     total_trials: int
     total_scored: int
     n_folds_searched: int
+    feasible_size_exact: bool = True
 
 
 @dataclass(frozen=True)
@@ -502,12 +506,22 @@ def search_summary_from_disk(wf_directory: Path) -> SearchSummary | None:
     total_trials = sum(int(fold.get("n_trials", 0)) for fold in folds)
     total_scored = sum(int(fold.get("n_scored", 0)) for fold in folds)
     trial_budget = int(payload["trial_budget"])
-    feasible_size = space.feasible_size()
+    try:
+        feasible_size = space.feasible_size()
+        feasible_exact = True
+    except ValueError:
+        # Constrained and too large to count exactly. The upper bound is the
+        # honest answer here and is marked as one: a report that spent ten
+        # seconds enumerating to refine a number nobody acts on would be paying
+        # for precision it does not use.
+        feasible_size = space.size
+        feasible_exact = False
     return SearchSummary(
         method=str(payload["method"]),
         objective=str(payload["objective"]),
         trial_budget=trial_budget,
         feasible_size=feasible_size,
+        feasible_size_exact=feasible_exact,
         truncated=trial_budget < feasible_size,
         total_trials=total_trials,
         total_scored=total_scored,

@@ -64,6 +64,7 @@ verdict.
 
 import json
 import math
+import random
 import statistics
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -286,6 +287,20 @@ class ParamSet:
         return ", ".join(f"{name}={value}" for name, value in self.values)
 
 
+#: Points a space may be enumerated over before sampling switches to rejection
+#: and an exact feasible count is refused. A quarter of a second at the measured
+#: enumeration rate of ~416 000 points/s: small enough that no caller waits on
+#: it, large enough that every search space in this repository stays on the exact
+#: path and keeps drawing the same points from the same seed.
+ENUMERATION_LIMIT = 100_000
+
+#: Attempts rejection sampling may spend per requested point before giving up.
+#: Twenty is generous for any space whose constraints leave a workable fraction
+#: feasible, and the failure is loud because a short sample would be a fold
+#: reporting a search it did not run.
+REJECTION_ATTEMPTS_PER_POINT = 20
+
+
 class SearchSpace(BaseModel):
     """The parameters a search may vary, discrete on every axis.
 
@@ -375,8 +390,50 @@ class SearchSpace(BaseModel):
             if self.satisfies(candidate):
                 yield candidate
 
-    def feasible_size(self) -> int:
-        """How many points survive :attr:`constraints`."""
+    @property
+    def size(self) -> int:
+        """Points in the space before constraints — the product of the axes.
+
+        Always cheap and always exact. An upper bound on
+        :meth:`feasible_size`, and equal to it when the space has no
+        constraints, which is the common case.
+        """
+        return math.prod(len(axis.values) for axis in self.axes)
+
+    def feasible_size(self, limit: int = ENUMERATION_LIMIT) -> int:
+        """How many points survive :attr:`constraints`.
+
+        Counted by arithmetic where that is possible and by enumeration only
+        where it is not. The distinction matters because the enumeration is
+        ``O(size)`` and the size is a *product* of axis lengths: an eleven-axis
+        space measured on the real shelf held 3 906 250 points and took 9.2
+        seconds to count, on a path that called this three times.
+
+        Args:
+            limit: Points this may enumerate before refusing. A space larger
+                than this with constraints has no cheap exact answer, and
+                spending ten seconds to produce one silently is what this
+                argument exists to stop.
+
+        Returns:
+            The exact count.
+
+        Raises:
+            ValueError: If constraints make arithmetic impossible and the space
+                is larger than ``limit``. Callers that can work with an upper
+                bound should read :attr:`size` instead — named rather than
+                substituted, because a bound quietly returned where an exact
+                count was asked for is the more expensive mistake.
+        """
+        total = self.size
+        if not self.constraints:
+            return total
+        if total > limit:
+            raise ValueError(
+                f"counting the feasible points of this space needs enumerating {total} of "
+                f"them, past the limit of {limit}. Read `size` for the upper bound "
+                f"({total}) or raise the limit deliberately"
+            )
         return sum(1 for _ in self.enumerate())
 
     def apply(self, spec: StrategySpec, params: ParamSet) -> StrategySpec:
@@ -808,6 +865,27 @@ class RandomSearch:
     def suggest(self, space: SearchSpace, budget: int) -> Iterator[ParamSet]:
         """A seeded sample of feasible points, without evaluating anything.
 
+        Two algorithms, chosen by the size of the space, and the reason is
+        measured rather than aesthetic. Shuffling the whole space is exact and
+        costs nothing while the space is small; on the eleven-axis space of a
+        real candidate it took **108.3 seconds and 1.14 GB of resident memory
+        to draw 48 points**, because it materialised 3 906 250 ``ParamSet``
+        objects and shuffled them. That cost is ``O(size)`` where the task is
+        ``O(budget x axes)``.
+
+        Above :data:`ENUMERATION_LIMIT` the sample is drawn by rejection: pick
+        a coordinate per axis uniformly, discard points that violate a
+        constraint or repeat one already drawn, stop when the budget is filled.
+        The result has the same distribution — a uniform subset of the feasible
+        set, without replacement — which is what
+        ``test_the_two_algorithms_agree_in_distribution`` asserts empirically
+        rather than by argument.
+
+        **Below the limit the old path is kept exactly**, so every stored run
+        whose space was small enough for the previous sampler to work draws the
+        same points from the same seed and digests identically. Only the runs
+        the old code could not afford are drawn differently.
+
         Args:
             space: What to sample from.
             budget: How many points. A budget at or above the feasible size
@@ -815,19 +893,49 @@ class RandomSearch:
                 enumeration order would have asked for a grid.
 
         Yields:
-            Points.
+            Points. Fewer than ``budget`` only when the space itself holds
+            fewer feasible points, which the caller can detect by counting.
 
         Raises:
-            ValueError: If ``budget`` is not positive.
+            ValueError: If ``budget`` is not positive, or if rejection sampling
+                cannot fill the budget within :data:`REJECTION_ATTEMPTS_PER_POINT`
+                attempts per point — a space whose feasible fraction is that
+                small needs its constraints looked at, and quietly returning a
+                short sample would let a fold report a search it did not run.
         """
         if budget < 1:
             raise ValueError(f"budget must be at least 1, got {budget}")
-        import random
 
-        population = list(space.enumerate())
         rng = random.Random(self.seed)
-        rng.shuffle(population)
-        yield from population[:budget]
+        if space.size <= ENUMERATION_LIMIT:
+            population = list(space.enumerate())
+            rng.shuffle(population)
+            yield from population[:budget]
+            return
+
+        widths = [len(axis.values) for axis in space.axes]
+        seen: set[tuple[int, ...]] = set()
+        drawn = 0
+        attempts = 0
+        ceiling = budget * REJECTION_ATTEMPTS_PER_POINT
+        while drawn < budget:
+            if attempts >= ceiling:
+                raise ValueError(
+                    f"drew {drawn} of {budget} points in {attempts} attempts on a space of "
+                    f"{space.size}; its constraints leave too few feasible points to sample "
+                    "this way. Returning a short sample would report a search that did not "
+                    "happen — narrow the axes or loosen the constraints"
+                )
+            attempts += 1
+            coords = tuple(rng.randrange(width) for width in widths)
+            if coords in seen:
+                continue
+            candidate = space.point(coords)
+            if not space.satisfies(candidate):
+                continue
+            seen.add(coords)
+            drawn += 1
+            yield candidate
 
     def run(self, space: SearchSpace, evaluate: Evaluate, budget: int) -> list[TrialRecord]:
         """Evaluate a seeded sample. See :meth:`ParameterSearch.run`."""

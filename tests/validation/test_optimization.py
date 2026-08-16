@@ -697,3 +697,175 @@ class TestTheSameSpaceScoresAPointIdenticallyThroughARealEngine:
         assert any(value is not None for value in forward.values()), (
             "the window must actually produce scoreable runs, or this proves nothing"
         )
+
+
+class TestRandomSearchDoesNotEnumerateLargeSpaces:
+    """Drawing k points must cost O(k x axes), not O(size of the space).
+
+    The old sampler materialised the whole space and shuffled it. On an
+    eleven-axis space from the real shelf that was 3 906 250 ``ParamSet``
+    objects, 108.3 seconds and 1.14 GB of resident memory — to return 48
+    points. These tests fix the four properties that make the replacement
+    equivalent rather than merely faster.
+    """
+
+    def _space(self, widths: list[int], constraints: list[dict[str, str]] | None = None):
+        from trading_system.validation.optimization import SearchSpace
+
+        return SearchSpace.model_validate(
+            {
+                "axes": [
+                    {
+                        "name": f"a{index}",
+                        "paths": [f"/entries/0/p{index}"],
+                        "values": list(range(width)),
+                    }
+                    for index, width in enumerate(widths)
+                ],
+                "constraints": constraints or [],
+            }
+        )
+
+    def test_the_small_path_draws_exactly_what_the_old_sampler_drew(self) -> None:
+        # Below the limit the algorithm is unchanged, which is what lets every
+        # stored run whose space was small enough keep its digest.
+        import random as _random
+
+        from trading_system.validation.optimization import RandomSearch
+
+        space = self._space([5, 5, 5, 2])
+
+        def old(budget: int, seed: int) -> list[tuple[int, ...]]:
+            population = list(space.enumerate())
+            rng = _random.Random(seed)
+            rng.shuffle(population)
+            return [point.coords for point in population[:budget]]
+
+        for seed in range(5):
+            for budget in (1, 7, 48, 200):
+                drawn = [p.coords for p in RandomSearch(seed=seed).suggest(space, budget)]
+                assert drawn == old(budget, seed)
+
+    def test_a_large_space_is_never_enumerated(self) -> None:
+        import time
+
+        from trading_system.validation.optimization import RandomSearch
+
+        # Ten axes of five values: 9 765 625 points. Enumerating would take
+        # tens of seconds; the assertion is on the clock because the claim is
+        # about cost, and a cost claim that is not timed is an opinion.
+        space = self._space([5] * 10)
+        started = time.monotonic()
+        drawn = list(RandomSearch(seed=0).suggest(space, 48))
+        assert time.monotonic() - started < 1.0
+        assert len(drawn) == 48
+        assert len({point.coords for point in drawn}) == 48
+
+    def test_the_two_algorithms_agree_in_distribution(self) -> None:
+        # A space small enough to enumerate, sampled many times by both paths;
+        # the empirical frequency of each point must agree. Equivalence of
+        # distribution is the claim that makes the swap safe, so it is measured
+        # rather than argued.
+        import random as _random
+        from collections import Counter
+
+        from trading_system.validation.optimization import RandomSearch
+
+        space = self._space([4, 4])
+        draws = 4000
+        new: Counter[tuple[int, ...]] = Counter()
+        old: Counter[tuple[int, ...]] = Counter()
+        import trading_system.validation.optimization as optimization
+
+        original = optimization.ENUMERATION_LIMIT
+        try:
+            # Force the rejection path onto a space small enough to also walk
+            # with the old algorithm: the two are only comparable side by side.
+            optimization.ENUMERATION_LIMIT = 0
+            for seed in range(draws):
+                new.update(point.coords for point in RandomSearch(seed=seed).suggest(space, 2))
+        finally:
+            optimization.ENUMERATION_LIMIT = original
+        for seed in range(draws):
+            population = list(space.enumerate())
+            _random.Random(seed).shuffle(population)
+            old.update(point.coords for point in population[:2])
+
+        total = space.size
+        for coords in (point.coords for point in space.enumerate()):
+            expected = 2 * draws / total
+            assert abs(new[coords] - expected) < 0.35 * expected
+            assert abs(new[coords] - old[coords]) < 0.4 * expected
+
+    def test_fewer_feasible_points_than_the_budget_returns_them_all(self) -> None:
+        from trading_system.validation.optimization import RandomSearch
+
+        space = self._space([3, 2])
+        drawn = list(RandomSearch(seed=0).suggest(space, 100))
+        assert len(drawn) == space.size
+
+    def test_constraints_that_leave_almost_nothing_feasible_fail_loudly(self) -> None:
+        import pytest
+
+        from trading_system.validation.optimization import RandomSearch, SearchSpace
+
+        # 125 000 points, past the enumeration limit, of which *none* satisfy
+        # the ordering: a0 is drawn from values that are all above a1's. A short
+        # sample here would be a fold reporting a search it did not run.
+        space = SearchSpace.model_validate(
+            {
+                "axes": [
+                    {"name": "a0", "paths": ["/entries/0/p0"], "values": list(range(100, 150))},
+                    {"name": "a1", "paths": ["/entries/0/p1"], "values": list(range(50))},
+                    {"name": "a2", "paths": ["/entries/0/p2"], "values": list(range(50))},
+                ],
+                "constraints": [{"less": "a0", "greater": "a1"}],
+            }
+        )
+        assert space.size > 100_000
+        with pytest.raises(ValueError, match="too few feasible points"):
+            list(RandomSearch(seed=0).suggest(space, 48))
+
+
+class TestFeasibleSizeIsNotCountedByEnumeration:
+    """Counting a product by walking it took 9.2 seconds on a real space."""
+
+    def _space(self, widths: list[int], constraints: list[dict[str, str]] | None = None):
+        from trading_system.validation.optimization import SearchSpace
+
+        return SearchSpace.model_validate(
+            {
+                "axes": [
+                    {
+                        "name": f"a{index}",
+                        "paths": [f"/entries/0/p{index}"],
+                        "values": list(range(width)),
+                    }
+                    for index, width in enumerate(widths)
+                ],
+                "constraints": constraints or [],
+            }
+        )
+
+    def test_an_unconstrained_space_is_counted_by_arithmetic(self) -> None:
+        import time
+
+        space = self._space([5] * 10)
+        started = time.monotonic()
+        assert space.feasible_size() == 9_765_625 == space.size
+        assert time.monotonic() - started < 0.1
+
+    def test_a_constrained_space_within_the_limit_is_still_counted_exactly(self) -> None:
+        space = self._space([4, 4], [{"less": "a0", "greater": "a1"}])
+        counted = sum(1 for _ in space.enumerate())
+        assert space.feasible_size() == counted
+        assert counted < space.size
+
+    def test_a_large_constrained_space_refuses_rather_than_spending_the_time(self) -> None:
+        import pytest
+
+        space = self._space([100, 100, 100], [{"less": "a0", "greater": "a1"}])
+        with pytest.raises(ValueError, match="past the limit"):
+            space.feasible_size()
+        # The upper bound is always available and always cheap.
+        assert space.size == 1_000_000
