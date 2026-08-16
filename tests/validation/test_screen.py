@@ -18,9 +18,11 @@ from typing import Any
 import polars as pl
 import pytest
 
+from trading_system.core.instruments import InstrumentClass
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
 from trading_system.data.resample import FX_DAY_ORIGIN, trading_day
+from trading_system.strategies.normalize.coverage import MarketCoverage, SeriesCoverage
 from trading_system.validation.holdout import (
     holdout_boundary,
     screen_frame,
@@ -33,6 +35,7 @@ from trading_system.validation.screen import (
     cross_sectional_z,
     distinct_signatures,
     load_manifest,
+    plan_tasks,
     run_screen,
     screen_id,
 )
@@ -437,3 +440,100 @@ class TestSignatures:
         broken = tmp_path / "broken.json"
         broken.write_text("{not json", encoding="utf-8")
         assert distinct_signatures([broken], {}) == 0
+
+
+class TestASeriesThatCannotBeClosedIsExcludedByName:
+    """A task that cannot start is not a failure to be counted — it is a plan entry.
+
+    Every daily series in the delivered store is cut by the vendor on UTC
+    midnight while runs cut their trading day at 17:00 New York, so no daily bar
+    has a close instant under that origin. Letting those tasks run and fail would
+    file a data convention under `ValueError` and bury it among real errors.
+    """
+
+    def _spec(self, tmp_path: Path, timeframe: str) -> Path:
+        import json
+
+        path = tmp_path / "s.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "id": "s",
+                    "version": "0.1.0",
+                    "type": "POSITION",
+                    "timeframes": {"signal_tf": timeframe, "entry_tf": timeframe},
+                    "instruments": {
+                        "allowed_classes": ["FX"],
+                        "allowed_symbols": ["EURUSD"],
+                        "denied_symbols": [],
+                    },
+                    "market_regimes": [],
+                    "entries": [
+                        {
+                            "direction": "LONG",
+                            "trigger": {
+                                "type": "leaf",
+                                "op": "gt",
+                                "left": "price:close",
+                                "right": {"indicator": "ema", "params": {"period": 50}},
+                            },
+                            "confirmation": [],
+                            "confirmation_window_bars": 0,
+                            "invalidation": {
+                                "price_level": {"indicator": "ema", "params": {"period": 50}}
+                            },
+                            "entry_order": {
+                                "order": {"type": "MARKET"},
+                                "expire_after_bars": 1,
+                            },
+                        }
+                    ],
+                    "exit_ref": "conservative_2r",
+                    "filters": [],
+                    "risk_profile": {
+                        "base_quality": 0.5,
+                        "quality_modifiers": [],
+                        "stop_reference": {"kind": "ATR", "period": 14, "multiple": 1.5},
+                        "max_concurrent_positions": 1,
+                        "cooldown_bars_after_loss": 0,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def _coverage(self, timeframe: Timeframe, *, anchor_ok: bool) -> MarketCoverage:
+        return MarketCoverage(
+            series={
+                ("EURUSD", timeframe): SeriesCoverage(
+                    symbol="EURUSD",
+                    asset_class=InstrumentClass.FX,
+                    timeframe=timeframe,
+                    bars=5000,
+                    start=datetime(2010, 1, 1, tzinfo=UTC),
+                    end=datetime(2026, 1, 1, tzinfo=UTC),
+                    median_range_points=10.0,
+                    has_volume=True,
+                    day_anchor_ok=anchor_ok,
+                    cost_points=1.0,
+                )
+            }
+        )
+
+    def test_it_produces_no_task_and_says_why(self, tmp_path: Path) -> None:
+        spec = self._spec(tmp_path, "D1")
+        tasks, skipped = plan_tasks(
+            [spec], self._coverage(Timeframe.D1, anchor_ok=False), symbols_per_spec=0
+        )
+        assert tasks == ()
+        assert "s@EURUSD" in skipped
+        assert "day anchor" in skipped["s@EURUSD"]
+
+    def test_the_same_series_with_a_usable_anchor_is_planned(self, tmp_path: Path) -> None:
+        spec = self._spec(tmp_path, "D1")
+        tasks, skipped = plan_tasks(
+            [spec], self._coverage(Timeframe.D1, anchor_ok=True), symbols_per_spec=0
+        )
+        assert [task.symbol for task in tasks] == ["EURUSD"]
+        assert skipped == {}

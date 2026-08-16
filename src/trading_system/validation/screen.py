@@ -636,11 +636,24 @@ def plan_tasks(
             skipped[path.stem] = f"unreadable spec: {type(error).__name__}"
             continue
         timeframe = spec.timeframes.signal_tf
-        candidates = [
-            (found.cost_ratio, symbol)
-            for symbol in spec.instruments.allowed_symbols
-            if (found := coverage.get(symbol, timeframe)) is not None
-        ]
+        candidates: list[tuple[float, str]] = []
+        for symbol in spec.instruments.allowed_symbols:
+            found = coverage.get(symbol, timeframe)
+            if found is None:
+                continue
+            if not found.day_anchor_ok:
+                # Excluded by name rather than left to fail mid-run: the vendor
+                # cuts this series' daily bars on UTC midnight and the run cuts
+                # its trading day at 17:00 New York, so no bar can be closed at
+                # all. A task that cannot start is not a result, and counting it
+                # among the failures would hide a data convention behind a
+                # traceback.
+                skipped[f"{spec.id}@{symbol}"] = (
+                    f"{symbol} {timeframe.value}: daily bars do not sit on the run's day "
+                    "anchor; excluded from the plan rather than run and failed"
+                )
+                continue
+            candidates.append((found.cost_ratio, symbol))
         if not candidates:
             skipped[spec.id] = (
                 f"none of its {len(spec.instruments.allowed_symbols)} symbol(s) are stored "

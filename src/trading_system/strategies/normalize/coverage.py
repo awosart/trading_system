@@ -24,6 +24,7 @@ from datetime import datetime
 
 import polars as pl
 
+from trading_system.backtest.clock import day_close_ts
 from trading_system.core.instruments import (
     InstrumentClass,
     InstrumentRegistry,
@@ -31,6 +32,7 @@ from trading_system.core.instruments import (
 )
 from trading_system.core.types import Timeframe
 from trading_system.data.models import OHLCVFrame
+from trading_system.data.resample import FX_DAY_ORIGIN, DayOrigin
 
 #: Cost-to-range ratio above which a symbol is not offered at a timeframe.
 #: Half the median bar is not a threshold with a theory behind it; it is the
@@ -53,6 +55,11 @@ class SeriesCoverage:
         end: Last bar's open time.
         median_range_points: Median ``high - low`` in instrument points.
         has_volume: Whether any bar carries a non-zero volume.
+        day_anchor_ok: Whether the series can be walked at all under the run's
+            day origin. Only ``D1`` can fail it: a daily bar's close is found by
+            looking for where the trading day turns over, and a vendor that cuts
+            its daily bars on UTC midnight while the run cuts its day at 17:00
+            New York has no such instant within an hour of the bar's own span.
         cost_points: Round-turn cost in points: the declared typical spread
             plus commission expressed in the same unit.
     """
@@ -65,6 +72,7 @@ class SeriesCoverage:
     end: datetime
     median_range_points: float
     has_volume: bool
+    day_anchor_ok: bool
     cost_points: float
 
     @property
@@ -163,6 +171,7 @@ def measure_coverage(
     instruments: InstrumentRegistry,
     symbols: Iterable[str],
     timeframes: Sequence[Timeframe],
+    day_origin: DayOrigin = FX_DAY_ORIGIN,
 ) -> MarketCoverage:
     """Measure every stored series among ``symbols`` × ``timeframes``.
 
@@ -172,6 +181,8 @@ def measure_coverage(
         instruments: Registry the point size and declared costs come from.
         symbols: Symbols to look for.
         timeframes: Bar sizes to look for.
+        day_origin: The day boundary a run would use, for checking that daily
+            bars can be closed under it at all.
 
     Returns:
         The coverage. A series that is absent, empty, or names an instrument
@@ -188,6 +199,13 @@ def measure_coverage(
             frame = load(symbol, timeframe)
             if frame.is_empty or frame.start is None or frame.end is None:
                 continue
+            anchor_ok = True
+            if timeframe is Timeframe.D1:
+                try:
+                    for stamp in list(frame.timestamps)[:8]:
+                        day_close_ts(stamp, day_origin)
+                except ValueError:
+                    anchor_ok = False
             stats = frame.df.select(
                 ((pl.col("high") - pl.col("low")) / point).median().alias("range"),
                 (pl.col("volume") != 0).any().alias("volume"),
@@ -202,6 +220,7 @@ def measure_coverage(
                 end=frame.end,
                 median_range_points=float(median_range) if median_range is not None else 0.0,
                 has_volume=bool(stats["volume"][0]),
+                day_anchor_ok=anchor_ok,
                 cost_points=cost_points(instrument),
             )
     return MarketCoverage(series=found)

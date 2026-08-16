@@ -64,6 +64,7 @@ def series(
         end=datetime(2024, 1, 1, tzinfo=UTC),
         median_range_points=median_range_points,
         has_volume=has_volume,
+        day_anchor_ok=True,
         cost_points=cost_points,
     )
 

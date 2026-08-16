@@ -77,6 +77,55 @@ class GroupSummary:
 
 
 @dataclass(frozen=True)
+class TableRow:
+    """One row of the sortable catalogue.
+
+    Flat and pre-computed rather than assembled in the template: a page that
+    sorts and filters in the browser needs every column as a plain value, and
+    deriving them in Jinja would put arithmetic where nothing can test it.
+
+    Attributes:
+        spec_id: Strategy id.
+        symbol: Instrument.
+        timeframe: Bar size.
+        family: What the entry bets on, from the corpus manifest.
+        fidelity: How much of the spec came from its page.
+        trades: Closed trades.
+        expectancy_r: Mean R per trade.
+        z: Cross-sectional z of expectancy within this instrument.
+        sortino: Annualised Sortino.
+        drawdown: Maximum drawdown as a positive fraction.
+        drop_share: Share of this row's signals lost to its dominant refusal.
+        dominant: The refusal that fired most.
+    """
+
+    spec_id: str
+    symbol: str
+    timeframe: str
+    family: str
+    fidelity: str
+    trades: int
+    expectancy_r: float | None
+    z: float | None
+    sortino: float | None
+    drawdown: float | None
+    drop_share: float
+    dominant: str
+
+
+def _drop_share(row: ScreenRow) -> float:
+    """Share of a row's signals refused by whatever refused most of them.
+
+    Zero when nothing dominated. Understated where the dominant counter is not
+    the only one, which is the safe direction: it never invents a blockage.
+    """
+    if not row.dominant_reason:
+        return 0.0
+    total = row.dominant_count + row.trades
+    return row.dominant_count / total if total else 0.0
+
+
+@dataclass(frozen=True)
 class ScreenReport:
     """Everything the page needs, computed once.
 
@@ -98,6 +147,9 @@ class ScreenReport:
         failures: Rows whose run raised.
         blocked: Most common dominant refusal, with counts.
         skipped: Specs that produced no task at all, by reason.
+        table: Every rankable row, flat, for the sortable catalogue.
+        symbols: Instruments present, for the filter.
+        timeframes: Bar sizes present, for the filter.
     """
 
     rows: tuple[ScreenRow, ...]
@@ -117,6 +169,9 @@ class ScreenReport:
     failures: tuple[ScreenRow, ...]
     blocked: tuple[tuple[str, int], ...]
     skipped: Mapping[str, str]
+    table: tuple[TableRow, ...] = ()
+    symbols: tuple[str, ...] = ()
+    timeframes: tuple[str, ...] = ()
 
     @property
     def total(self) -> int:
@@ -241,6 +296,24 @@ def build_report(
         if row.error is None and row.dominant_reason:
             blocked[row.dominant_reason] = blocked.get(row.dominant_reason, 0) + 1
 
+    table = tuple(
+        TableRow(
+            spec_id=row.spec_id,
+            symbol=row.symbol,
+            timeframe=row.timeframe,
+            family=meta.get(row.spec_id, {}).get("family", "?"),
+            fidelity=meta.get(row.spec_id, {}).get("fidelity", "?"),
+            trades=row.trades,
+            expectancy_r=row.expectancy_r,
+            z=z_scores.get(row.key),
+            sortino=row.sortino,
+            drawdown=abs(row.max_drawdown_pct) if row.max_drawdown_pct is not None else None,
+            drop_share=_drop_share(row),
+            dominant=row.dominant_reason,
+        )
+        for row in ordered
+        if row.error is None and row.trades >= MIN_TRADES_FOR_RANKING
+    )
     return ScreenReport(
         rows=ordered,
         meta=meta,
@@ -259,6 +332,9 @@ def build_report(
         failures=tuple(row for row in ordered if row.error is not None),
         blocked=tuple(sorted(blocked.items(), key=lambda pair: -pair[1])[:12]),
         skipped=dict(skipped or {}),
+        table=table,
+        symbols=tuple(sorted({row.symbol for row in ordered})),
+        timeframes=tuple(sorted({row.timeframe for row in ordered if row.timeframe})),
     )
 
 
