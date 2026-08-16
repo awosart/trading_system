@@ -6,11 +6,14 @@ explicit dependency rather than a module-level global.
 """
 
 import json
+import time
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from pathlib import Path
 
+import polars as pl
 import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
@@ -37,11 +40,15 @@ from trading_system.analytics.run_index import (
     run_directories,
 )
 from trading_system.analytics.run_index import write as write_index
+from trading_system.analytics.screen_report import MIN_TRADES_FOR_RANKING
+from trading_system.analytics.screen_report import build_report as build_screen_report
+from trading_system.analytics.screen_report import render as render_screen_report
+from trading_system.analytics.screen_report import write as write_screen_report
 from trading_system.backtest.clock import StreamKey
 from trading_system.backtest.config import BacktestConfig
 from trading_system.backtest.fx import build_converter
 from trading_system.backtest.orchestrator import StrategyBinding
-from trading_system.backtest.reproducibility import read_run, write_run
+from trading_system.backtest.reproducibility import code_version, read_run, write_run
 from trading_system.backtest.spec import RunInputs
 from trading_system.core.config import Settings
 from trading_system.core.exceptions import TradingSystemError, ValidationError
@@ -77,6 +84,13 @@ from trading_system.risk.margin import load_prop_profiles
 from trading_system.risk.sizing.methods import FixedFractional
 from trading_system.strategies.ingest import load_cards, load_overrides, triage
 from trading_system.strategies.ingest import render as render_ingest
+from trading_system.strategies.normalize import (
+    Fidelity,
+    measure_coverage,
+    normalise_card,
+    write_corpus,
+)
+from trading_system.strategies.normalize.coverage import DEFAULT_MAX_COST_RATIO
 from trading_system.strategies.repository import META_SUFFIX, Status, StrategyRepository
 from trading_system.strategies.results_link import (
     RUN_KIND_WALKFORWARD,
@@ -92,11 +106,13 @@ from trading_system.strategies.schema import (
     strategy_json_schema,
 )
 from trading_system.strategies.validator import Severity, validate_paths
+from trading_system.validation import trials as trials_module
 from trading_system.validation.calibration import (
     POSITION_COUNT_DIVERGENCE_THRESHOLD,
     NullKind,
     run_calibration,
 )
+from trading_system.validation.holdout import DEFAULT_HOLDOUT_FRACTION, HoldoutBoundary
 
 # Two different samplers share a name: prop.simulator's builds a prop episode,
 # this one builds the trade sample the resamplers replay. Aliased so neither
@@ -127,6 +143,22 @@ from trading_system.validation.report import (
     write_report,
 )
 from trading_system.validation.robustness import run_all
+from trading_system.validation.screen import (
+    DEFAULT_BAR_BUDGET,
+    SCREEN_ROOT,
+    ScreenManifest,
+    ScreenRow,
+    ScreenStore,
+    ScreenTask,
+    cross_sectional_z,
+    distinct_signatures,
+    load_corpus_meta,
+    load_manifest,
+    now_iso,
+    plan_tasks,
+    run_screen,
+    screen_id,
+)
 from trading_system.validation.space_builder import (
     build_candidates,
     build_space_document,
@@ -856,6 +888,434 @@ def ingest_convert(
     )
 
 
+@strategy_app.command("normalize")
+def strategy_normalize(
+    ctx: typer.Context,
+    out: Path = typer.Argument(..., help="Directory the normalised tree is written to."),
+    cards: Path = typer.Option(DEFAULT_CARDS_DIR, "--cards", help="Directory of scraped cards."),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH,
+        "--exit-library",
+        help="Exit preset library exit_ref is checked against.",
+    ),
+    max_cost_ratio: float = typer.Option(
+        DEFAULT_MAX_COST_RATIO,
+        "--max-cost-ratio",
+        help="Refuse a symbol at a bar size once the round turn is this fraction of the "
+        "median bar's range.",
+    ),
+) -> None:
+    """Render every scraped card as a spec, filling in what the page never said.
+
+    The strict reader (``ts strategy ingest convert``) refuses a card the moment
+    it is silent or unreadable, and converts one card in 883. This command
+    answers a different question — what is the most defensible strategy each
+    page implies, on data this store actually holds — and so supplies the
+    missing values instead of refusing.
+
+    Nothing it writes is a measurement or a library record. Each spec carries a
+    fidelity grade in ``manifest.json``: ``read`` means every condition is a
+    sentence the page wrote, ``partial`` means some were dropped or salvaged,
+    and ``archetype`` means the entry was written here from the card's
+    indicators or family and its page never stated a rule at all.
+    """
+    settings: Settings = ctx.obj
+    if not cards.is_dir():
+        typer.echo(f"{cards} is not a directory of scraped cards.")
+        raise typer.Exit(code=1)
+
+    store = ParquetStore(settings.data_dir)
+    instruments = load_instruments(settings.instruments_path)
+    symbols = sorted(store.symbols())
+    coverage = measure_coverage(store.get, instruments, symbols, list(Timeframe))
+    typer.echo(f"{len(coverage.series)} series measured across {len(symbols)} symbol(s)")
+
+    exit_ids = known_exit_ids(exit_library)
+    results = [
+        normalise_card(
+            card, coverage=coverage, known_exit_ids=exit_ids, max_cost_ratio=max_cost_ratio
+        )
+        for _path, card in load_cards(cards)
+    ]
+    corpus = write_corpus(results, out, source=str(cards))
+
+    typer.echo(f"normalised {len(corpus.normalised)} of {len(corpus.results)} card(s) -> {out}")
+    for fidelity in Fidelity:
+        found = corpus.by_fidelity(fidelity)
+        if found:
+            typer.echo(f"  {fidelity.value:10} {len(found)}")
+    if corpus.refused:
+        typer.echo(f"  refused    {len(corpus.refused)}")
+    typer.echo(f"Manifest: {out / 'manifest.json'}   index: {out / 'index.csv'}")
+
+
+@strategy_app.command("screen")
+def strategy_screen(
+    ctx: typer.Context,
+    specs: Path = typer.Argument(..., help="Directory of strategy specs, searched recursively."),
+    out: Path = typer.Option(
+        Path("reports/screen.html"), "--out", help="Where the HTML report is written."
+    ),
+    manifest: Path | None = typer.Option(
+        None,
+        "--manifest",
+        help="Normalised corpus manifest, for fidelity and family labels. "
+        "Defaults to manifest.json beside the specs' root.",
+    ),
+    bar_budget: int = typer.Option(
+        DEFAULT_BAR_BUDGET, "--bars", help="Bars each run gets, back from the holdout boundary."
+    ),
+    holdout: float = typer.Option(
+        DEFAULT_HOLDOUT_FRACTION,
+        "--holdout",
+        help="Share of every series withheld from the screen. Cut before anything runs.",
+    ),
+    symbols_per_spec: int = typer.Option(
+        1,
+        "--symbols",
+        help="Instruments each strategy is run on, cheapest round turn first. 0 means every "
+        "instrument its universe names and the store holds.",
+    ),
+    keep_max_dd: float | None = typer.Option(
+        None,
+        "--keep-max-dd",
+        help="Write the whole run to the store when its maximum drawdown is below this "
+        "fraction, e.g. 0.10. Every task still runs — a drawdown is not knowable without "
+        "running — so this decides what is kept, not what is measured. Rows that do not "
+        "qualify are counted and reported, never silently dropped.",
+    ),
+    risk_pct: float = typer.Option(0.01, "--risk", help="Fraction of equity risked per trade."),
+    workers: int = typer.Option(1, "--workers", help="Processes to spread the runs over."),
+    returns_sample: int = typer.Option(
+        200,
+        "--returns-sample",
+        help="Tasks that bring back daily returns, for the effective-trials estimate.",
+    ),
+    limit: int | None = typer.Option(
+        None, "--limit", help="Run only the first N tasks. For sizing the job before committing."
+    ),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
+    ),
+) -> None:
+    """Screen a shelf of strategies over the pre-holdout history, and report.
+
+    Hypotheses, not evidence: one window, the parameters each file names, no
+    folds, no selection, no null. The last ``--holdout`` of every series is cut
+    off before any run is built, and the frames a run walks do not contain those
+    bars — so the holdout stays clean for the walk-forward that confirms a
+    candidate later.
+
+    Re-running with the same inputs is a no-op: the screen id is a digest of the
+    code, the spec set, the universe and the screen's own settings, and a
+    finished screen is not recomputed. An interrupted one resumes from its own
+    row log, having lost at most the task that was in flight.
+    """
+    settings: Settings = ctx.obj
+    if not specs.is_dir():
+        typer.echo(f"{specs} is not a directory of strategy specs.")
+        raise typer.Exit(code=1)
+
+    spec_paths = sorted(p for p in specs.rglob("*.json") if not p.name.endswith(".meta.json"))
+    if not spec_paths:
+        typer.echo(f"No strategy specs under {specs}.")
+        raise typer.Exit(code=1)
+
+    store = ParquetStore(settings.data_dir)
+    instruments = load_instruments(settings.instruments_path)
+    universe = sorted(store.symbols())
+    coverage = measure_coverage(store.get, instruments, universe, list(Timeframe))
+
+    tasks, skipped = plan_tasks(
+        spec_paths,
+        coverage,
+        symbols_per_spec=symbols_per_spec,
+        bar_budget=bar_budget,
+        holdout_fraction=holdout,
+        risk_pct=risk_pct,
+        returns_sample=returns_sample,
+        keep_run_max_dd=keep_max_dd,
+    )
+    if limit is not None:
+        tasks = tasks[:limit]
+
+    identity = screen_id(
+        spec_paths,
+        universe=universe,
+        bar_budget=bar_budget,
+        holdout_fraction=holdout,
+        risk_pct=risk_pct,
+        symbols_per_spec=symbols_per_spec,
+    )
+    root = settings.runs_dir / SCREEN_ROOT / identity
+    finished = load_manifest(root)
+    if finished is not None:
+        typer.echo(f"screen {identity} is already complete at {root}; nothing re-run")
+        raise typer.Exit(code=0)
+
+    screen_store = ScreenStore(root)
+    already = len(screen_store.completed())
+    typer.echo(
+        f"screen {identity}: {len(spec_paths)} spec(s), {len(tasks)} run(s) planned"
+        + (f", {already} already done" if already else "")
+        + (f", {len(skipped)} spec(s) had no stored instrument" if skipped else "")
+    )
+
+    done = already
+    started = time.monotonic()
+
+    def progress(row: ScreenRow) -> None:
+        del row
+        nonlocal done
+        done += 1
+        if done % 50 == 0 or done == len(tasks):
+            elapsed = time.monotonic() - started
+            rate = (done - already) / elapsed if elapsed > 0 else 0.0
+            left = (len(tasks) - done) / rate if rate > 0 else 0.0
+            typer.echo(
+                f"  {done}/{len(tasks)}  {elapsed / 60:.1f} min elapsed, ~{left / 60:.1f} min left"
+            )
+
+    rows = run_screen(
+        tasks,
+        screen_store,
+        data_dir=settings.data_dir,
+        instruments_path=settings.instruments_path,
+        exit_library=exit_library,
+        workers=workers,
+        runs_dir=settings.runs_dir if keep_max_dd is not None else None,
+        on_row=progress,
+    )
+    rows_path, returns_path = screen_store.materialise()
+
+    manifest_path = manifest if manifest is not None else specs.parent / "manifest.json"
+    meta = load_corpus_meta(manifest_path)
+    z_scores = cross_sectional_z(rows)
+
+    # Only the markets actually screened: a factor measured over instruments
+    # nobody ran would describe a screen that did not happen.
+    market_returns = _market_returns(store, sorted({row.symbol for row in rows}), holdout)
+    estimate = trials_module.estimate(
+        strategy_returns={row.key: row.daily_returns for row in rows if row.daily_returns},
+        market_returns=market_returns,
+        n_strategies=len({row.spec_id for row in rows}),
+        n_markets=len({row.symbol for row in rows}),
+        n_trials_raw=len(rows),
+        signature_floor=distinct_signatures(spec_paths, meta),
+    )
+
+    boundaries = tuple(
+        boundary
+        for boundary in _screen_boundaries(store, rows, holdout)
+    )
+    earliest = min((item.boundary for item in boundaries), default=None)
+    note = (
+        f"Отрезано {holdout:.0%} каждой ленты; самая ранняя граница — "
+        f"{earliest:%Y-%m-%d %H:%M} UTC."
+        if earliest is not None
+        else f"Отрезано {holdout:.0%} каждой ленты."
+    )
+    ScreenManifest(
+        screen_id=identity,
+        generated=now_iso(),
+        source_digest=code_version().source_digest,
+        holdout_fraction=holdout,
+        boundaries=boundaries,
+        n_specs=len(spec_paths),
+        n_tasks=len(tasks),
+        bar_budget=bar_budget,
+        symbols_per_spec=symbols_per_spec,
+        trials=estimate.as_record(),
+        skipped=skipped,
+    ).write(root)
+
+    report = build_screen_report(
+        rows,
+        meta,
+        z_scores,
+        trials=estimate,
+        bar_budget=bar_budget,
+        holdout_fraction=holdout,
+        holdout_note=note,
+        skipped=skipped,
+    )
+    path = write_screen_report(render_screen_report(report), out)
+
+    if keep_max_dd is not None:
+        kept = sum(1 for row in rows if row.kept_run)
+        traded = sum(1 for row in rows if row.error is None and row.trades > 0)
+        typer.echo(
+            f"drawdown filter < {keep_max_dd:.0%}: kept {kept} full run(s), "
+            f"{traded - kept} of {traded} that traded did not qualify"
+        )
+    typer.echo(
+        f"{len(report.completed)}/{report.total} completed, {len(report.traded)} traded, "
+        f"{len(report.rankable)} with >= {MIN_TRADES_FOR_RANKING} trades, "
+        f"{len(report.positive)} of those above zero"
+    )
+    typer.echo(
+        f"trials: {estimate.n_trials_raw} raw, {estimate.n_trials_effective:.1f} effective "
+        f"(S_eff {estimate.strategies_effective:.1f} x M_eff {estimate.markets_effective:.2f})"
+    )
+    typer.echo(f"rows: {rows_path}" + (f"   returns: {returns_path}" if returns_path else ""))
+    typer.echo(f"Report: {path}")
+
+
+def _market_returns(
+    store: ParquetStore, universe: Sequence[str], holdout: float
+) -> dict[str, tuple[float, ...]]:
+    """Daily returns per market, over the pre-holdout history alone.
+
+    The market factor of the effective-trials estimate must be measured on the
+    same bars the screen saw; taking it from the whole series would let the
+    holdout inform a number the screen publishes.
+    """
+    from trading_system.validation.holdout import screen_frame as _cut
+
+    found: dict[str, tuple[float, ...]] = {}
+    for symbol in universe:
+        frame = store.get(symbol, Timeframe.D1)
+        if frame.is_empty or len(frame) < 30:
+            continue
+        visible, _boundary = _cut(frame, fraction=holdout)
+        closes = visible.df["close"].to_list()
+        found[symbol] = tuple(
+            (closes[index] / closes[index - 1]) - 1.0
+            for index in range(1, len(closes))
+            if closes[index - 1]
+        )
+    return found
+
+
+def _screen_boundaries(
+    store: ParquetStore, rows: Sequence[ScreenRow], holdout: float
+) -> list[HoldoutBoundary]:
+    """Where each series a screen touched was cut."""
+    from trading_system.validation.holdout import screen_frame as _cut
+
+    seen: dict[tuple[str, str], HoldoutBoundary] = {}
+    for row in rows:
+        if not row.timeframe:
+            continue
+        key = (row.symbol, row.timeframe)
+        if key in seen:
+            continue
+        frame = store.get(row.symbol, Timeframe(row.timeframe))
+        if frame.is_empty:
+            continue
+        seen[key] = _cut(frame, fraction=holdout)[1]
+    return [seen[key] for key in sorted(seen)]
+
+
+@strategy_app.command("keep-top")
+def strategy_keep_top(
+    ctx: typer.Context,
+    specs: Path = typer.Argument(..., help="The same directory of specs the screen ran."),
+    screen: str = typer.Option(..., "--screen-id", help="Screen whose rows the choice is made on."),
+    top: int = typer.Option(
+        5, "--top", help="Runs kept per (instrument, timeframe) pair, best first."
+    ),
+    min_trades: int = typer.Option(
+        100, "--min-trades", help="Trades a row needs before it is eligible to be kept."
+    ),
+    workers: int = typer.Option(1, "--workers", help="Processes to spread the re-runs over."),
+    exit_library: Path = typer.Option(
+        DEFAULT_LIBRARY_PATH, "--exit-library", help="Exit preset library."
+    ),
+) -> None:
+    """Store the full runs of the best rows per market, by re-running them.
+
+    The screen's second pass. The first writes nothing but compact rows, because
+    a run directory per task is thousands of directories for a few numbers each
+    — the cost P15 stage 1.5 already paid once. This pass picks a bounded set
+    and reconstructs it: re-running is deterministic and the row's stored
+    ``result_digest`` is what makes the reconstruction checkable rather than a
+    fresh measurement.
+
+    **Chosen by cross-sectional z within each instrument, not by drawdown.**
+    A raw Sortino on XAUUSD and on EURUSD are different quantities; z is the
+    unit that is comparable across markets. And a drawdown gate was measured on
+    the delivered screen to select strategies that barely traded — positive at
+    42.2% against a 42.0% base rate — while moving with ``risk_pct`` rather than
+    with the strategy. Top-N *per pair* rather than top-N overall, so the kept
+    set covers every market instead of collapsing into whichever one happened to
+    suit the shelf.
+    """
+    settings: Settings = ctx.obj
+    root = settings.runs_dir / SCREEN_ROOT / screen
+    rows_path = root / "rows.parquet"
+    if not rows_path.is_file():
+        typer.echo(f"no screen rows at {rows_path}")
+        raise typer.Exit(code=1)
+
+    table = pl.read_parquet(rows_path)
+    rows = [ScreenRow.from_record(record) for record in table.to_dicts()]
+    scores = cross_sectional_z(rows, statistic="expectancy_r")
+    eligible = [
+        row
+        for row in rows
+        if row.error is None and row.trades >= min_trades and row.key in scores
+    ]
+    buckets: dict[tuple[str, str], list[ScreenRow]] = {}
+    for row in eligible:
+        buckets.setdefault((row.symbol, row.timeframe), []).append(row)
+    chosen: list[ScreenRow] = []
+    for group in buckets.values():
+        group.sort(key=lambda item: -scores[item.key])
+        chosen.extend(group[:top])
+    typer.echo(
+        f"{len(rows)} row(s), {len(eligible)} eligible (>= {min_trades} trades), "
+        f"{len(buckets)} (instrument, timeframe) pair(s), keeping {len(chosen)}"
+    )
+    if not chosen:
+        raise typer.Exit(code=0)
+
+    paths = {p.stem: p for p in specs.rglob("*.json") if not p.name.endswith(".meta.json")}
+    tasks = []
+    missing = 0
+    for row in chosen:
+        path = paths.get(row.spec_id)
+        if path is None:
+            missing += 1
+            continue
+        tasks.append(
+            ScreenTask(
+                spec_path=path,
+                symbol=row.symbol,
+                bar_budget=row.bars,
+                cost_ratio=row.cost_ratio,
+                keep_run=True,
+            )
+        )
+    if missing:
+        typer.echo(f"  {missing} chosen row(s) have no spec file under {specs}; skipped")
+
+    store = ScreenStore(root / f"kept_top{top}")
+    done = 0
+
+    def progress(row: ScreenRow) -> None:
+        del row  # the row is kept by the store; this only counts
+        nonlocal done
+        done += 1
+        if done % 25 == 0 or done == len(tasks):
+            typer.echo(f"  {done}/{len(tasks)}")
+
+    kept_rows = run_screen(
+        tasks,
+        store,
+        data_dir=settings.data_dir,
+        instruments_path=settings.instruments_path,
+        exit_library=exit_library,
+        workers=workers,
+        runs_dir=settings.runs_dir,
+        on_row=progress,
+    )
+    store.materialise()
+    stored = sum(1 for row in kept_rows if row.kept_run)
+    typer.echo(f"stored {stored} full run(s) under {settings.runs_dir}")
+    typer.echo("Render the catalogue with: ts report index --out reports/runs/index.html")
+
+
 class BacktestCliConfig(BaseModel):
     """Everything one run needs beyond its strategy and its bars.
 
@@ -1278,12 +1738,17 @@ def validate_optimize(
         typer.echo(f"exit_ref {spec.exit_ref!r} not found in {exit_library}")
         raise typer.Exit(code=1)
 
-    if method is SearchMethod.GRID and trial_budget < search_space.feasible_size():
-        typer.echo(
-            f"--method grid over this space needs --trial-budget of at least "
-            f"{search_space.feasible_size()}; got {trial_budget}."
-        )
-        raise typer.Exit(code=1)
+    if method is SearchMethod.GRID:
+        # Counted once, not twice: on a constrained space this enumerates, and
+        # enumerating a space twice to build one message is the kind of waste
+        # that hides until somebody profiles it.
+        needed = search_space.feasible_size()
+        if trial_budget < needed:
+            typer.echo(
+                f"--method grid over this space needs --trial-budget of at least "
+                f"{needed}; got {trial_budget}."
+            )
+            raise typer.Exit(code=1)
 
     key = StreamKey(cli_config.symbol, cli_config.timeframe)
     base = RunInputs(

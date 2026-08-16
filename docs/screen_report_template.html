@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Скрин стратегий — trading_system</title>
+<style>
+  :root {
+    --ink: #1c2128; --muted: #5b6672; --line: #e3e6ea; --bg: #ffffff;
+    --panel: #f7f8f9; --pos: #1b7f5e; --neg: #b3402f;
+    --warn: #8a6d1f; --warn-bg: #fdf6e3; --warn-line: #e6d9a8;
+    --stop: #7a2718; --stop-bg: #fbeeea; --stop-line: #e8c4ba;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; }
+  header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 22px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 38px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 13px; margin: 22px 0 8px; color: var(--muted);
+       text-transform: uppercase; letter-spacing: 0.06em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .stop { background: var(--stop-bg); border: 1px solid var(--stop-line);
+          border-left: 4px solid var(--stop); padding: 14px 16px; margin: 18px 0;
+          border-radius: 3px; }
+  .stop strong { color: var(--stop); }
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-line);
+          border-left: 4px solid var(--warn); padding: 12px 14px; margin: 16px 0;
+          border-radius: 3px; }
+  .warn strong { color: var(--warn); }
+  .cards { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 6px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+          padding: 10px 14px; min-width: 128px; }
+  .card .k { font-size: 11px; color: var(--muted); text-transform: uppercase;
+             letter-spacing: 0.05em; }
+  .card .v { font-size: 20px; font-weight: 600; margin-top: 2px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; font-size: 13px; }
+  th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line);
+           white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+       color: var(--muted); font-weight: 600; }
+  tbody tr:hover { background: var(--panel); }
+  .pos { color: var(--pos); } .neg { color: var(--neg); }
+  .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 8px;
+         background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Скрин стратегий</h1>
+  <div class="sub">
+    {{ report.total }} прогонов · {{ report.bar_budget }} баров на прогон ·
+    holdout {{ '%.0f%%'|format(report.holdout_fraction * 100) }} отрезан до запуска ·
+    {{ generated_at.strftime('%Y-%m-%d %H:%M') }} UTC
+  </div>
+</header>
+
+<div class="stop">
+  <strong>Выход скрина — гипотезы, а не свидетельства.</strong>
+  Каждое число здесь получено <em>внутри выборки</em>: один период, параметры из файла
+  стратегии, без фолдов, без подбора, без нулевых процессов. Хорошая строка означает
+  ровно одно — «эту стратегию стоит прогнать через walk-forward на holdout», и никогда
+  «эта стратегия работает».
+  <br><br>
+  <strong>Кросс-секционный z не снимает смещение, общее для всех стратегий на рынке.</strong>
+  z стандартизует стратегию по распределению остальных стратегий на том же инструменте —
+  это убирает инструмент-специфичный уровень и разброс, но если все стратегии на этом
+  рынке длинные, а рынок рос, вся кросс-секция сдвинута, и z этого не заметит.
+  <strong>Верхний дециль z — не свидетельство эджа.</strong> Подтверждающее сравнение —
+  перцентиль против перестановочного и синтетического ноля этого инструмента, и оно
+  на holdout, а не здесь.
+  {% if report.trials %}
+  <br><br>
+  <strong>Поправка на множественное тестирование.</strong>
+  Сделано {{ report.trials.n_trials_raw }} сравнений; независимых из них —
+  <strong>{{ '%.0f'|format(report.trials.n_trials_effective) }}</strong>. Лучшая строка
+  из такого числа положительна и при полном отсутствии эджа у всех.
+  {% endif %}
+</div>
+
+<div class="cards">
+  <div class="card"><div class="k">прогонов</div><div class="v">{{ report.total }}</div></div>
+  <div class="card"><div class="k">завершились</div><div class="v">{{ report.completed|length }}</div></div>
+  <div class="card"><div class="k">торговали</div><div class="v">{{ report.traded|length }}</div></div>
+  <div class="card"><div class="k">&lt;{{ min_trades }} сделок</div><div class="v">{{ report.thin|length }}</div></div>
+  <div class="card"><div class="k">ранжируемы</div><div class="v">{{ report.rankable|length }}</div></div>
+  <div class="card"><div class="k">из них выше нуля</div><div class="v">{{ report.positive|length }}</div></div>
+  <div class="card"><div class="k">ошибок</div><div class="v">{{ report.failures|length }}</div></div>
+  <div class="card"><div class="k">без задач</div><div class="v">{{ report.skipped|length }}</div></div>
+  <div class="card"><div class="k">машинного времени</div><div class="v">{{ '%.0f'|format(report.total_seconds / 60) }} мин</div></div>
+</div>
+
+<div class="warn">
+  <strong>Holdout.</strong> {{ report.holdout_note }}
+  Ни один прогон этой страницы не видел этих баров: срез сделан при конструировании
+  входов, то есть бары физически отсутствуют в объекте, который проходит движок.
+</div>
+
+{% if report.trials %}
+<h2>Эффективное число независимых испытаний</h2>
+<table>
+  <tbody>
+    <tr><td>сравнений сделано (raw)</td><td>{{ report.trials.n_trials_raw }}</td></tr>
+    <tr><td><strong>независимых (N_eff)</strong></td><td><strong>{{ '%.1f'|format(report.trials.n_trials_effective) }}</strong></td></tr>
+    <tr><td>стратегий на шелфе / S_eff</td><td>{{ report.trials.n_strategies }} / {{ '%.1f'|format(report.trials.strategies_effective) }}</td></tr>
+    <tr><td>рынков / M_eff</td><td>{{ report.trials.n_markets }} / {{ '%.2f'|format(report.trials.markets_effective) }}</td></tr>
+    <tr><td>подвыборка для S_eff</td><td>{{ report.trials.sample_size }}</td></tr>
+    <tr><td>пол по различимым сигнатурам</td><td>{{ report.trials.signature_floor if report.trials.signature_floor else '—' }}</td></tr>
+    {% if report.trials.strategies %}
+    <tr><td>средняя |корреляция| между стратегиями</td><td>{{ '%.3f'|format(report.trials.strategies.mean_abs_correlation) }}</td></tr>
+    {% endif %}
+    {% if report.trials.markets %}
+    <tr><td>средняя |корреляция| между рынками</td><td>{{ '%.3f'|format(report.trials.markets.mean_abs_correlation) }}</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+<p class="sub">{{ report.trials.method }}</p>
+{% endif %}
+
+{% macro group_table(title, groups) %}
+<h3>{{ title }}</h3>
+<table>
+  <thead><tr>
+    <th>группа</th><th>прогонов</th><th>торговали</th><th>ранжируемы</th>
+    <th>выше нуля</th><th>доля</th><th>медиана expectancy_r</th>
+    <th>медиана сделок</th><th>медиана z</th>
+  </tr></thead>
+  <tbody>
+  {% for g in groups %}
+    <tr>
+      <td>{{ g.name }}</td>
+      <td>{{ g.runs }}</td>
+      <td>{{ g.traded }}</td>
+      <td>{{ g.rankable }}</td>
+      <td>{{ g.positive }}</td>
+      <td>{% if g.positive_share is not none %}{{ '%.0f%%'|format(g.positive_share * 100) }}{% else %}—{% endif %}</td>
+      <td class="{% if g.median_expectancy_r is not none and g.median_expectancy_r > 0 %}pos{% elif g.median_expectancy_r is not none %}neg{% endif %}">
+        {% if g.median_expectancy_r is not none %}{{ '%+.4f'|format(g.median_expectancy_r) }}{% else %}—{% endif %}
+      </td>
+      <td>{% if g.median_trades is not none %}{{ '%.0f'|format(g.median_trades) }}{% else %}—{% endif %}</td>
+      <td>{% if g.median_z is not none %}{{ '%+.2f'|format(g.median_z) }}{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% macro row_table(rows) %}
+<table>
+  <thead><tr>
+    <th>стратегия</th><th>fidelity</th><th>семейство</th><th>рынок</th><th>TF</th>
+    <th>z</th><th>сделок</th><th>expectancy_r</th><th>Sortino</th><th>Sharpe</th>
+    <th>просадка</th><th>cost/бар</th><th>доминирующий отказ</th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}
+    {% set m = report.meta.get(row.spec_id, {}) %}
+    {% set z = report.z_of(row) %}
+    <tr>
+      <td class="mono">{{ row.spec_id }}</td>
+      <td><span class="tag">{{ m.get('fidelity', '?') }}</span></td>
+      <td>{{ m.get('family', '?') }}</td>
+      <td>{{ row.symbol }}</td>
+      <td>{{ row.timeframe }}</td>
+      <td class="{% if z is not none and z > 0 %}pos{% elif z is not none %}neg{% endif %}">
+        {% if z is not none %}{{ '%+.2f'|format(z) }}{% else %}—{% endif %}
+      </td>
+      <td>{{ row.trades }}</td>
+      <td class="{% if row.expectancy_r is not none and row.expectancy_r > 0 %}pos{% elif row.expectancy_r is not none %}neg{% endif %}">
+        {% if row.expectancy_r is not none %}{{ '%+.4f'|format(row.expectancy_r) }}{% else %}—{% endif %}
+      </td>
+      <td>{% if row.sortino is not none %}{{ '%+.2f'|format(row.sortino) }}{% else %}—{% endif %}</td>
+      <td>{% if row.sharpe is not none %}{{ '%+.2f'|format(row.sharpe) }}{% else %}—{% endif %}</td>
+      <td>{% if row.max_drawdown_pct is not none %}{{ '%.1f%%'|format(row.max_drawdown_pct * 100) }}{% else %}—{% endif %}</td>
+      <td>{{ '%.0f%%'|format(row.cost_ratio * 100) }}</td>
+      <td class="mono">{% if row.dominant_reason %}{{ row.dominant_reason }} ×{{ row.dominant_count }}{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endmacro %}
+
+<h2>Срезы</h2>
+{{ group_table('По инструменту', report.by_symbol) }}
+{{ group_table('По таймфрейму', report.by_timeframe) }}
+{{ group_table('По семейству входа', report.by_family) }}
+{{ group_table('По fidelity — насколько спека прочитана со своей страницы', report.by_fidelity) }}
+
+<h2>Кандидаты: топ-{{ top_n }} по кросс-секционному z (из {{ report.rankable|length }} ранжируемых)</h2>
+<p class="sub">
+  Ранжирование по z, а не по сырому Sortino: сырая величина на XAUUSD и на EURUSD —
+  разные величины, их несопоставимость не убирается нормировкой риска по ATR.
+  {% if report.trials %}
+  Максимум берётся по {{ report.rankable|length }} рядам при
+  {{ '%.0f'|format(report.trials.n_trials_effective) }} независимых испытаниях —
+  порог значимости на таком числе недостижим никаким числом строк здесь.
+  {% endif %}
+</p>
+{{ row_table(report.top) }}
+
+<h2>Худшие {{ top_n }} по z</h2>
+<p class="sub">
+  Симметрично полезны: устойчиво отрицательный ряд на большой выборке — либо
+  инвертируемая идея, либо доказательство того, что издержки на этом таймфрейме съедают всё.
+</p>
+{{ row_table(report.bottom) }}
+
+<h2>Самые активные {{ top_n }}</h2>
+<p class="sub">
+  Частота диагностична сама по себе: ряд с тысячами сделок на {{ report.bar_budget }} барах
+  торгует шум, и его результат — почти чистая функция модели издержек.
+</p>
+{{ row_table(report.busiest) }}
+
+{% if report.blocked %}
+<h2>Что чаще всего останавливало сделки</h2>
+<p class="sub">
+  Отказ, доминирующий у сотен прогонов, — факт о конфигурации прогона (риск, лимиты,
+  маржа), а не о стратегиях.
+</p>
+<table>
+  <thead><tr><th>причина</th><th>у скольких прогонов доминирует</th></tr></thead>
+  <tbody>
+  {% for reason, count in report.blocked %}
+    <tr><td class="mono">{{ reason }}</td><td>{{ count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if report.failures %}
+<h2>Прогоны, которые не завершились ({{ report.failures|length }})</h2>
+<table>
+  <thead><tr><th>стратегия</th><th>рынок</th><th>TF</th><th>ошибка</th></tr></thead>
+  <tbody>
+  {% for row in report.failures[:60] %}
+    <tr><td class="mono">{{ row.spec_id }}</td><td>{{ row.symbol }}</td>
+        <td>{{ row.timeframe }}</td><td class="mono">{{ row.error }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if report.skipped %}
+<h2>Спеки без единой задачи ({{ report.skipped|length }})</h2>
+<table>
+  <thead><tr><th>спека</th><th>причина</th></tr></thead>
+  <tbody>
+  {% for spec, reason in report.skipped.items() %}
+    <tr><td class="mono">{{ spec }}</td><td>{{ reason }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<footer>
+  Скрин: один период, параметры из файла, внутри выборки, по первым
+  {{ '%.0f%%'|format((1 - report.holdout_fraction) * 100) }} каждой ленты.
+  Ни одна строка не является свидетельством об эдже. Подтверждение — walk-forward и
+  вердикт на holdout, которого этот прогон не касался. Гейт на
+  <span class="mono">APPROVED</span> по-прежнему требует вердикта
+  <span class="mono">ROBUST</span>.
+</footer>
+
+</div>
+</body>
+</html>
