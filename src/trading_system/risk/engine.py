@@ -56,6 +56,7 @@ the same class of defect that made ``source`` mandatory on
 Exit Engine — the mirror of the Exit Engine not importing this one.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from decimal import ROUND_DOWN, Decimal, localcontext
 from types import MappingProxyType
@@ -93,6 +94,18 @@ from trading_system.risk.stop_calculator import (
 from trading_system.strategies.schema import StopReference
 
 logger = get_logger(__name__)
+
+#: The stdlib logger behind :data:`logger`, kept for one thing only: asking
+#: whether a level would be emitted at all. structlog assembles the event dict,
+#: timestamps it and walks the processor chain *before* the level is consulted,
+#: so a suppressed ``debug`` still costs 2.70 us against 0.05 us for this check
+#: — and ``_refuse`` fires 169 273 times on a 200 000-bar run. The question is
+#: put to the stdlib logger rather than to the structlog one because
+#: :func:`~trading_system.core.logging.setup_logging` routes structlog into
+#: stdlib, making the stdlib level the one that actually decides; a structlog
+#: configured onto some other factory would make this guard too strict rather
+#: than too loose, which is the safe direction for a debug line.
+_level_check = logging.getLogger(__name__)
 
 #: Placeholder threshold used when no correlation provider is configured. With
 #: no matrix, clustering is by manual groups alone and no comparison happens.
@@ -603,5 +616,6 @@ class RiskEngine:
             The refusal.
         """
         self._rejections[reason] += 1
-        logger.debug("risk.refused", reason=reason.value, detail=detail)
+        if _level_check.isEnabledFor(logging.DEBUG):
+            logger.debug("risk.refused", reason=reason.value, detail=detail)
         return RiskDecision.refused(reason, detail, stop_price=stop_price, reasons=reasons)

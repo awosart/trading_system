@@ -44,6 +44,7 @@ recognised. Sizing runs after the equity snapshot, against the account as the
 instant left it. The full phase order is in :mod:`trading_system.backtest.engine`.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
@@ -127,6 +128,10 @@ from trading_system.strategies.schema import (
 _SIDES: dict[Direction, Side] = {Direction.LONG: Side.BUY, Direction.SHORT: Side.SELL}
 
 logger = get_logger(__name__)
+
+#: Level gate for the hot debug line below; see `RiskEngine._refuse` for why the
+#: question goes to the stdlib logger rather than to the structlog one.
+_level_check = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -923,13 +928,17 @@ class Orchestrator:
             return decision
         if verdict.decision is GuardDecision.REJECT:
             self._signal_drops[SignalDrop.PROP_GUARD] += 1
-            logger.debug(
-                "prop.rejected",
-                strategy=signal.strategy_id,
-                symbol=signal.symbol,
-                reason=verdict.reason.value,
-                detail=verdict.detail,
-            )
+            # Guarded for the same reason as `RiskEngine._refuse`: the event
+            # dict is built before the level is consulted, and this fires once
+            # per rejected signal.
+            if _level_check.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "prop.rejected",
+                    strategy=signal.strategy_id,
+                    symbol=signal.symbol,
+                    reason=verdict.reason.value,
+                    detail=verdict.detail,
+                )
             return None
 
         self._signal_drops[SignalDrop.PROP_REDUCED] += 1
