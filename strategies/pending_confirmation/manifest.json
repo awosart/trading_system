@@ -1,0 +1,146 @@
+{
+  "frozen": "2026-08-17T10:17:25.870543+00:00",
+  "what_this_is": "Hypotheses, not findings. Nothing here has been confirmed on data that had no part in selecting it. The list is frozen so the bar cannot be moved once new data is read.",
+  "source_screen": "4d1f5ec791df4690",
+  "screen_covers": "first 80% of every series; the holdout of the previous cycle is spent",
+  "selection_criteria_frozen_before_new_data": {
+    "tier_A": "positive expectancy_r on >=8 of the markets it ran on, >=100 trades each",
+    "tier_B": "percentile >=95 against its own permutation null (N=200) on its own market"
+  },
+  "what_is_already_known_and_must_not_be_forgotten": {
+    "multiplicity": "Tier A is the best of 594 specs on a statistic chosen after seeing the table. N_eff for the full matrix was 1754, honest threshold 99.99715%.",
+    "cross_market_result_for_58_atr_channel_breakout": {
+      "percentiles_outside_selection": {
+        "GBPUSD": 89.5,
+        "NAS100": 75.5,
+        "AUDUSD": 88.0,
+        "USDJPY": 77.0,
+        "XAUUSD": 78.5,
+        "US30": 57.5,
+        "SPX500": 44.0,
+        "USDCAD": 39.0,
+        "EURUSD": 33.5
+      },
+      "median": 75.5,
+      "above_50": "6/9",
+      "above_95": "0/9",
+      "sign_test_p": 0.2539,
+      "verdict": "not confirmed and not rejected; the median sits ~1.7 sd above 50 only if the markets are independent, which they are not. A joint permutation null is required."
+    }
+  },
+  "candidates": [
+    {
+      "spec_id": "58-atr-channel-breakout-swing-strategy",
+      "tier": "A",
+      "reason": "cross_market_consistency",
+      "markets_run": 10,
+      "markets_positive": 8,
+      "median_expectancy_r": 0.0748,
+      "awaits": "walk-forward + joint permutation null on data the screen never saw"
+    },
+    {
+      "spec_id": "84-5-ema-and-13-ema-fibonacci-numbers",
+      "tier": "A",
+      "reason": "cross_market_consistency",
+      "markets_run": 10,
+      "markets_positive": 8,
+      "median_expectancy_r": 0.064,
+      "awaits": "walk-forward + joint permutation null on data the screen never saw"
+    },
+    {
+      "spec_id": "143-multitimeframe-trading-system-with-sma-and-bollinger-bands",
+      "tier": "A",
+      "reason": "cross_market_consistency",
+      "markets_run": 10,
+      "markets_positive": 8,
+      "median_expectancy_r": 0.0583,
+      "awaits": "walk-forward + joint permutation null on data the screen never saw"
+    },
+    {
+      "spec_id": "19-doji-star-system",
+      "tier": "A",
+      "reason": "cross_market_consistency",
+      "markets_run": 10,
+      "markets_positive": 8,
+      "median_expectancy_r": 0.0199,
+      "awaits": "walk-forward + joint permutation null on data the screen never saw"
+    },
+    {
+      "spec_id": "58-atr-channel-breakout-swing-strategy",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "UKOIL",
+      "timeframe": "H4",
+      "trades": 199,
+      "expectancy_r": 0.2406,
+      "percentile_own_null": 97.0,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "32-the-secret-method",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "XAUUSD",
+      "timeframe": "M5",
+      "trades": 274,
+      "expectancy_r": 0.1547,
+      "percentile_own_null": 100.0,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "207-pullbacks-trend-strategy",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "NAS100",
+      "timeframe": "M1",
+      "trades": 334,
+      "expectancy_r": 0.1341,
+      "percentile_own_null": 100.0,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "37-donchian-breakout",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "NAS100",
+      "timeframe": "H1",
+      "trades": 843,
+      "expectancy_r": 0.0547,
+      "percentile_own_null": 95.5,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "67-power-trend",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "SPX500",
+      "timeframe": "M15",
+      "trades": 155,
+      "expectancy_r": 0.1811,
+      "percentile_own_null": 95.0,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "36-hells-angels",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "USDJPY",
+      "timeframe": "M15",
+      "trades": 122,
+      "expectancy_r": 0.1586,
+      "percentile_own_null": 99.5,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    },
+    {
+      "spec_id": "34-precision-scalping",
+      "tier": "B",
+      "reason": "beat_own_null_on_one_market",
+      "symbol": "EURJPY",
+      "timeframe": "M5",
+      "trades": 151,
+      "expectancy_r": 0.0772,
+      "percentile_own_null": 98.0,
+      "awaits": "the same market on bars outside the screen, or a market it was not selected on"
+    }
+  ]
+}
