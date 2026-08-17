@@ -62,8 +62,7 @@ from trading_system.data.resample import DayOrigin, trading_day
 #: The rank is a tie-break only: it never leaves this module and never enters a
 #: digest, so the values themselves are free to shift when a member is added.
 TIMEFRAME_RANK: dict[Timeframe, int] = {
-    timeframe: rank
-    for rank, timeframe in enumerate(sorted(Timeframe, key=lambda tf: tf.duration))
+    timeframe: rank for rank, timeframe in enumerate(sorted(Timeframe, key=lambda tf: tf.duration))
 }
 
 #: How far either side of ``open + 24h`` the daily boundary may sit. One hour is
