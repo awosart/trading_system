@@ -163,8 +163,16 @@ class SameCurrencyConverter:
 
     For runs whose whole universe is quoted in the account currency. Choosing it
     is a statement that no conversion is expected; if one turns out to be needed,
-    that is a fact worth learning as a refusal rather than papering over. It is
-    never a default anywhere — a converter is always passed in explicitly.
+    that is a fact worth learning as a refusal rather than papering over.
+
+    It **is** the default of :attr:`~trading_system.backtest.spec.RunInputs.converter`,
+    which this docstring used to deny. The denial mattered because the sentence
+    invited the reader to assume a run that never named a converter could not be
+    silently assuming parity — and the assumption is the safe one either way,
+    since the failure is a refusal rather than a rate of 1.0 on a cross. It
+    showed up as USDJPY H1 taking zero trades and counting 978
+    ``fx_rate_unavailable`` refusals: correct behaviour, reached through a
+    default the docs said did not exist.
     """
 
     def rate(self, *, base: str, quote: str, at: datetime) -> Decimal:
