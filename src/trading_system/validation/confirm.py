@@ -187,9 +187,7 @@ class ConfirmOutcome:
     error: str | None = None
 
 
-def holdout_frame(
-    frame: OHLCVFrame, *, fraction: float = DEFAULT_HOLDOUT_FRACTION
-) -> OHLCVFrame:
+def holdout_frame(frame: OHLCVFrame, *, fraction: float = DEFAULT_HOLDOUT_FRACTION) -> OHLCVFrame:
     """The withheld tail of a series — the complement of what the screen saw.
 
     Args:
@@ -326,11 +324,7 @@ def split_periods(
     for index in range(periods):
         start = frame.start + span * index
         end = frame.start + span * (index + 1) if index < periods - 1 else frame.end
-        inside = [
-            trade
-            for trade in result.trades
-            if start <= trade.closed_at <= end
-        ]
+        inside = [trade for trade in result.trades if start <= trade.closed_at <= end]
         total = sum(trade.realized_r for trade in inside)
         found.append(
             PeriodOutcome(
@@ -386,9 +380,7 @@ def judge(
     if null_percentile is None:
         failed.append("no null calibration")
     elif null_percentile < criterion.null_percentile:
-        failed.append(
-            f"null percentile {null_percentile:.1f} < {criterion.null_percentile:.1f}"
-        )
+        failed.append(f"null percentile {null_percentile:.1f} < {criterion.null_percentile:.1f}")
     return not failed, tuple(failed), share
 
 

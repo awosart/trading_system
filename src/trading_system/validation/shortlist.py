@@ -228,9 +228,7 @@ def residual_z(scores: Sequence[float], shares: Sequence[float]) -> list[float]:
     var_x = sum((value - mean_x) ** 2 for value in shares)
     if var_x <= 0:
         return list(scores)
-    cov = sum(
-        (x - mean_x) * (y - mean_y) for x, y in zip(shares, scores, strict=True)
-    )
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(shares, scores, strict=True))
     slope = cov / var_x
     intercept = mean_y - slope * mean_x
     return [y - (intercept + slope * x) for x, y in zip(shares, scores, strict=True)]
@@ -551,9 +549,7 @@ class TradeBudgetedSearch:
         """Identifies the method in reports and stored selections."""
         return f"{self.inner.name}+trades<={self.trade_budget}"
 
-    def run(
-        self, space: "SearchSpace", evaluate: "Evaluate", budget: int
-    ) -> list["TrialRecord"]:
+    def run(self, space: "SearchSpace", evaluate: "Evaluate", budget: int) -> list["TrialRecord"]:
         """Spend up to ``budget`` trials, or the trade budget, whichever binds first."""
         collected: list[TrialRecord] = []
         spent = 0

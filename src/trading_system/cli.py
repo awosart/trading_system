@@ -1104,10 +1104,7 @@ def strategy_screen(
         signature_floor=distinct_signatures(spec_paths, meta),
     )
 
-    boundaries = tuple(
-        boundary
-        for boundary in _screen_boundaries(store, rows, holdout)
-    )
+    boundaries = tuple(boundary for boundary in _screen_boundaries(store, rows, holdout))
     earliest = min((item.boundary for item in boundaries), default=None)
     note = (
         f"Отрезано {holdout:.0%} каждой ленты; самая ранняя граница — "
@@ -1252,9 +1249,7 @@ def strategy_keep_top(
     rows = [ScreenRow.from_record(record) for record in table.to_dicts()]
     scores = cross_sectional_z(rows, statistic="expectancy_r")
     eligible = [
-        row
-        for row in rows
-        if row.error is None and row.trades >= min_trades and row.key in scores
+        row for row in rows if row.error is None and row.trades >= min_trades and row.key in scores
     ]
     buckets: dict[tuple[str, str], list[ScreenRow]] = {}
     for row in eligible:

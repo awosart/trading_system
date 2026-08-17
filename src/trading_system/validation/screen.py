@@ -717,9 +717,7 @@ def run_screen(
     """
     done = store.completed()
     pending = [task for task in tasks if task.key not in done]
-    payloads = [
-        (task, data_dir, instruments_path, exit_library, runs_dir) for task in pending
-    ]
+    payloads = [(task, data_dir, instruments_path, exit_library, runs_dir) for task in pending]
 
     if workers <= 1:
         for payload in payloads:

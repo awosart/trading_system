@@ -169,9 +169,7 @@ class TestSelection:
         assert chosen[0].key == "clean"
         # The residual is centred, so it is not comparable in level with the raw
         # z; what matters is the order, and the order changed.
-        assert chosen[0].residual_z > max(
-            item.residual_z for item in chosen if item.key != "clean"
-        )
+        assert chosen[0].residual_z > max(item.residual_z for item in chosen if item.key != "clean")
 
     def test_every_excluded_timeframe_is_named_rather_than_implied(self) -> None:
         assert set(EXCLUDED_TIMEFRAMES) == {"M1", "M5"}
